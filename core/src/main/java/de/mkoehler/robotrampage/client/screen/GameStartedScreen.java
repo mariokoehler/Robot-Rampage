@@ -5,13 +5,20 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.board.Board;
+import de.mkoehler.robotrampage.board.StartSquare;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.lobby.RobotLook;
+import de.mkoehler.robotrampage.client.render.BoardActor;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
+import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -22,6 +29,10 @@ import java.util.List;
  * @author Mario Koehler
  */
 public final class GameStartedScreen extends StageScreen implements NetworkClient.Handler {
+
+    private static final float MAX_TILE = 50f;
+    private static final float BOARD_AREA = 700f;
+    private static final float BOARD_LEFT = 1000f;
 
     private final ConnectedServer server;
     private final List<Object> carried;
@@ -53,13 +64,34 @@ public final class GameStartedScreen extends StageScreen implements NetworkClien
 
         Table root = new Table();
         root.setFillParent(true);
-        root.top().left().padLeft(160f).padTop(200f);
+        root.top().left().padLeft(160f).padTop(200f).padRight(Theme.VIEW_WIDTH - BOARD_LEFT + 40f);
         root.add(ui.label("Game started", Theme.TextStyle.TITLE, Theme.INK)).left().row();
         root.add(statusLabel).left().padTop(Theme.SPACE_6).row();
         root.add(ui.label("The game screen is the next thing to be built.", Theme.TextStyle.BODY_LARGE,
             Theme.INK_MUTED)).left().padTop(Theme.SPACE_3).row();
         root.add(leave).size(180f, 52f).left().padTop(Theme.SPACE_8);
         stage.addActor(root);
+        stage.addActor(boardOf(started));
+    }
+
+    /**
+     * Builds the picture of the board with every robot on its start square.
+     *
+     * @param started the message that started the game
+     * @return the actor, placed on the right of the screen
+     */
+    private BoardActor boardOf(GameStarted started) {
+        Board board = BoardLoader.parse(started.boardJson()).board();
+        float tile = Math.min(MAX_TILE, BOARD_AREA / Math.max(board.width(), board.height()));
+        BoardActor actor = new BoardActor(ui, board, tile);
+        List<RobotPose> robots = new ArrayList<>();
+        for (PlayerInfo player : started.players()) {
+            StartSquare start = board.startSquares().get(player.seat());
+            robots.add(RobotPose.at(player.seat(), start.position(), start.facing()));
+        }
+        actor.setRobots(robots);
+        actor.setPosition(BOARD_LEFT, (Theme.VIEW_HEIGHT - actor.getHeight()) / 2f);
+        return actor;
     }
 
     /**

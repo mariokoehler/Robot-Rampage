@@ -230,9 +230,9 @@ public final class UiKit implements Disposable {
      * drawn smaller than they are stored, so they are filtered with mipmaps.
      *
      * @param path the path relative to the asset folder, for example {@code robots/robot-1-bolt.png}
-     * @return the picture as a drawable
+     * @return the picture as a drawable, which can also be drawn turned
      */
-    public Drawable image(String path) {
+    public TextureRegionDrawable image(String path) {
         Texture texture = images.computeIfAbsent(path, key -> {
             Texture loaded = new Texture(Gdx.files.internal(key), true);
             loaded.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);

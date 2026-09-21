@@ -15,4 +15,7 @@ Vector art taken straight from the game's screen mockups
 | `icons/` | lock, tick, chevron, close, settings, play, pause, power, host crown, flag, info, warning, eye, wifi | UI icons, drawn white or ink; tint them at runtime. |
 | `robots/` | the eight robots, one per seat (128 px) | Bodies without facing; the client draws the facing wedge and seat badge. |
 
+`edges/laser-emitter.svg`, `overlays/robot-wedge.svg` and `overlays/robot-badge.svg` are parts of the board laser and of the
+robot overlay drawing, cut out by hand so the client can draw them separately (beam length and robot heading vary).
+
 Not derived: audio (none exists yet), the window/application icon, a logo (the design uses plain type).

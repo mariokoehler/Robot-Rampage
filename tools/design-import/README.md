@@ -13,4 +13,9 @@ neither runs during a normal build.
    PNGs with [resvg](https://github.com/RazrFalcon/resvg-js), loading the project fonts from `assets/fonts` (flags,
    badges and pushers contain text).
 
+4. **Board sprites.** `node make-board-sprites.js` renders the pictures the board renderer draws on top of the ground
+   (flag, start square, crusher, pusher, wall, laser emitter, robot wedge and badge) from `assets-raw/design` into
+   `assets/board`, without the floor background and without numbers (the client draws numbers itself). The laser emitter,
+   wedge and badge SVGs in `assets-raw/design` were cut out of the canvas drawings by hand.
+
 The atlas packing that follows (libGDX `TexturePacker`, as in the StarWars project) is not built yet.

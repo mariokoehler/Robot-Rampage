@@ -718,6 +718,24 @@ texture atlas; belt curves are chosen by the renderer from neighbour analysis
 (2.12). Robots are sprites facing one of four directions, tinted/numbered per
 player.
 
+**Implemented (M4 slice 3): the static board.** `client.render.BoardActor` is a Scene2D actor that draws a `Board` at any
+square size (the mockups' numbers are for 50 px) and the robots on it (`RobotPose`: a position in squares, possibly
+between two squares, and a heading in degrees, so animations can move robots smoothly). Layers, bottom to top: ground
+(floor, belts turned to their direction, gears, pits, repair sites), start squares, crushers, pushers, flags, board lasers,
+walls, robots (body, facing wedge, seat badge). Ground tiles come from `assets/tiles`; everything on top of the ground
+comes from **number-free sprites** in `assets/board` (derived from the canvas drawings by
+`tools/design-import/make-board-sprites.js`, which strips the floor background and the baked-in numbers), with the numbers
+of flags, start squares, pushers and robot badges drawn by the renderer with the game fonts, and laser beams drawn as bars.
+The pure geometry (turning a picture for a direction, the walls of a board once each, how far a beam reaches) is in
+`client.board.BoardGeometry` and is unit-tested. Belt curves are **not** yet drawn (belts are turned to their direction
+only, no corner pieces), and no damage tags, program preview, highlights or archive markers yet — those belong to the
+programming and resolution screens. Crusher squares show no register numbers. Pusher register numbers are turned to run along the bar on east and west
+pushers. `GameStartedScreen` parses the board in its constructor; the server validated it and versions are checked, so a
+bad board is not expected, but a failure there would be an uncaught crash. `BoardSnapshot` (`lwjgl3/src/test`, a dev
+tool run by hand) renders a board with a robot on every start square into a PNG through a hidden window, so the renderer can
+be checked without playing. `lwjgl3/src/test/resources/renderer-probe.json` is a board with everything on it that
+`proving-grounds` lacks (pushers on all four sides, crushers, both gears, 1 to 3 beam lasers, express belts) for exactly that.
+
 **Animation is event-driven.** During the Execute phase the client receives the
 turn's `GameEvent` list (3.4) and plays it through an *animation queue*: each
 event maps to a short animation (slide, rotate, laser beam, explosion, flag
@@ -880,8 +898,9 @@ no UI and is where the test value is:
   couldn't-join dialogs, the background `ConnectionAttempt`, remembered address and name (`SettingsStore`, in
   `~/.robot-rampage/client-settings.json`), and a lobby placeholder. Slice 2 is **done**: the Lobby screen (`LobbyView` decides what it shows), chips, the
   pill switch, toasts, the robot and belt images, the redone (centered) Startup screen with the belt and robots, and the
-  `GameStartedScreen` placeholder. The Settings button on the startup screen
-  is disabled until the Settings dialog exists. Still to come: board renderer, programming UI, Resolution with
+  `GameStartedScreen` placeholder. Slice 3 is **done**: the static board renderer (4.1), shown for now on the
+  `GameStartedScreen` placeholder with every robot on its start square. The Settings button on the startup screen
+  is disabled until the Settings dialog exists. Still to come: programming UI, Resolution with
   the animation queue, Game Over, the remaining dialogs and toasts, and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
