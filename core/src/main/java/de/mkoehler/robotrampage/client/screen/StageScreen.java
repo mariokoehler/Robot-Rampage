@@ -3,7 +3,10 @@ package de.mkoehler.robotrampage.client.screen;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.ScreenAdapter;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.actions.Actions;
+import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.ui.Theme;
@@ -17,6 +20,11 @@ import de.mkoehler.robotrampage.client.ui.UiKit;
  * @author Mario Koehler
  */
 abstract class StageScreen extends ScreenAdapter {
+
+    private static final String TOAST_NAME = "toast";
+    private static final float TOAST_BOTTOM = 140f;
+    private static final float TOAST_SECONDS = 4f;
+    private static final float TOAST_FADE = 0.2f;
 
     /** The game that shows this screen and owns the shared resources. */
     protected final RobotRampageGame game;
@@ -43,6 +51,29 @@ abstract class StageScreen extends ScreenAdapter {
      * @param delta seconds since the previous frame
      */
     protected void update(float delta) {
+    }
+
+    /**
+     * Shows a short message at the bottom of the screen that fades away by itself, for example why the server refused a
+     * request. A new message replaces the one still showing.
+     *
+     * @param message the message
+     */
+    protected void toast(String message) {
+        Actor showing = stage.getRoot().findActor(TOAST_NAME);
+        if (showing != null) {
+            showing.remove();
+        }
+        Table toast = ui.panel();
+        toast.setName(TOAST_NAME);
+        toast.padTop(Theme.SPACE_3).padLeft(Theme.SPACE_6).padRight(Theme.SPACE_6).padBottom(Theme.SPACE_3 + UiKit.SHAPE_RESERVE);
+        toast.add(ui.label(message, Theme.TextStyle.BODY_LARGE, Theme.INK));
+        toast.pack();
+        toast.setPosition((Theme.VIEW_WIDTH - toast.getWidth()) / 2f, TOAST_BOTTOM);
+        toast.getColor().a = 0f;
+        toast.addAction(Actions.sequence(Actions.fadeIn(TOAST_FADE), Actions.delay(TOAST_SECONDS),
+            Actions.fadeOut(TOAST_FADE), Actions.removeActor()));
+        stage.addActor(toast);
     }
 
     /**

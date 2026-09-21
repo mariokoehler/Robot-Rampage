@@ -91,6 +91,8 @@ class ThemeTest {
         assertEquals(20, Theme.TextStyle.FIELD.size());
         assertEquals(Theme.FontFile.BARLOW_SEMIBOLD, Theme.TextStyle.FIELD.file());
         assertEquals(20, Theme.TextStyle.BODY_LARGE.size());
+        assertEquals(13, Theme.TextStyle.CHIP.size());
+        assertEquals(0.06f, Theme.TextStyle.CHIP.letterSpacingEm());
     }
 
     /**

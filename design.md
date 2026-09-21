@@ -534,7 +534,7 @@ derived from the game seed and a fill counter — like the deck, never a live
 | Direction | Message | Purpose |
 |---|---|---|
 | C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name (at most 20 characters, `NetworkConstants.MAX_DISPLAY_NAME_LENGTH`), optional session token; the response carries the seat, the token and the **server's version**, on a refusal too, so the client can show both versions. This pair is a compatibility surface: a client of another version may not be able to read the response that says the versions differ, so the client treats an unreadable handshake like an unreachable server. |
-| S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name. |
+| S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name, and the facts the lobby shows: seats, minimum players (so the client can tell whether the host may start), board size, flag count, lives, programming seconds. Sent again to everybody at every change, and once more when a game ends and the session returns to the lobby, so the lobby screen must be buildable from one `LobbyState` alone. |
 | C→S | `SetReady`, `StartGameRequest` | Lobby actions (start: host only). |
 | S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
 | S→all | `TurnStarted` | Turn number, the respawn events, who must program, the time limit. |
@@ -790,8 +790,7 @@ versions, settings, connection lost, menu, leave, power down, choose your facing
 below it.
 
 **What the mockups need beyond the current protocol.** Done: the server's version in `HandshakeResponse`, the 10 s connect
-timeout and the 20-character name limit. Still to be added with the lobby and programming slices:
-- `LobbyState` should carry the board's facts (size, flag count) and the game settings (lives, programming seconds).
+timeout, the 20-character name limit and the game facts in `LobbyState`. Still to be added with the lobby and programming slices:
 - The connection-lost dialog and the "Away 9:12" chip need the reconnect grace period (seconds) from the server, in the
   handshake and in `PlayerConnection`.
 - The "Time's up" banner ("empty registers were filled at random") and the register slots after a random fill need a
@@ -811,18 +810,33 @@ Settings, the leave confirmation, the board key, the ranking rules in the standi
 have been extracted into `assets-raw/design/` (README there) with `tools/design-import`. What still has to be produced
 by the owner: sound effects and music (none exist) and the window/application icon. **There is no logo (owner, 2026-09-21):** the
 name is set in Bungee, and the startup screen shows the tagline "Plan carefully. Crash spectacularly." in smaller type below it.
-Rasterizing to PNG and packing an atlas is the next asset-pipeline step.
+The eight robots and the ground tiles are rasterized to 128 px PNGs in `assets/robots` and `assets/tiles` (with
+`tools/design-import/rasterize.js`) and loaded as single textures with mipmaps; packing an atlas is still to do.
 
 ## 5. UX flow
 
 ### 5.1 Screen flow
 
-`Startup` (implemented) → `Connect` (implemented; server address, display name) → a `ConnectedScreen` placeholder that lists the seated players until the lobby is built →
+`Startup` (implemented) → `Connect` (implemented; server address, display name) →
 `Lobby` (the waiting room of the server's single game: see who joined, ready-up,
 the host starts — the first player to connect is the host; game
 options later belong in a "create game" step, see 7) → `Game` (alternating **Programming** and
 **Resolution** views) → `Game Over` (standings) → back to `Lobby`. Details of the
 lobby model are open (7).
+
+**Lobby (implemented).** The screen shows a row for every seat of the board (robot, name, Host/You/Ready chips, or
+"Waiting for a player…"), the facts of the game, the "I am ready" switch and, for the host, "Start game". **The start
+button follows the server's rule exactly** (`LobbyView.canStart`): the player is the host, at least `minPlayers` are
+seated, and every player *except the host* is ready — the host's own ready flag does not matter. Everybody else sees a
+disabled "Waiting for the host". A refused request (`RequestRejected`) appears as a toast. **DECISIONS (owner may
+revise):** the mockup's board preview is not drawn in the lobby — the board only reaches the client with `GameStarted`,
+so a bordered placeholder stands in until the board renderer exists; free seats use a solid border where the mockup
+draws a dashed one; the lobby has no "leave" confirmation (leaving costs nothing here).
+**A dropped connection in the lobby ends the seat** (the session removes a disconnected player in the lobby, so there is
+no reconnect and no grace period): the player is sent back to the connect screen with a dialog. The "Connection lost"
+dialog with reconnect attempts belongs to running games only. After `GameStarted` the lobby hands the connection, with
+the messages that arrived behind the start message, to the next screen; a `GameStartedScreen` placeholder stands in
+until the game screen is built. The lobby never closes the connection when it is disposed, only when the player leaves.
 
 ### 5.2 Controls
 
@@ -864,8 +878,10 @@ no UI and is where the test value is:
 - **M4 — Playable client.** First real playtest at the end. Slice 1 is **done**: the widget kit and dialog
   (`UiKit`, `ModalDialog`), the Startup and Connect screens, the connecting, can't-reach, different-versions and
   couldn't-join dialogs, the background `ConnectionAttempt`, remembered address and name (`SettingsStore`, in
-  `~/.robot-rampage/client-settings.json`), and a `ConnectedScreen` placeholder. The Settings button on the startup screen
-  is disabled until the Settings dialog exists. Still to come: Lobby, board renderer, programming UI, Resolution with
+  `~/.robot-rampage/client-settings.json`), and a lobby placeholder. Slice 2 is **done**: the Lobby screen (`LobbyView` decides what it shows), chips, the
+  pill switch, toasts, the robot and belt images, the redone (centered) Startup screen with the belt and robots, and the
+  `GameStartedScreen` placeholder. The Settings button on the startup screen
+  is disabled until the Settings dialog exists. Still to come: board renderer, programming UI, Resolution with
   the animation queue, Game Over, the remaining dialogs and toasts, and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down

@@ -6,6 +6,7 @@ import de.mkoehler.robotrampage.client.connect.ConnectFlow;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ConnectionAttempt;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
+import de.mkoehler.robotrampage.client.lobby.LobbyView;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.NetworkServer;
@@ -391,5 +392,40 @@ class ServerIntegrationTest {
 
         assertEquals(ConnectFlow.Phase.UNREACHABLE, attempt.flow().phase());
         assertFalse(attempt.flow().detail().isEmpty());
+    }
+
+    /**
+     * The lobby screen enables its start button by the same rule the server applies: with two players it stays off until the
+     * other player is ready, and when it turns on the server really starts the game.
+     *
+     * @throws Exception on any failure
+     */
+    @Test
+    void theStartButtonRuleAgreesWithTheServer() throws Exception {
+        TestClient ann = connect("Ann", null);
+        int annSeat = ann.take(HandshakeResponse.class).getSeat();
+        TestClient bo = connect("Bo", null);
+        bo.take(HandshakeResponse.class);
+
+        LobbyState twoPlayers = ann.take(LobbyState.class);
+        while (twoPlayers.players().size() < 2) {
+            twoPlayers = ann.take(LobbyState.class);
+        }
+        LobbyView notReady = new LobbyView(twoPlayers, annSeat);
+        assertTrue(notReady.iAmHost());
+        assertFalse(notReady.canStart(), "the other player is not ready");
+        assertEquals(2, twoPlayers.minPlayers());
+        assertEquals(12, twoPlayers.boardWidth());
+        assertEquals(3, twoPlayers.flagCount());
+
+        bo.send(new SetReady(true));
+        LobbyState ready = ann.take(LobbyState.class);
+        while (!ready.players().stream().allMatch(player -> player.host() || player.ready())) {
+            ready = ann.take(LobbyState.class);
+        }
+        assertTrue(new LobbyView(ready, annSeat).canStart());
+
+        ann.send(new StartGameRequest());
+        assertNotNull(ann.take(GameStarted.class));
     }
 }

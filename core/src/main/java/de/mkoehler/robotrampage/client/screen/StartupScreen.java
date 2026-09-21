@@ -9,18 +9,25 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Align;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.lobby.RobotLook;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.AppVersion;
 
 /**
- * The first screen: the game's name, one line about it, and the way in (Play), to the settings and out (Quit). The
- * settings screen does not exist yet, so its button is shown disabled.
+ * The first screen: the game's name and tagline, the way in (Play), to the settings and out (Quit), and the eight robots
+ * standing on a conveyor belt. The settings screen does not exist yet, so its button is shown disabled.
  *
  * @author Mario Koehler
  */
 public final class StartupScreen extends StageScreen {
 
     private static final float BAND_HEIGHT = 98f;
+    private static final float BELT_TILE = 96f;
+    private static final float ROBOT_SIZE = 128f;
+    private static final float ROBOT_LEFT = 86f;
+    private static final float ROBOT_SPACING = 230f;
+    private static final float ROBOT_TOP = 760f;
+    private static final float ROBOT_STAGGER = 10f;
     private static final String CREDIT = "A fan project. RoboRally is a board game by Richard Garfield, published by "
         + "Wizards of the Coast / Avalon Hill and Renegade Game Studios.";
 
@@ -31,7 +38,9 @@ public final class StartupScreen extends StageScreen {
      */
     public StartupScreen(RobotRampageGame game) {
         super(game);
+        addBelt();
         stage.addActor(floorBand());
+        addRobots();
         stage.addActor(titleBlock());
     }
 
@@ -65,12 +74,35 @@ public final class StartupScreen extends StageScreen {
 
         Table table = new Table();
         table.setFillParent(true);
-        table.top().left().padLeft(160f).padTop(230f);
-        table.add(ui.label("Robot Rampage", Theme.TextStyle.HERO, Theme.INK)).left().row();
+        table.top().padTop(230f);
+        table.add(ui.label("Robot Rampage", Theme.TextStyle.HERO, Theme.INK)).row();
         table.add(ui.label("Plan carefully. Crash spectacularly.", Theme.TextStyle.LEAD,
-            Theme.INK_MUTED)).left().padTop(40f).row();
-        table.add(buttons).left().padTop(40f);
+            Theme.INK_MUTED)).padTop(40f).row();
+        table.add(buttons).padTop(40f);
         return table;
+    }
+
+    /**
+     * Lays the conveyor belt along the bottom of the screen, above the strip with the version.
+     */
+    private void addBelt() {
+        for (int i = 0; i < Theme.VIEW_WIDTH / BELT_TILE; i++) {
+            Image tile = new Image(ui.image("tiles/belt.png"));
+            tile.setBounds(i * BELT_TILE, BAND_HEIGHT, BELT_TILE, BELT_TILE);
+            stage.addActor(tile);
+        }
+    }
+
+    /**
+     * Stands the eight robots in a row on the belt, every other one a little higher.
+     */
+    private void addRobots() {
+        for (int seat = 0; seat < RobotLook.COUNT; seat++) {
+            Image robot = new Image(ui.image(RobotLook.picture(seat)));
+            float top = seat % 2 == 0 ? ROBOT_TOP : ROBOT_TOP + ROBOT_STAGGER;
+            robot.setBounds(ROBOT_LEFT + seat * ROBOT_SPACING, Theme.VIEW_HEIGHT - top - ROBOT_SIZE, ROBOT_SIZE, ROBOT_SIZE);
+            stage.addActor(robot);
+        }
     }
 
     /**

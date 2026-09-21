@@ -120,7 +120,7 @@ class WireProtocolTest {
             de.mkoehler.robotrampage.rules.RobotStatus.ELIMINATED, false, false);
         LoggedEvent event = new LoggedEvent(2, SubPhase.LASERS, new GameEvent.RobotDestroyed(3, DestructionCause.DAMAGE));
         List<Object> messages = List.of(
-            new LobbyState(players, "Proving Grounds", 8),
+            new LobbyState(players, "Proving Grounds", 8, 2, 12, 12, 3, 3, 90),
             new SetReady(true),
             new StartGameRequest(),
             new GameStarted("{\"json\": true}", players, 3),

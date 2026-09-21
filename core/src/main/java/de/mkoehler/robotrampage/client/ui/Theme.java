@@ -320,7 +320,9 @@ public final class Theme {
         /** Text typed into a field: Barlow SemiBold 20. Not in the design system's token file. */
         FIELD(FontFile.BARLOW_SEMIBOLD, 20, 0f),
         /** The main line of a dialog: Barlow 20. Not in the design system's token file. */
-        BODY_LARGE(FontFile.BARLOW_REGULAR, 20, 0f);
+        BODY_LARGE(FontFile.BARLOW_REGULAR, 20, 0f),
+        /** The text of status chips and small captions in capitals: Barlow SemiBold 13, letter-spaced by 0.06 em. */
+        CHIP(FontFile.BARLOW_SEMIBOLD, 13, 0.06f);
 
         private final FontFile file;
         private final int size;

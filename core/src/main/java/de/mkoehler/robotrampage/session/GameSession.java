@@ -660,7 +660,9 @@ public final class GameSession {
      * Tells everybody the state of the lobby.
      */
     private void broadcastLobby() {
-        outbox.broadcast(new LobbyState(playerInfos(), board.definition().name(), board.board().startSquares().size()));
+        outbox.broadcast(new LobbyState(playerInfos(), board.definition().name(), board.board().startSquares().size(),
+            config.minPlayers(), board.board().width(), board.board().height(), board.board().flags().size(),
+            Robot.STARTING_LIVES, (int) (config.programmingMillis() / 1000)));
     }
 
     /**

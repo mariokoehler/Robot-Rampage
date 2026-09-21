@@ -1,5 +1,6 @@
 package de.mkoehler.robotrampage.client.ui;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
@@ -14,7 +15,9 @@ import com.badlogic.gdx.scenes.scene2d.utils.NinePatchDrawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Disposable;
 
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * Everything a screen needs to build widgets in the look of the design: the generated fonts, the stretchable shapes, and
@@ -30,6 +33,13 @@ public final class UiKit implements Disposable {
 
     private static final int FIELD_PADDING = Theme.SPACE_4;
     private static final float CURSOR_WIDTH = 2f;
+
+    /** The height of a chip's visible pill. */
+    public static final int CHIP_HEIGHT = 28;
+    /** The rows a stretchable shape keeps below its visible box for the shadow; a shape is this much taller than it looks. */
+    public static final int SHAPE_RESERVE = 3;
+    /** The height to give a chip in a layout: the pill plus the shape's shadow reserve. */
+    public static final int CHIP_CELL_HEIGHT = CHIP_HEIGHT + SHAPE_RESERVE;
     private static final float SELECTION_ALPHA = 0.35f;
 
     private final Theme.Fonts fonts;
@@ -37,6 +47,7 @@ public final class UiKit implements Disposable {
     private final Texture pixel;
     private final TextField.TextFieldStyle fieldStyle;
     private final TextField.TextFieldStyle fieldErrorStyle;
+    private final Map<String, Texture> images = new HashMap<>();
 
     /**
      * Generates the fonts and builds the shared shapes.
@@ -168,6 +179,69 @@ public final class UiKit implements Disposable {
     }
 
     /**
+     * The looks of a status chip.
+     */
+    public enum ChipKind {
+        /** Bordered, on the page color: neutral facts such as an address or "Not ready". */
+        OUTLINE,
+        /** Ink-colored with white text: counts and roles such as the host. */
+        INK,
+        /** Orange with white text: the player's own marker. */
+        PRIMARY,
+        /** Green with white text: something is done or ready. */
+        SUCCESS
+    }
+
+    /**
+     * Creates a status chip: a small pill with a few capital letters.
+     *
+     * @param text the text, turned into capitals
+     * @param kind the look
+     * @return the chip; place it in a layout with the height {@link #CHIP_CELL_HEIGHT}
+     */
+    public Table chip(String text, ChipKind kind) {
+        Color fill = switch (kind) {
+            case OUTLINE -> Theme.SURFACE_RAISED;
+            case INK -> Theme.INK;
+            case PRIMARY -> Theme.PRIMARY;
+            case SUCCESS -> Theme.SUCCESS;
+        };
+        Color border = kind == ChipKind.OUTLINE ? Theme.LINE_STRONG : fill;
+        Color textColor = kind == ChipKind.OUTLINE ? Theme.INK_MUTED : Theme.ON_PRIMARY;
+        Table chip = new Table();
+        chip.setBackground(shapes.rounded(fill, border, kind == ChipKind.OUTLINE ? Theme.BORDER_CONTROL : 0,
+            CHIP_HEIGHT / 2, null, 0, false));
+        chip.padBottom(SHAPE_RESERVE);
+        chip.add(label(text, Theme.TextStyle.CHIP, textColor)).padLeft(Theme.SPACE_3).padRight(Theme.SPACE_3);
+        return chip;
+    }
+
+    /**
+     * Creates the on/off switch of the design: a pill with a round knob.
+     *
+     * @return the switch, off
+     */
+    public PillToggle toggle() {
+        return new PillToggle(shapes);
+    }
+
+    /**
+     * Returns a picture from the asset folder, loaded on first use and kept until this kit is disposed. Pictures are
+     * drawn smaller than they are stored, so they are filtered with mipmaps.
+     *
+     * @param path the path relative to the asset folder, for example {@code robots/robot-1-bolt.png}
+     * @return the picture as a drawable
+     */
+    public Drawable image(String path) {
+        Texture texture = images.computeIfAbsent(path, key -> {
+            Texture loaded = new Texture(Gdx.files.internal(key), true);
+            loaded.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);
+            return loaded;
+        });
+        return new TextureRegionDrawable(new TextureRegion(texture));
+    }
+
+    /**
      * Builds the style of a text field.
      *
      * @param error whether it is the style for a rejected value
@@ -207,7 +281,8 @@ public final class UiKit implements Disposable {
      * @return the text in capitals if the style is set in capitals, else unchanged
      */
     private static String capitalsIfNeeded(String text, Theme.TextStyle style) {
-        boolean capitals = style.file() == Theme.FontFile.BUNGEE || style == Theme.TextStyle.LABEL;
+        boolean capitals = style.file() == Theme.FontFile.BUNGEE || style == Theme.TextStyle.LABEL
+            || style == Theme.TextStyle.CHIP;
         return capitals ? text.toUpperCase(Locale.ROOT) : text;
     }
 
@@ -219,5 +294,7 @@ public final class UiKit implements Disposable {
         fonts.dispose();
         shapes.dispose();
         pixel.dispose();
+        images.values().forEach(Texture::dispose);
+        images.clear();
     }
 }

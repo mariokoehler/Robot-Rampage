@@ -92,13 +92,13 @@ class ArchitectureTest {
     }
 
     /**
-     * The client's connect flow and settings are plain Java: no libGDX and no screens, which is what lets them be tested
+     * The client's connect flow, settings and lobby view are plain Java: no libGDX and no screens, which is what lets them be tested
      * without a window and driven by any screen. They may use the network layer, which they exist to drive.
      */
     @Test
     void clientLogicStaysFreeOfLibGdxAndScreens() {
         noClasses().that().resideInAnyPackage("de.mkoehler.robotrampage.client.connect..",
-                "de.mkoehler.robotrampage.client.settings..")
+                "de.mkoehler.robotrampage.client.settings..", "de.mkoehler.robotrampage.client.lobby..")
             .should().dependOnClassesThat().resideInAnyPackage(
                 "com.badlogic..", "de.mkoehler.robotrampage.client.screen..", "de.mkoehler.robotrampage.client.ui..")
             .check(productionClasses);

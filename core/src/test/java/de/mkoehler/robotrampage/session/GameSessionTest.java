@@ -249,6 +249,24 @@ class GameSessionTest {
     }
 
     /**
+     * The lobby tells clients everything they show about the game and everything they need to know whether the host may
+     * start: the board's size and flags, the lives, the programming time and the number of players required.
+     */
+    @Test
+    void theLobbyStateCarriesTheFactsOfTheGame() {
+        join("Ann");
+
+        LobbyState lobby = outbox.lastReceivedBy(0, LobbyState.class);
+
+        assertEquals(2, lobby.minPlayers());
+        assertEquals(5, lobby.boardWidth());
+        assertEquals(30, lobby.boardHeight());
+        assertEquals(1, lobby.flagCount());
+        assertEquals(Robot.STARTING_LIVES, lobby.lives());
+        assertEquals(CAP / 1000, lobby.programmingSeconds());
+    }
+
+    /**
      * A leaving player frees their seat for the next one and the host passes on.
      */
     @Test

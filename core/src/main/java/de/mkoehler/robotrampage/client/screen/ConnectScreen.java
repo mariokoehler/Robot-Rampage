@@ -54,6 +54,17 @@ public final class ConnectScreen extends StageScreen {
      * @param game the game showing the screen
      */
     public ConnectScreen(RobotRampageGame game) {
+        this(game, null);
+    }
+
+    /**
+     * Builds the screen and opens a dialog with a message on top of it, for a player who arrives here because a connection
+     * ended.
+     *
+     * @param game   the game showing the screen
+     * @param notice what to tell the player, or {@code null} for nothing
+     */
+    public ConnectScreen(RobotRampageGame game, String notice) {
         super(game);
         addressField = ui.textField(game.settings().serverAddress(), 255);
         nameField = ui.textField(game.settings().displayName(), NetworkConstants.MAX_DISPLAY_NAME_LENGTH);
@@ -69,6 +80,9 @@ public final class ConnectScreen extends StageScreen {
         root.add(serverPanel()).width(820f).top();
         stage.addActor(root);
         stage.setKeyboardFocus(addressField);
+        if (notice != null) {
+            showNoticeDialog(notice);
+        }
     }
 
     /**
@@ -259,7 +273,7 @@ public final class ConnectScreen extends StageScreen {
             case ACCEPTED -> {
                 ConnectionAttempt finished = attempt;
                 attempt = null;
-                game.setScreen(new ConnectedScreen(game, finished.connected(), finished.address()));
+                game.setScreen(new LobbyScreen(game, finished.connected(), finished.address()));
             }
             case UNREACHABLE -> showUnreachableDialog(attempt.address(), flow.detail());
             case VERSION_MISMATCH -> showVersionDialog(flow.serverVersion());
@@ -393,6 +407,26 @@ public final class ConnectScreen extends StageScreen {
             .buttons(200f, back)
             .onEscape(this::dismiss);
         open(refused);
+    }
+
+    /**
+     * Tells the player that the connection they had has ended.
+     *
+     * @param notice what to say
+     */
+    private void showNoticeDialog(String notice) {
+        TextButton ok = ui.button("Back", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
+        ok.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                dismiss();
+            }
+        });
+        open(new ModalDialog(ui, DIALOG_WIDTH, true)
+            .title("Disconnected")
+            .text(notice, Theme.TextStyle.BODY_LARGE, Theme.INK)
+            .buttons(200f, ok)
+            .onEscape(this::dismiss));
     }
 
     /**
