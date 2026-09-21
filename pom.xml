@@ -36,8 +36,6 @@
     <jacksonVersion>2.22.2</jacksonVersion>
     <!-- Enforces the package layering of design.md 3.3 in a unit test (core's ArchitectureTest) -->
     <archUnitVersion>1.5.0</archUnitVersion>
-    <!-- Scene2D UI toolkit for menu-style screens, see design.md 4.2 -->
-    <visUiVersion>1.5.9</visUiVersion>
   </properties>
 
   <!-- The KryoNet fork is only published on JitPack, not Maven Central. -->

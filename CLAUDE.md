@@ -44,6 +44,8 @@ analyse them with a script). `client.ui.Theme` (from Claude Design, moved into `
 spacing field is `spaceX`) holds all tokens; fonts are in `assets/fonts`; derived vector art is in `assets-raw/design`
 (re-derive with `tools/design-import`). Note `Theme.robotColor(seat)` takes the **displayed seat number 1..8 = robot id +
 1**. Design canvas is 1920×1080 → `FitViewport`.
+The canvas's "suggestion" items (Menu, Settings, leave confirmation, board key, standings ranking, archive-marker diamond)
+were **confirmed as decisions** by the owner — build them as drawn.
 **Not done from M3: autosave** (design.md 3.10). **Next: M4**, the playable client (connect screen, board renderer,
 programming UI, animation queue) — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
@@ -62,7 +64,7 @@ not hand-verified twice. The design was reviewed by the user (2026-09-21): tags 
 - **No Ashley, no Box2D, no gdxAI, no MCP server, no `dev-tools` module** — reasons
   in design.md 3.7. The user tests in-game themselves; that was faster than MCP in
   StarWars.
-- **Kept:** libGDX, Maven, KryoNet (TCP only), Jackson, VisUI, JUnit 5.
+- **Kept:** libGDX, Maven, KryoNet (TCP only), Jackson, JUnit 5, FreeType (fonts). UI is plain Scene2D on `client.ui.Theme` (design.md 4.2).
 - **GitHub:** https://github.com/mariokoehler/Robot-Rampage (public, branch `main`,
   created 2026-09-21; GitHub has no spaces in names, hence `Robot-Rampage`). The README
   carries a prominent work-in-progress warning — keep it until the game is actually
@@ -76,9 +78,8 @@ not hand-verified twice. The design was reviewed by the user (2026-09-21): tags 
   annotated `vX.Y.Z`, commits after a tag build as `X.Y.(Z+1)-SNAPSHOT`. Design in
   design.md 3.9.
 - The rules engine (`rules`, `board` packages) **never imports libGDX**, `net` or
-  `client` (design.md 3.3). **This is discipline only** — `core` depends on `gdx` and
-  `vis-ui`, so nothing stops an accidental import (and `server` inherits vis-ui
-  transitively). If it ever slips, the clean fix is splitting client screens out of
+  `client` (design.md 3.3). **This is discipline only** — `core` depends on `gdx`,
+  so nothing stops an accidental import. If it ever slips, the clean fix is splitting client screens out of
   `core` into their own module; that is cheapest *before* M1 piles code into
   `core`, so reconsider at the start of M1 rather than after M4.
 - **`ArchitectureTest` (ArchUnit, core) enforces that rule** for `rules`/`board`/`net`/

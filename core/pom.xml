@@ -36,12 +36,6 @@
       <artifactId>jackson-databind</artifactId>
     </dependency>
     <dependency>
-      <!-- Built directly on Scene2D (already part of `gdx`), see design.md 4.2. -->
-      <groupId>com.kotcrab.vis</groupId>
-      <artifactId>vis-ui</artifactId>
-      <version>${visUiVersion}</version>
-    </dependency>
-    <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>

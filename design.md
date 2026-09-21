@@ -401,7 +401,7 @@ netcode gotchas in its `CLAUDE.md` do not carry over.
 - **Maven**, multi-module (3.3). Java 25.
 - **KryoNet** (maintained `crykn` fork via JitPack) — networking, TCP only.
 - **Jackson** (`jackson-databind`) — JSON: boards, config files, saved games.
-- **VisUI** — Scene2D widgets for the menu-style screens (4.2).
+- **gdx-freetype** — generates the fonts at runtime from the TTF files (4.2).
 - **JUnit 5** — tests, used pragmatically (3.8).
 - **Not used, on purpose:** Ashley (ECS), Box2D, gdxAI, an MCP server. See 3.7.
 
@@ -674,7 +674,7 @@ none for rendering/UI. Focus, roughly in priority order:
 **Test helper (planned):** a tiny ASCII-art board parser for tests, so a scenario
 reads like the board it describes instead of a wall of `set(x, y, …)` calls.
 
-Not tested: screens, rendering, animation, VisUI wiring.
+Not tested: screens, rendering, animation, Scene2D wiring.
 
 ### 3.9 Build, versioning and release
 
@@ -730,8 +730,8 @@ design system): the colours, spacing, radii and borders as constants; a `TextSty
 the stretchable rounded panels, buttons and fields with their hard, blur-free shadows into nine-patches from a signed
 distance field. The whole UI is laid out in a `FitViewport` of **1920×1080** (`Theme.VIEW_WIDTH/HEIGHT`), so every
 number in the mockups (4.6) can be used as is; the fonts are regenerated for the real window size. The board itself is
-drawn with `SpriteBatch`. **VisUI is no longer needed** — the mockups' look (Bungee labels, orange one-per-screen
-button, sinking press) is not VisUI's — and can be removed from the pom *(unconfirmed)*.
+drawn with `SpriteBatch`. The screens use plain Scene2D widgets styled from `Theme`; VisUI was dropped because the mockups' look (Bungee labels,
+orange one-per-screen button, sinking press) is not VisUI's.
 
 ### 4.3 The programming UI
 
@@ -787,8 +787,9 @@ below it.
 size, playback speed, show my program on the board, auto-skip resolution), and the last server address, name and
 session token for rejoining "from this computer".
 
-**Marked by the designer as suggestions, not from this document — to be confirmed:** the Menu dialog, Settings, the
-leave confirmation, the board key, the ranking rules in the standings, and the archive-marker diamond.
+**Decided (owner, 2026-09-21):** the pieces the designer drew as suggestions beyond this document — the Menu dialog,
+Settings, the leave confirmation, the board key, the ranking rules in the standings, and the archive-marker diamond — are
+**taken as decisions for now**, so the client is built to the mockups as drawn. They can still be revised once played.
 
 **Assets.** The board tiles, objects, card icons, UI icons and the eight robots are vector drawings in the mockups and
 have been extracted into `assets-raw/design/` (README there) with `tools/design-import`. What still has to be produced
