@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *
  * @author Mario Koehler
  */
-public final class NetworkClient {
+public final class NetworkClient implements ServerLink {
 
     /**
      * Receives the events {@link NetworkClient#poll(Handler)} drains from the network thread.
@@ -78,6 +78,7 @@ public final class NetworkClient {
      * @throws IOException if the connection could not be established within
      *                     {@link NetworkConstants#CONNECTION_TIMEOUT_MILLIS}
      */
+    @Override
     public void connect(String host, int tcpPort) throws IOException {
         client.start();
         try {
@@ -103,6 +104,7 @@ public final class NetworkClient {
      *
      * @param handler where the events go
      */
+    @Override
     public void poll(Handler handler) {
         Event event;
         while ((event = inbox.poll()) != null) {
@@ -119,6 +121,7 @@ public final class NetworkClient {
      *
      * @param message the message, one of the classes registered in {@link MessageRegistry}
      */
+    @Override
     public void send(Object message) {
         client.sendTCP(message);
     }
@@ -126,6 +129,7 @@ public final class NetworkClient {
     /**
      * Closes the connection and stops the network thread. Safe to call repeatedly.
      */
+    @Override
     public void disconnect() {
         client.stop();
     }

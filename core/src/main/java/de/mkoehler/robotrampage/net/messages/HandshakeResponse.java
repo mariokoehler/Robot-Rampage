@@ -31,6 +31,11 @@ public class HandshakeResponse {
     private String sessionToken;
 
     /**
+     * The version of the server that answered, so a client that is refused for its version can show both.
+     */
+    private String serverVersion;
+
+    /**
      * No-arg constructor required by Kryo for deserialization.
      */
     public HandshakeResponse() {
@@ -39,12 +44,14 @@ public class HandshakeResponse {
     /**
      * Creates a handshake response.
      *
-     * @param accepted whether the client's handshake was accepted
-     * @param message  a human-readable message accompanying the result
+     * @param accepted      whether the client's handshake was accepted
+     * @param message       a human-readable message accompanying the result
+     * @param serverVersion the version of the answering server
      */
-    public HandshakeResponse(boolean accepted, String message) {
+    public HandshakeResponse(boolean accepted, String message, String serverVersion) {
         this.accepted = accepted;
         this.message = message;
+        this.serverVersion = serverVersion;
     }
 
     /**
@@ -53,12 +60,14 @@ public class HandshakeResponse {
      * @param message      a human-readable welcome
      * @param seat         the seat, which is also the player's robot id
      * @param sessionToken the token for resuming this seat after a disconnect
+     * @param serverVersion the version of the answering server
      */
-    public HandshakeResponse(String message, int seat, String sessionToken) {
+    public HandshakeResponse(String message, int seat, String sessionToken, String serverVersion) {
         this.accepted = true;
         this.message = message;
         this.seat = seat;
         this.sessionToken = sessionToken;
+        this.serverVersion = serverVersion;
     }
 
     /**
@@ -95,5 +104,14 @@ public class HandshakeResponse {
      */
     public String getSessionToken() {
         return sessionToken;
+    }
+
+    /**
+     * Returns the version of the server that answered.
+     *
+     * @return the server's build version
+     */
+    public String getServerVersion() {
+        return serverVersion;
     }
 }

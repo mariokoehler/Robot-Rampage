@@ -2,7 +2,12 @@ package de.mkoehler.robotrampage.server;
 
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.LoadedBoard;
+import de.mkoehler.robotrampage.client.connect.ConnectFlow;
+import de.mkoehler.robotrampage.client.connect.ConnectedServer;
+import de.mkoehler.robotrampage.client.connect.ConnectionAttempt;
+import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.net.AppVersion;
+import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.NetworkServer;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
@@ -193,6 +198,7 @@ class ServerIntegrationTest {
         HandshakeResponse response = stale.take(HandshakeResponse.class);
         assertFalse(response.isAccepted());
         assertTrue(response.getMessage().contains("update"));
+        assertEquals(AppVersion.getVersion(), response.getServerVersion());
         assertTrue(stale.awaitDisconnect());
     }
 
@@ -297,5 +303,93 @@ class ServerIntegrationTest {
         HandshakeResponse response = mallory.take(HandshakeResponse.class);
         assertFalse(response.isAccepted());
         assertTrue(mallory.awaitDisconnect());
+    }
+
+    /**
+     * Runs a connection attempt, the way the client's connect screen does, until it has finished.
+     *
+     * @param link    the link the attempt uses
+     * @param version the version the client claims to run
+     * @return the finished attempt
+     */
+    private ConnectionAttempt joinLikeTheClient(NetworkClient link, String version) {
+        ConnectionAttempt attempt = new ConnectionAttempt(link, new ServerAddress("localhost", port), "Ann", null, version);
+        attempt.start();
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (!attempt.flow().isFinished() && System.currentTimeMillis() < deadline) {
+            attempt.update();
+        }
+        return attempt;
+    }
+
+    /**
+     * The client's connect flow joins a real server: it is accepted, gets a seat and a token, and the lobby state that follows
+     * the acceptance reaches the next screen, either handed over with the connection or still waiting on the link.
+     */
+    @Test
+    void theClientsConnectFlowJoinsARealServer() {
+        NetworkClient link = new NetworkClient();
+
+        ConnectionAttempt attempt = joinLikeTheClient(link, AppVersion.getVersion());
+
+        assertEquals(ConnectFlow.Phase.ACCEPTED, attempt.flow().phase());
+        ConnectedServer connected = attempt.connected();
+        assertEquals(0, connected.welcome().getSeat());
+        assertNotNull(connected.welcome().getSessionToken());
+        assertEquals(AppVersion.getVersion(), connected.welcome().getServerVersion());
+        List<Object> seen = new ArrayList<>(connected.earlyMessages());
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (seen.stream().noneMatch(LobbyState.class::isInstance) && System.currentTimeMillis() < deadline) {
+            link.poll(new NetworkClient.Handler() {
+                @Override
+                public void onMessage(Object message) {
+                    seen.add(message);
+                }
+
+                @Override
+                public void onDisconnect() {
+                }
+            });
+        }
+        assertTrue(seen.stream().anyMatch(LobbyState.class::isInstance));
+        link.disconnect();
+    }
+
+    /**
+     * The client's connect flow tells a version refusal from any other: the server's version is shown, and the connection ends.
+     */
+    @Test
+    void theClientsConnectFlowReportsAVersionMismatch() {
+        NetworkClient link = new NetworkClient();
+
+        ConnectionAttempt attempt = joinLikeTheClient(link, "0.0.0-ancient");
+
+        assertEquals(ConnectFlow.Phase.VERSION_MISMATCH, attempt.flow().phase());
+        assertEquals(AppVersion.getVersion(), attempt.flow().serverVersion());
+        assertNull(attempt.connected());
+    }
+
+    /**
+     * Nothing listens on the port: the flow reports the server as unreachable instead of hanging.
+     *
+     * @throws IOException if no free port could be found
+     */
+    @Test
+    void theClientsConnectFlowReportsAnUnreachableServer() throws IOException {
+        int unusedPort;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            unusedPort = socket.getLocalPort();
+        }
+        NetworkClient link = new NetworkClient();
+        ConnectionAttempt attempt = new ConnectionAttempt(link, new ServerAddress("localhost", unusedPort), "Ann", null,
+            AppVersion.getVersion());
+        attempt.start();
+        long deadline = System.currentTimeMillis() + 5_000;
+        while (!attempt.flow().isFinished() && System.currentTimeMillis() < deadline) {
+            attempt.update();
+        }
+
+        assertEquals(ConnectFlow.Phase.UNREACHABLE, attempt.flow().phase());
+        assertFalse(attempt.flow().detail().isEmpty());
     }
 }

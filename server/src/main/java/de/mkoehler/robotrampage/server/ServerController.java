@@ -153,7 +153,7 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             network.close(previous);
         }
         seatByConnection.put(connectionId, result.seat());
-        network.send(connectionId, new HandshakeResponse(result.message(), result.seat(), result.sessionToken()));
+        network.send(connectionId, new HandshakeResponse(result.message(), result.seat(), result.sessionToken(), serverVersion));
         session.attach(result.seat());
     }
 
@@ -164,7 +164,7 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
      * @param reason       what to tell the player
      */
     private void refuse(int connectionId, String reason) {
-        network.send(connectionId, new HandshakeResponse(false, reason));
+        network.send(connectionId, new HandshakeResponse(false, reason, AppVersion.getVersion()));
         network.close(connectionId);
     }
 }

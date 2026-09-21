@@ -85,6 +85,12 @@ class ThemeTest {
             assertEquals(Theme.FontFile.BUNGEE, style.file(), style.name());
         }
         assertEquals(Theme.FontFile.BARLOW_BOLD, Theme.TextStyle.NAME.file());
+        assertEquals(32, Theme.TextStyle.SUBTITLE.size());
+        assertEquals(26, Theme.TextStyle.BUTTON_LARGE.size());
+        assertEquals(22, Theme.TextStyle.BUTTON_MEDIUM.size());
+        assertEquals(20, Theme.TextStyle.FIELD.size());
+        assertEquals(Theme.FontFile.BARLOW_SEMIBOLD, Theme.TextStyle.FIELD.file());
+        assertEquals(20, Theme.TextStyle.BODY_LARGE.size());
     }
 
     /**

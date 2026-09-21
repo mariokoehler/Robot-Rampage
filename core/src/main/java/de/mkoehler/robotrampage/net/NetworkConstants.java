@@ -36,7 +36,13 @@ public final class NetworkConstants {
      * Maximum time, in milliseconds, a client waits for a connection attempt to
      * complete before giving up.
      */
-    public static final int CONNECTION_TIMEOUT_MILLIS = 5000;
+    public static final int CONNECTION_TIMEOUT_MILLIS = 10_000;
+
+    /**
+     * The longest display name, in characters. The connect screen refuses longer names and the server cuts them off at
+     * this length, so a name never looks different in the lobby than in the field it was typed in.
+     */
+    public static final int MAX_DISPLAY_NAME_LENGTH = 20;
 
     /**
      * Not instantiable; this class only holds constants.

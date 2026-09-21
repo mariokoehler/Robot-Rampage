@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.session;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.board.StartSquare;
+import de.mkoehler.robotrampage.net.NetworkConstants;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
@@ -88,7 +89,7 @@ public final class GameSession {
         GAME_OVER
     }
 
-    private static final int MAX_NAME_LENGTH = 24;
+    private static final int MAX_NAME_LENGTH = NetworkConstants.MAX_DISPLAY_NAME_LENGTH;
     private static final long FILL_STRIDE = 0x9E3779B97F4A7C15L;
 
     private final LoadedBoard board;

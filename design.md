@@ -420,8 +420,11 @@ netcode gotchas in its `CLAUDE.md` do not carry over.
   - `session` — the protocol-agnostic game-session state machine (`GameSession`,
     `SessionConfig`, `Outbox`; 3.5). Depends on `rules`, `board` and the message
     classes only — never on libGDX, KryoNet or the client (`ArchitectureTest`).
-  - `client` (and sub-packages) — screens, board renderer, animation, UI. Uses
-    libGDX.
+  - `client` (and sub-packages) — uses libGDX, except where noted:
+    `client.connect` (address and name rules, the `ConnectFlow` state machine and the
+    background `ConnectionAttempt`) and `client.settings` (`ClientSettings`, `SettingsStore`)
+    are plain Java and `ArchitectureTest` keeps libGDX out of them; `client.ui` (`Theme`,
+    `UiKit`, `ModalDialog`) is the design system in code; `client.screen` holds the screens.
 - `lwjgl3` — desktop client launcher (`Lwjgl3Launcher`, `StartupHelper`),
   packaging, natives.
 - `server` — dedicated server: `ServerLauncher` + `GameServer` on the libGDX
@@ -530,7 +533,7 @@ derived from the game seed and a fill counter — like the deck, never a live
 
 | Direction | Message | Purpose |
 |---|---|---|
-| C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name, optional session token; the response carries the seat and token. |
+| C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name (at most 20 characters, `NetworkConstants.MAX_DISPLAY_NAME_LENGTH`), optional session token; the response carries the seat, the token and the **server's version**, on a refusal too, so the client can show both versions. This pair is a compatibility surface: a client of another version may not be able to read the response that says the versions differ, so the client treats an unreadable handshake like an unreachable server. |
 | S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name. |
 | C→S | `SetReady`, `StartGameRequest` | Lobby actions (start: host only). |
 | S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
@@ -729,9 +732,24 @@ design system): the colours, spacing, radii and borders as constants; a `TextSty
 `Fonts` are generated from the TrueType files with **gdx-freetype** (`assets/fonts`); and `Shapes`, which renders
 the stretchable rounded panels, buttons and fields with their hard, blur-free shadows into nine-patches from a signed
 distance field. The whole UI is laid out in a `FitViewport` of **1920×1080** (`Theme.VIEW_WIDTH/HEIGHT`), so every
-number in the mockups (4.6) can be used as is; the fonts are regenerated for the real window size. The board itself is
+number in the mockups (4.6) can be used as is; the fonts are generated once at startup for the height of the monitor
+(at most twice the layout size) and scaled back down, so they stay sharp on larger monitors (they are not regenerated when
+the window is resized). The board itself is
 drawn with `SpriteBatch`. The screens use plain Scene2D widgets styled from `Theme`; VisUI was dropped because the mockups' look (Bungee labels,
-orange one-per-screen button, sinking press) is not VisUI's.
+orange one-per-screen button, sinking press) is not VisUI's. `UiKit` owns the fonts and shapes and builds labels (capitals
+where the design uses capitals), buttons, text fields with a focused and an error look, panels and wells; `ModalDialog` is
+the scrim, panel, title, text and button row that every dialog uses. Screens extend `StageScreen` (a `Stage` on the
+1920×1080 viewport).
+
+**The connect flow.** Opening the connection blocks, so `ConnectionAttempt` does it on a worker thread that only opens
+and closes the link and queues the outcome; the `ConnectFlow` (a libGDX-free state machine: connecting, handshaking,
+accepted, unreachable, version mismatch, refused, cancelled) and the screens are touched only by the render thread, which
+calls `ConnectionAttempt.update()` every frame. Cancelling marks the flow cancelled at once and closes the link on the
+worker thread behind the connection try; an outcome that arrives later is dropped. Messages that arrive in the same poll as
+the acceptance are handed to the next screen in `ConnectedServer.earlyMessages()`. `ServerLink` is the small interface the
+attempt uses, so tests drive it with a fake link. **DECISION (owner may revise):** a refusal for a reason other than the
+version (game full, already under way) has no mockup; it reuses the error-dialog shell as "Couldn't join" with the server's
+message.
 
 ### 4.3 The programming UI
 
@@ -771,15 +789,13 @@ versions, settings, connection lost, menu, leave, power down, choose your facing
 12×12 board (600 px, 50 px tiles), five register slots with Confirm and the power-down toggle, and the hand of cards
 below it.
 
-**What the mockups need beyond the current protocol** (to be added with the client slice):
+**What the mockups need beyond the current protocol.** Done: the server's version in `HandshakeResponse`, the 10 s connect
+timeout and the 20-character name limit. Still to be added with the lobby and programming slices:
 - `LobbyState` should carry the board's facts (size, flag count) and the game settings (lives, programming seconds).
-- The version-mismatch dialog shows both versions, so `HandshakeResponse` needs the server's version; the
-  connection-lost dialog and the "Away 9:12" chip need the reconnect grace period (seconds) from the server, in the
+- The connection-lost dialog and the "Away 9:12" chip need the reconnect grace period (seconds) from the server, in the
   handshake and in `PlayerConnection`.
 - The "Time's up" banner ("empty registers were filled at random") and the register slots after a random fill need a
   message telling a player which cards were filled in for them (`ProgramFilledIn`).
-- The connect timeout is 10 s in the mockups (currently 5 s); display names are limited to 20 characters (the server
-  currently allows 24).
 - Standings details ("touched flag 3 in turn 11, register 4", "eliminated in turn 9") are derived by the client from the
   events it has replayed.
 
@@ -793,14 +809,15 @@ Settings, the leave confirmation, the board key, the ranking rules in the standi
 
 **Assets.** The board tiles, objects, card icons, UI icons and the eight robots are vector drawings in the mockups and
 have been extracted into `assets-raw/design/` (README there) with `tools/design-import`. What still has to be produced
-by the owner: sound effects and music (none exist), the window/application icon, and a logo if wanted (the design uses
-plain type). Rasterizing to PNG and packing an atlas is the next asset-pipeline step.
+by the owner: sound effects and music (none exist) and the window/application icon. **There is no logo (owner, 2026-09-21):** the
+name is set in Bungee, and the startup screen shows the tagline "Plan carefully. Crash spectacularly." in smaller type below it.
+Rasterizing to PNG and packing an atlas is the next asset-pipeline step.
 
 ## 5. UX flow
 
 ### 5.1 Screen flow
 
-`Startup` (placeholder implemented) → `Connect` (server address, display name) →
+`Startup` (implemented) → `Connect` (implemented; server address, display name) → a `ConnectedScreen` placeholder that lists the seated players until the lobby is built →
 `Lobby` (the waiting room of the server's single game: see who joined, ready-up,
 the host starts — the first player to connect is the host; game
 options later belong in a "create game" step, see 7) → `Game` (alternating **Programming** and
@@ -844,8 +861,12 @@ no UI and is where the test value is:
   **autosave** of the game state after every turn (3.10) — needs a JSON form of
   `GameState` (robots, deck order and shuffle counter, the session's fill counter) and a
   resume path; planned as its own slice.
-- **M4 — Playable client.** Connect screen, board renderer, programming UI,
-  animation queue. First real playtest.
+- **M4 — Playable client.** First real playtest at the end. Slice 1 is **done**: the widget kit and dialog
+  (`UiKit`, `ModalDialog`), the Startup and Connect screens, the connecting, can't-reach, different-versions and
+  couldn't-join dialogs, the background `ConnectionAttempt`, remembered address and name (`SettingsStore`, in
+  `~/.robot-rampage/client-settings.json`), and a `ConnectedScreen` placeholder. The Settings button on the startup screen
+  is disabled until the Settings dialog exists. Still to come: Lobby, board renderer, programming UI, Resolution with
+  the animation queue, Game Over, the remaining dialogs and toasts, and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
   toggle, animations) and a board that uses pushers and crushers. (Multiple

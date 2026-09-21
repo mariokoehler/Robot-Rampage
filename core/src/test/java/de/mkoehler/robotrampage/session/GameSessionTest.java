@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.session;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.LoadedBoard;
+import de.mkoehler.robotrampage.net.NetworkConstants;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
@@ -276,7 +277,7 @@ class GameSessionTest {
 
         String name = outbox.lastReceivedBy(result.seat(), LobbyState.class).players().get(0).name();
         assertTrue(name.startsWith("Bob"), name);
-        assertTrue(name.length() <= 24);
+        assertTrue(name.length() <= NetworkConstants.MAX_DISPLAY_NAME_LENGTH);
     }
 
     /**

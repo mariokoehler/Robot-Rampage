@@ -86,14 +86,16 @@ class MessageRegistryTest {
      */
     @Test
     void handshakeResponseSurvivesRoundTrip() {
-        HandshakeResponse accepted = roundTrip(new HandshakeResponse(true, "Welcome."), HandshakeResponse.class);
+        HandshakeResponse accepted = roundTrip(new HandshakeResponse(true, "Welcome.", "1.2"), HandshakeResponse.class);
         assertTrue(accepted.isAccepted());
         assertEquals("Welcome.", accepted.getMessage());
+        assertEquals("1.2", accepted.getServerVersion());
 
-        HandshakeResponse rejected = roundTrip(new HandshakeResponse(false, "Version mismatch."),
+        HandshakeResponse rejected = roundTrip(new HandshakeResponse(false, "Version mismatch.", "2.0"),
             HandshakeResponse.class);
         assertFalse(rejected.isAccepted());
         assertEquals("Version mismatch.", rejected.getMessage());
+        assertEquals("2.0", rejected.getServerVersion());
     }
 
     /**

@@ -22,8 +22,8 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done** — 218 unit tests in
-`core` plus 6 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slice 1 (client shell, Startup,
+Connect) done** — 269 unit tests in `core` plus 9 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -46,8 +46,17 @@ spacing field is `spaceX`) holds all tokens; fonts are in `assets/fonts`; derive
 1**. Design canvas is 1920×1080 → `FitViewport`.
 The canvas's "suggestion" items (Menu, Settings, leave confirmation, board key, standings ranking, archive-marker diamond)
 were **confirmed as decisions** by the owner — build them as drawn.
-**Not done from M3: autosave** (design.md 3.10). **Next: M4**, the playable client (connect screen, board renderer,
-programming UI, animation queue) — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
+**Client slice 1 (design.md 4.2, 6):** `RobotRampageGame` owns `UiKit` (fonts + shapes + widget factories, from `Theme`) and the
+`SettingsStore`; screens extend `client.screen.StageScreen`; dialogs are `ModalDialog`. **Threading rule for the client:** anything
+that blocks (connecting, disconnecting) runs off the render thread inside `ConnectionAttempt`, whose outcomes are only
+drained by `update()` on the render thread; screens read `ConnectFlow`, never a captured screen reference from another
+thread. `client.connect` and `client.settings` stay libGDX-free (`ArchitectureTest`), which is why they have unit tests and the
+screens do not. The Settings button is disabled (no Settings dialog yet); `ConnectedScreen` is a placeholder for the lobby.
+**The extracted mockups are a snapshot** — the Claude Design canvas is the source of truth and was changed after the extraction
+(e.g. the startup tagline), so re-read it before building each screen. The Startup and Connect screens were tried in-game
+by the owner and look fine.
+**There is no logo:** the name is Bungee text with the tagline "Plan carefully. Crash spectacularly." below it (owner decision).
+**Not done from M3: autosave** (design.md 3.10). **Next: M4 slice 2**, the lobby, then the board renderer, programming UI, animation queue — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
@@ -88,9 +97,9 @@ not hand-verified twice. The design was reviewed by the user (2026-09-21): tags 
   caught (verified by adding one deliberately). The first build after adding ArchUnit
   needed network access.
 - **Screen disposal:** `Game.dispose()` only calls `hide()` on the current screen, not
-  `dispose()`. `RobotRampageGame.dispose()` disposes the current screen; when M4
-  adds screen transitions, each `setScreen` call site must dispose the screen it
-  leaves (same discipline as StarWars).
+  `dispose()`. `RobotRampageGame.dispose()` disposes the current screen, and its `setScreen` override disposes the
+  screen it leaves via `postRunnable` (screens change from inside their own `render`, so disposing at once would draw a
+  disposed stage).
 
 ## Build system
 
@@ -182,8 +191,8 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   ends the game in turn 1 and your test measures the wrong thing. To check card conservation *between* turns remember
   the next hands are already dealt (`cardsInPlay` + hands = 84); a disconnected player is always auto-filled, so a
   player is never removed while owing a hand.
-- **M4 must remember:** `NetworkClient.connect` BLOCKS (up to 5 s) — never call it from the render thread (StarWars'
-  socket-stall lesson); use a background thread and hand the result over via the poll queue. Nothing enforces this in code.
+- **Client threading:** `NetworkClient.connect` BLOCKS (up to 10 s) — never call it from the render thread (StarWars'
+  socket-stall lesson). `ConnectionAttempt` does it on a worker thread; use it, don't call `connect` from a screen.
 - **The game seed** is logged by the server at startup (`game seed N`) and can be given as the 2nd launcher argument
   (`ServerLauncher [port] [seed]`); put it in any bug report — random fills and shuffles are reproducible from it.
 - **Modules:** run `mvn install -pl core -am -DskipTests` before `mvn -pl server test` (server resolves core from

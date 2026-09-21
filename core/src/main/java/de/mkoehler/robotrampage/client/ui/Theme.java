@@ -286,9 +286,9 @@ public final class Theme {
     }
 
     /**
-     * The type scale. The first six styles are the design system's; the last
-     * four are the extra sizes the screen mockups use for big titles, intro
-     * text and player names.
+     * The type scale. The first six styles are the design system's; the others
+     * are the extra sizes the screen mockups use for big titles, intro text,
+     * player names, large buttons and text fields.
      */
     public enum TextStyle {
         /** The game title and the biggest titles (Game Over): Bungee 56. */
@@ -310,7 +310,17 @@ public final class Theme {
         /** Intro text under a title: Barlow 24. Not in the design system's token file. */
         LEAD(FontFile.BARLOW_REGULAR, 24, 0f),
         /** Player names in lists: Barlow Bold 24. Not in the design system's token file. */
-        NAME(FontFile.BARLOW_BOLD, 24, 0f);
+        NAME(FontFile.BARLOW_BOLD, 24, 0f),
+        /** Panel and dialog titles: Bungee 32. Not in the design system's token file. */
+        SUBTITLE(FontFile.BUNGEE, 32, 0f),
+        /** The labels of the big start screen buttons: Bungee 26. Not in the design system's token file. */
+        BUTTON_LARGE(FontFile.BUNGEE, 26, 0.02f),
+        /** The labels of the secondary start screen buttons: Bungee 22. Not in the design system's token file. */
+        BUTTON_MEDIUM(FontFile.BUNGEE, 22, 0.02f),
+        /** Text typed into a field: Barlow SemiBold 20. Not in the design system's token file. */
+        FIELD(FontFile.BARLOW_SEMIBOLD, 20, 0f),
+        /** The main line of a dialog: Barlow 20. Not in the design system's token file. */
+        BODY_LARGE(FontFile.BARLOW_REGULAR, 20, 0f);
 
         private final FontFile file;
         private final int size;
@@ -385,7 +395,9 @@ public final class Theme {
         /**
          * Generates every text style from the TrueType files in a directory.
          * Each style becomes a bitmap font sized for the given scale, so a
-         * window of 2560 by 1440 can pass 1.333 to keep text sharp.
+         * window of 2560 by 1440 can pass 1.333 to keep text sharp. The fonts
+         * are scaled back down by the same factor, so their size in the
+         * {@value Theme#VIEW_WIDTH} by {@value Theme#VIEW_HEIGHT} layout stays the one of the style.
          *
          * @param directory the folder holding the four font files, for example {@code Gdx.files.internal("fonts")}
          * @param scale     the ratio of the real window height to {@value Theme#VIEW_HEIGHT}; 1 for the design size
@@ -402,7 +414,9 @@ public final class Theme {
                 for (TextStyle style : TextStyle.values()) {
                     FreeTypeFontGenerator generator = generators.computeIfAbsent(style.file(),
                         file -> new FreeTypeFontGenerator(directory.child(file.fileName())));
-                    result.fonts.put(style, generator.generateFont(parameterFor(style, scale)));
+                    BitmapFont font = generator.generateFont(parameterFor(style, scale));
+                    font.getData().setScale(1f / scale);
+                    result.fonts.put(style, font);
                 }
             } finally {
                 generators.values().forEach(FreeTypeFontGenerator::dispose);
