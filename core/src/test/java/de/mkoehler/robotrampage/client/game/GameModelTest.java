@@ -13,6 +13,7 @@ import de.mkoehler.robotrampage.net.messages.HandDealt;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
+import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -387,13 +388,47 @@ class GameModelTest {
     void theEndOfTheGameWaitsForTheReplay() {
         GameModel model = programming(0);
         model.apply(new TurnResolved(1, List.of()));
-        model.apply(new GameOver(ME, model.robots()));
+        model.apply(new GameOver(ME, model.robots(), 15));
 
         assertEquals(Stage.RESOLVING, model.stage());
         assertEquals(GameEvent.NO_ROBOT, model.winnerRobotId());
         model.completeResolution();
         assertEquals(Stage.OVER, model.stage());
         assertEquals(ME, model.winnerRobotId());
+    }
+
+    /**
+     * The results remember what the client replayed: the turn and register of the flag that won the game and the turn an
+     * eliminated robot was lost in, but not the elimination of a robot whose player left. The countdown to the lobby starts
+     * with the end of the game.
+     */
+    @Test
+    void theResultsRememberWhatWasReplayed() {
+        GameModel model = programming(0);
+        Position flag = model.board().flags().get(model.board().flags().size() - 1);
+        RobotState me = model.myRobot();
+        RobotState winner = new RobotState(ME, flag, me.facing(), 0, 3, 3, me.archiveMarker(), RobotStatus.ACTIVE, false, false);
+        RobotState out = new RobotState(2, null, Direction.NORTH, 9, 0, 1, new Position(0, 0), RobotStatus.ELIMINATED, false,
+            false);
+        RobotState gone = new RobotState(0, null, Direction.NORTH, 0, 2, 0, new Position(0, 0), RobotStatus.ELIMINATED, false,
+            false);
+        model.apply(new PlayerLeft(0, List.of()));
+
+        model.apply(new TurnResolved(11, List.of(new LoggedEvent(4, SubPhase.CHECKPOINTS,
+            new GameEvent.FlagTouched(ME, model.board().flags().size(), flag)))));
+        model.apply(new StateSnapshot(11, List.of(gone, winner, out), true, ME));
+        model.apply(new GameOver(ME, List.of(gone, winner, out), 15));
+
+        assertEquals(15, model.lobbySecondsLeft());
+        model.completeResolution();
+        model.tick(4.5f);
+        List<Standings.Row> rows = model.standings().rows();
+        assertEquals(11, model.lobbySecondsLeft());
+        assertEquals(List.of(ME, 2, 0), rows.stream().map(Standings.Row::seat).toList());
+        assertEquals("Touched flag 3 in turn 11, register 4", rows.get(0).detail());
+        assertEquals("Eliminated in turn 11", rows.get(1).detail());
+        assertEquals("Left the game", rows.get(2).detail());
+        assertEquals("Bo wins!", model.standings().headline());
     }
 
     /**
@@ -404,7 +439,7 @@ class GameModelTest {
         GameModel model = programming(0);
         RobotState winner = model.myRobot();
 
-        model.apply(new GameOver(ME, List.of(winner)));
+        model.apply(new GameOver(ME, List.of(winner), 15));
 
         assertEquals(Stage.OVER, model.stage());
         assertEquals(ME, model.winnerRobotId());

@@ -6,6 +6,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
@@ -231,6 +232,25 @@ public final class UiKit implements Disposable {
         chip.padBottom(SHAPE_RESERVE);
         chip.add(label(text, Theme.TextStyle.CHIP, textColor)).padLeft(Theme.SPACE_3).padRight(Theme.SPACE_3);
         return chip;
+    }
+
+    /**
+     * Builds a row of small squares, the first ones filled and the rest as an outline: the lives a robot has left.
+     *
+     * @param filled how many squares are filled
+     * @param total  how many squares there are
+     * @param size   the width and height of a square
+     * @param radius the corner radius of a square
+     * @return the row
+     */
+    public Table pips(int filled, int total, float size, int radius) {
+        Table row = new Table();
+        for (int i = 0; i < total; i++) {
+            Image pip = new Image(i < filled ? rounded(Theme.INK, Theme.INK, 0, radius)
+                : rounded(new Color(0f, 0f, 0f, 0f), Theme.LINE_STRONG, Theme.BORDER_CONTROL, radius));
+            row.add(pip).size(size, size + SHAPE_RESERVE).padRight(4f);
+        }
+        return row;
     }
 
     /**

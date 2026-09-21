@@ -17,6 +17,7 @@ import de.mkoehler.robotrampage.client.screen.GameScreen;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.ServerLink;
+import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
@@ -26,10 +27,14 @@ import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.TimerPaused;
+import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
+import de.mkoehler.robotrampage.rules.GameEvent;
+import de.mkoehler.robotrampage.rules.LoggedEvent;
 import de.mkoehler.robotrampage.rules.RobotStatus;
+import de.mkoehler.robotrampage.rules.SubPhase;
 
 import java.io.File;
 import java.io.IOException;
@@ -121,6 +126,11 @@ public final class ScreenSnapshot {
         write(game, folder, "game-powered-down.png", state(game, 0, 0, false, true, false), 23f);
         write(game, folder, "game-time-up.png", state(game, 0, 2, false, false, true), 23f);
         write(game, folder, "game-host.png", state(game, 0, 0, 2, false, false, false), 23f);
+        write(game, folder, "gameover-winner.png", gameOver(game, 0, 3, true, false), 0f);
+        write(game, folder, "gameover-two.png", gameOver(game, 0, 2, true, false), 0f);
+        write(game, folder, "gameover-none.png", gameOver(game, -1, 6, false, false), 0f);
+        write(game, folder, "gameover-long-name.png", gameOver(game, 0, 8, true, true), 0f);
+        write(game, folder, "gameover-unseen.png", gameOver(game, 0, 3, true, false, false), 0f);
         GameScreen paused = state(game, 0, 0, 2, false, false, false);
         paused.model().apply(new TimerPaused(true, 67));
         paused.refresh();
@@ -213,6 +223,67 @@ public final class ScreenSnapshot {
             }
             screen.refresh();
         }
+        return screen;
+    }
+
+    /**
+     * Builds the game screen at the end of a game, as a player who watched the whole game sees it.
+     *
+     * @param game     the game
+     * @param winner   the winning seat, or -1 for no winner
+     * @param players  how many players took part, at most eight
+     * @param finished whether the winner touched every flag
+     * @param longName whether the winner has the longest name a player can have
+     * @return the screen, showing the results
+     */
+    private static GameScreen gameOver(RobotRampageGame game, int winner, int players, boolean finished, boolean longName) {
+        return gameOver(game, winner, players, finished, longName, true);
+    }
+
+    /**
+     * Builds the game screen at the end of a game, either as a player who watched the whole game sees it or as one who
+     * missed all of its turns (a game that ends because a player dropped, or a player who came back after the last turn).
+     *
+     * @param game     the game
+     * @param winner   the winning seat, or -1 for no winner
+     * @param players  how many players took part, at most eight
+     * @param finished whether the winner touched every flag
+     * @param longName whether the winner has the longest name a player can have
+     * @param seen     whether the turns of the game were played back on this screen
+     * @return the screen, showing the results
+     */
+    private static GameScreen gameOver(RobotRampageGame game, int winner, int players, boolean finished, boolean longName,
+                                       boolean seen) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<String> names = new ArrayList<>(List.of("Sophie", "Mario", "Kenji", "Łukasz", "Amira", "Diego", "Noor", "Tim"));
+        if (longName) {
+            names.set(0, "Maximilian-Alexander Q.");
+        }
+        List<PlayerInfo> infos = new ArrayList<>();
+        for (int seat = 0; seat < players; seat++) {
+            infos.add(new PlayerInfo(seat, names.get(seat), true, true, seat == 0));
+        }
+        int[] flags = {3, 2, 2, 1, 1, 0, 1, 0};
+        int[] lives = {3, 3, 3, 2, 0, 0, 1, 0};
+        List<RobotState> robots = new ArrayList<>();
+        for (int seat = 0; seat < players; seat++) {
+            boolean out = winner < 0 ? true : lives[seat] == 0;
+            robots.add(new RobotState(seat, out ? null : new Position(2 + seat, 1), Direction.NORTH, 0,
+                winner < 0 ? 0 : lives[seat], winner < 0 ? seat % 3 : Math.min(flags[seat], finished ? 3 : 1),
+                new Position(2 + seat, 0), out ? RobotStatus.ELIMINATED : RobotStatus.ACTIVE, false, false));
+        }
+        List<Object> messages = new ArrayList<>();
+        if (seen) {
+            messages.add(new TurnStarted(11, List.of(), List.of(), 90));
+            messages.add(new TurnResolved(11, winner < 0 || !finished ? List.of() : List.of(new LoggedEvent(4,
+                SubPhase.CHECKPOINTS, new GameEvent.FlagTouched(winner, 3, new Position(9, 9))))));
+            messages.add(new StateSnapshot(11, robots, true, winner));
+        }
+        messages.add(new GameOver(winner, robots, 12));
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test");
+        GameScreen screen = new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
+            new ServerAddress("localhost", 45725), new GameStarted(board, infos, ME), messages);
+        screen.model().completeResolution();
         return screen;
     }
 

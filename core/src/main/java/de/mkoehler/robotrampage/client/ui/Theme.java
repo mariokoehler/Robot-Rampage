@@ -307,6 +307,8 @@ public final class Theme {
         TITLE(FontFile.BUNGEE, 72, 0f),
         /** The title on the startup screen: Bungee 132. Not in the design system's token file. */
         HERO(FontFile.BUNGEE, 132, 0f),
+        /** The result on the Game Over screen ("Sophie wins!"): Bungee 104. Not in the design system's token file. */
+        RESULT(FontFile.BUNGEE, 104, 0f),
         /** Intro text under a title: Barlow 24. Not in the design system's token file. */
         LEAD(FontFile.BARLOW_REGULAR, 24, 0f),
         /** Player names in lists: Barlow Bold 24. Not in the design system's token file. */

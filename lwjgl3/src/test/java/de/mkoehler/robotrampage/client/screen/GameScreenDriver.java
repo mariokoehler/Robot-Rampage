@@ -169,9 +169,13 @@ public final class GameScreenDriver {
         frame(screen);
         check(screen.stage.getActors().size == actors, "Escape should close the menu");
 
-        link.incoming.add(new GameOver(0, model.robots()));
+        link.incoming.add(new GameOver(0, model.robots(), 15));
         frame(screen);
-        check(screen.stage.getActors().size == actors + 1, "the end of the game should open the game over dialog");
+        check(screen.stage.getActors().size == actors, "the end of the game should not open a dialog");
+        check(!screen.stage.getActors().get(0).isVisible() && screen.stage.getActors().get(2).isVisible(),
+            "the end of the game should show the game over layout in place of the game");
+        click(screen, 1696f, 1006f);
+        check(game.getScreen() == screen, "the lobby button of the game over screen is only a countdown");
         link.incoming.add(new LobbyState(List.of(new PlayerInfo(ME, "Bo", false, true, true)), "Proving Grounds", 8, 2, 12, 12,
             3, 3, 90));
         frame(screen);

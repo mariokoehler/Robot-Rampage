@@ -87,6 +87,8 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private final PillToggle powerToggle;
     private final Group programmingGroup = new Group();
     private final Group resolutionGroup = new Group();
+    private final Group gameOverGroup = new Group();
+    private GameOverView gameOverView;
     private Group activeGroup;
     private BoardActor resolutionBoard;
     private final Table resolutionTitle = new Table();
@@ -149,9 +151,12 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
 
         programmingGroup.setSize(Theme.VIEW_WIDTH, Theme.VIEW_HEIGHT);
         resolutionGroup.setSize(Theme.VIEW_WIDTH, Theme.VIEW_HEIGHT);
+        gameOverGroup.setSize(Theme.VIEW_WIDTH, Theme.VIEW_HEIGHT);
         stage.addActor(programmingGroup);
         stage.addActor(resolutionGroup);
+        stage.addActor(gameOverGroup);
         resolutionGroup.setVisible(false);
+        gameOverGroup.setVisible(false);
         activeGroup = programmingGroup;
         buildFrame();
         activeGroup = resolutionGroup;
@@ -334,6 +339,9 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             overShown = true;
             showGameOver();
         }
+        if (overShown) {
+            gameOverView.setLobbySeconds(model.lobbySecondsLeft());
+        }
     }
 
     /**
@@ -466,7 +474,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         }
         text.add(nameLine).left().row();
         Table stats = new Table();
-        stats.add(pips(row.lives(), Robot.STARTING_LIVES, 12f, 5)).padRight(Theme.SPACE_3);
+        stats.add(ui.pips(row.lives(), Robot.STARTING_LIVES, 12f, 5)).padRight(Theme.SPACE_3);
         stats.add(ui.label("Damage " + row.damage(), Theme.TextStyle.CAPTION, Theme.INK_MUTED));
         text.add(stats).left();
         line.add(text).expandX().left().padLeft(14f);
@@ -496,25 +504,6 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Builds a row of small squares, filled for what is left and outlined for what is gone.
-     *
-     * @param filled the number of filled squares
-     * @param total  the number of squares
-     * @param size   the side of a square
-     * @param radius the corner radius
-     * @return the row
-     */
-    private Table pips(int filled, int total, float size, int radius) {
-        Table row = new Table();
-        for (int i = 0; i < total; i++) {
-            Image pip = new Image(i < filled ? ui.rounded(Theme.INK, Theme.INK, 0, radius)
-                : ui.rounded(new Color(0f, 0f, 0f, 0f), Theme.LINE_STRONG, Theme.BORDER_CONTROL, radius));
-            row.add(pip).size(size, size + UiKit.SHAPE_RESERVE).padRight(4f);
-        }
-        return row;
-    }
-
-    /**
      * Rebuilds the panel with this player's robot: lives, damage, the hand, locked registers and the board key.
      */
     private void refreshRobot() {
@@ -536,7 +525,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
 
         Table stats = new Table();
         stats.left();
-        stat(stats, "Lives", pips(me.lives(), Robot.STARTING_LIVES, 18f, 5));
+        stat(stats, "Lives", ui.pips(me.lives(), Robot.STARTING_LIVES, 18f, 5));
         Table damage = new Table();
         for (int i = 0; i < Robot.FULL_HAND_SIZE; i++) {
             Image segment = new Image(ui.rounded(i < me.damage() ? Theme.DANGER : Theme.LINE,
@@ -1009,6 +998,9 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      * @param delta seconds since the previous frame
      */
     private void updateResolution(float delta) {
+        if (overShown) {
+            return;
+        }
         boolean resolving = model.stage() == GameModel.Stage.RESOLVING
             || model.stage() == GameModel.Stage.OVER && replay != null;
         if (resolving != showingResolution) {
@@ -1249,23 +1241,17 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Tells the player the game is over and who won.
+     * Swaps to the Game Over layout: the results of the game, until the server takes everybody back to the lobby. It is built
+     * from the state the game ended with, so it waits for the end of the replay of the last turn.
      */
     private void showGameOver() {
-        TextButton leave = ui.button("Leave", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
-        leave.addListener(new ChangeListener() {
-            @Override
-            public void changed(ChangeEvent event, Actor actor) {
-                leaveGame();
-            }
-        });
-        int winner = model.winnerRobotId();
-        String result = winner < 0 ? "Nobody won." : model.nameOf(winner) + " won the game.";
-        open(new ModalDialog(ui, 700f, false)
-            .title("Game over")
-            .text(result, Theme.TextStyle.BODY_LARGE, Theme.INK)
-            .text("The lobby opens in a few seconds.", Theme.TextStyle.BODY, Theme.INK_MUTED)
-            .buttons(200f, leave));
+        closeDialog();
+        gameOverView = new GameOverView(ui, model.standings(), this::leaveGame, model.lobbySecondsLeft());
+        gameOverGroup.clearChildren();
+        gameOverGroup.addActor(gameOverView);
+        programmingGroup.setVisible(false);
+        resolutionGroup.setVisible(false);
+        gameOverGroup.setVisible(true);
     }
 
     /**

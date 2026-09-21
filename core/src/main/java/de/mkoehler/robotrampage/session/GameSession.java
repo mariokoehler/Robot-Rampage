@@ -596,7 +596,7 @@ public final class GameSession {
         outbox.broadcast(new TurnResolved(turn, result.events()));
         outbox.broadcast(snapshot());
         if (state.isOver()) {
-            finishGame();
+            finishGame(config.pauseAfterTurn(result.events().size()));
         } else {
             phase = Phase.RESOLVING;
             nextTurnAt = clock.getAsLong() + config.pauseAfterTurn(result.events().size());
@@ -605,12 +605,15 @@ public final class GameSession {
 
     /**
      * Ends the game and shows the results.
+     *
+     * @param replayMillis the time the clients need to play back the turn that ended the game, which passes before the results
+     *                     are shown; 0 if the game ended without a turn being played
      */
-    private void finishGame() {
+    private void finishGame(long replayMillis) {
         resumeTimer();
         phase = Phase.GAME_OVER;
-        backToLobbyAt = clock.getAsLong() + config.gameOverMillis();
-        outbox.broadcast(new GameOver(state.winnerId(), robotStates()));
+        backToLobbyAt = clock.getAsLong() + replayMillis + config.gameOverMillis();
+        outbox.broadcast(new GameOver(state.winnerId(), robotStates(), secondsUntil(backToLobbyAt)));
     }
 
     /**
@@ -661,7 +664,7 @@ public final class GameSession {
         outbox.broadcast(new PlayerLeft(player.seat, log.entries()));
         if (state.isOver()) {
             if (phase != Phase.GAME_OVER) {
-                finishGame();
+                finishGame(0);
             }
         } else {
             afterConfirmation();
@@ -703,7 +706,7 @@ public final class GameSession {
                     outbox.send(player.seat, hand);
                 }
             }
-            case GAME_OVER -> outbox.send(player.seat, new GameOver(state.winnerId(), robotStates()));
+            case GAME_OVER -> outbox.send(player.seat, new GameOver(state.winnerId(), robotStates(), secondsUntil(backToLobbyAt)));
             default -> {
             }
         }

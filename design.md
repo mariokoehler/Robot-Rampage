@@ -518,7 +518,7 @@ of a game can therefore be non-contiguous.
 ≥ 2 players, everyone else ready) → `PROGRAMMING` ↔ `RESOLVING` (a pause so clients can
 animate; *(unconfirmed)* default 12 s + 260 ms per event, at most 60 s: this is the time the clients have to play the turn
 back, see 4.1) → `GAME_OVER` (back to
-`LOBBY` after 15 s *(unconfirmed)*). The first player to join is the host. Back in the lobby,
+`LOBBY` after 15 s *(unconfirmed)*, counted from the end of the replay of the turn that ended the game: the server adds the turn's pause, so the results are not cut off by the lobby). The first player to join is the host. Back in the lobby,
 players who dropped are forgotten, the others keep their seats and their **session tokens**
 and must ready up again; the host is still whoever joined first among them. A token is only
 ever forgotten with its player, so it stays valid as long as the server process runs
@@ -556,7 +556,7 @@ derived from the game seed and a fill counter — like the deck, never a live
 | S→all | `TurnResolved` | The ordered `LoggedEvent` list of the turn. |
 | S→all | `StateSnapshot` | Public state of every robot after the turn (no hands), for resync and as a check. |
 | S→all | `PlayerConnection`, `PlayerLeft` | A player dropped or came back; a player's grace period ended and their robot was removed. |
-| S→all | `GameOver` | Winner and final robot states. |
+| S→all | `GameOver` | Winner and final robot states, and the seconds until the server takes everybody back to the lobby (the client counts them down on the Game Over screen). |
 
 **Clients replay the event list; they do not re-simulate.** (The alternative —
 send programs and let every client run the rules — was rejected: a rules bug or a
@@ -771,6 +771,21 @@ while they fire (the idle beams of the board lasers are hidden during a replay),
 Not built: the "auto-skip resolution" setting, icons in the "What happened" list (colored squares for now), and the
 respawn animation (robots that re-enter appear with the next turn).
 
+**Game Over screen (M4 slice 6, implemented).** A third layout inside `GameScreen` (`GameOverView`, so the connection never
+changes hands), shown when the replay of the last turn is over and the end of the game is taken over. As the mockup: "GAME
+OVER", "<name> WINS!" (Bungee 104, shrunk for very long names), what decided it, a confetti scatter (seeded, so it always
+looks the same) and a podium with the first three, and the standings card: place, robot, name, Winner/You chips, a line of
+detail, "n/3 flags" and the lives left. `client.game.Standings` (libGDX-free, tested) does the ranking and the words.
+**Decisions taken here (unconfirmed):** the winner is always first, then flags touched, then lives left, then seat (a robot
+that was eliminated or whose player left counts as having no lives); "One flag short" is said of everybody who is exactly one flag short of the last; the
+podium pictures are centred on their blocks (the mockup has them left-aligned by accident); with fewer than three players the
+podium has fewer places; with **no winner** (everybody eliminated at once) there is no podium and no confetti and the headline
+is "No winner"; a winner who did not touch every flag is "Last robot standing". **The lines under the names are derived
+from turns the client replayed** (design 4.6): the flag that won the game (turn and register), the turn of an elimination,
+"Left the game". A player who joined late or came back saw no turns, so those lines are left out or say less ("Eliminated"),
+never guessed. **"Back to lobby" is not a button:** the server moves everybody back at once, so the mockup's button is a
+disabled countdown ("Lobby in 12 s", from `GameOver.lobbyInSeconds`, then "Opening the lobby…"); "Leave server" leaves.
+
 **Animation is event-driven.** During the Execute phase the client receives the
 turn's `GameEvent` list (3.4) and plays it through an *animation queue*: each
 event maps to a short animation (slide, rotate, laser beam, explosion, flag
@@ -873,7 +888,7 @@ timeout, the 20-character name limit and the game facts in `LobbyState`. Still t
 - The "Time's up" banner ("empty registers were filled at random") and the register slots after a random fill need a
   message telling a player which cards were filled in for them (`ProgramFilledIn`).
 - Standings details ("touched flag 3 in turn 11, register 4", "eliminated in turn 9") are derived by the client from the
-  events it has replayed.
+  events it has replayed. **Done** (`GameModel` remembers the last flag of every robot and the turn it was eliminated in).
 
 **Client-only features the mockups imply:** local settings saved as JSON (music/effects volume, fullscreen, vsync, window
 size, playback speed, show my program on the board, auto-skip resolution), and the last server address, name and
@@ -960,7 +975,7 @@ no UI and is where the test value is:
   half of the game screen (4.3): `GameModel`/`ProgramDraft` (libGDX-free, tested, and checked against the real server), the
   cards and register widgets, players, robot and program panels, the Menu, Leave and Game over dialogs. The Settings button on the startup screen
   is disabled until the Settings dialog exists. Slice 5 is **done**: the replay of a resolved turn (4.1) and the belt corner,
-  join, T and X pieces. Still to come: the Game Over screen, the respawn-facing, power-down and eliminated dialogs, drag and drop, the
+  join, T and X pieces. Slice 6 is **done**: the Game Over screen (4.1). Still to come: the respawn-facing, power-down and eliminated dialogs, drag and drop, the
   "time's up" banner, reconnecting a dropped client,  and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down

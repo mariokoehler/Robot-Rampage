@@ -140,7 +140,7 @@ class WireProtocolTest {
             new StateSnapshot(4, List.of(gone, robot), true, 3),
             new PlayerConnection(3, false),
             new PlayerLeft(3, List.of(event)),
-            new GameOver(-1, List.of(gone, robot)));
+            new GameOver(-1, List.of(gone, robot), 15));
 
         for (Object message : messages) {
             assertEquals(message, roundTrip(message), message.getClass().getSimpleName());

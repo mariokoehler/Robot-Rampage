@@ -157,7 +157,18 @@ class GameSessionTest {
      * @return the session
      */
     private GameSession newSession(long seed) {
-        LoadedBoard board = BoardLoader.parse(BOARD_JSON);
+        return newSession(seed, BOARD_JSON);
+    }
+
+    /**
+     * Builds a session on the given board.
+     *
+     * @param seed      the game seed
+     * @param boardJson the board
+     * @return the session
+     */
+    private GameSession newSession(long seed, String boardJson) {
+        LoadedBoard board = BoardLoader.parse(boardJson);
         SessionConfig config = new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, GAME_OVER_PAUSE, 2);
         return new GameSession(board, config, seed, now::get, outbox);
     }
@@ -805,6 +816,7 @@ class GameSessionTest {
         assertEquals(GameSession.Phase.GAME_OVER, session.phase());
         GameOver over = outbox.lastReceivedBy(0, GameOver.class);
         assertEquals(0, over.winnerRobotId());
+        assertEquals(GAME_OVER_PAUSE / 1000, over.lobbyInSeconds());
         assertFalse(session.join("x", tokens.get(1)).accepted());
     }
 
@@ -875,6 +887,36 @@ class GameSessionTest {
         assertEquals(1, lobby.players().size());
         assertFalse(lobby.players().get(0).ready());
         assertNotNull(session.join("Newcomer", null).sessionToken());
+    }
+
+    /**
+     * A game that ends because a robot reached the last flag keeps its results up for the pause that lets the clients play the
+     * winning turn back and then for the game-over time: the lobby does not open while the winning move is still being shown.
+     * The board is a two-by-two square with the flag next to a start square, so some seed lets a random program win at once.
+     */
+    @Test
+    void theResultsOfAWonGameWaitForTheReplayOfTheWinningTurn() {
+        String tiny = """
+            {"formatVersion": 1, "id": "s", "name": "Small", "width": 2, "height": 2, "flags": [{"x": 0, "y": 1}],
+             "startSquares": [{"x": 0, "y": 0, "facing": "NORTH"}, {"x": 1, "y": 0, "facing": "NORTH"}]}
+            """;
+        boolean won = false;
+        for (long seed = 0; seed < 500 && !won; seed++) {
+            now.set(1_000);
+            outbox = new RecordingOutbox();
+            session = newSession(seed, tiny);
+            startWith(2);
+            submitFor(0);
+            submitFor(1);
+            won = session.phase() == GameSession.Phase.GAME_OVER;
+        }
+        assertTrue(won, "no seed let a robot reach the flag in the first turn");
+
+        assertEquals((PAUSE + GAME_OVER_PAUSE) / 1000, outbox.lastReceivedBy(0, GameOver.class).lobbyInSeconds());
+        advance(GAME_OVER_PAUSE);
+        assertEquals(GameSession.Phase.GAME_OVER, session.phase());
+        advance(PAUSE);
+        assertEquals(GameSession.Phase.LOBBY, session.phase());
     }
 
     // ------------------------------------------------------------------------------------ rules interplay

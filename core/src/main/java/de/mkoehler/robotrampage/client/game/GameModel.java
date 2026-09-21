@@ -25,6 +25,7 @@ import de.mkoehler.robotrampage.rules.Robot;
 import de.mkoehler.robotrampage.rules.RobotStatus;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +121,9 @@ public final class GameModel {
     private StateSnapshot heldSnapshot;
     private GameOver heldGameOver;
     private int winnerRobotId = GameEvent.NO_ROBOT;
+    private final Map<Integer, Standings.FlagTouch> lastFlags = new HashMap<>();
+    private final Map<Integer, Integer> eliminatedTurns = new HashMap<>();
+    private float lobbyCountdown = -1f;
     private int revision;
 
     /**
@@ -166,6 +170,7 @@ public final class GameModel {
         } else if (message instanceof TurnResolved resolved) {
             completeResolution();
             lastResolved = resolved;
+            noteFlags(resolved);
             robotsBeforeResolution = robots();
             resolutionOpen = true;
             stage = Stage.RESOLVING;
@@ -184,6 +189,7 @@ public final class GameModel {
         } else if (message instanceof PlayerLeft left) {
             removed.add(left.robotId());
         } else if (message instanceof GameOver over) {
+            lobbyCountdown = over.lobbyInSeconds();
             if (resolutionOpen) {
                 heldGameOver = over;
             } else {
@@ -204,6 +210,9 @@ public final class GameModel {
     public void tick(float seconds) {
         if (timerRuns() && !timerPaused) {
             remainingSeconds = Math.max(0f, remainingSeconds - seconds);
+        }
+        if (lobbyCountdown > 0f) {
+            lobbyCountdown = Math.max(0f, lobbyCountdown - seconds);
         }
     }
 
@@ -275,6 +284,37 @@ public final class GameModel {
         } else {
             draft = new ProgramDraft(hand.hand(), hand.lockedCards());
             stage = Stage.PROGRAMMING;
+        }
+    }
+
+    /**
+     * Remembers, for every flag a robot touched in a turn that is about to be played back, which flag it was and when, so the
+     * results can say where the game was won.
+     *
+     * @param resolved the resolved turn
+     */
+    private void noteFlags(TurnResolved resolved) {
+        for (LoggedEvent logged : resolved.events()) {
+            if (logged.event() instanceof GameEvent.FlagTouched touched) {
+                lastFlags.put(touched.robotId(), new Standings.FlagTouch(touched.flagNumber(), resolved.turn(), logged.register()));
+            }
+        }
+    }
+
+    /**
+     * Remembers the turn in which a robot was eliminated, for the robots that the given states show as eliminated for the first
+     * time. Players who left the game are not counted: they did not lose their lives.
+     *
+     * @param after the states the turn ended with
+     * @param turn  the turn
+     */
+    private void noteEliminations(List<RobotState> after, int turn) {
+        for (RobotState state : after) {
+            RobotState before = robots.get(state.robotId());
+            if (state.status() == RobotStatus.ELIMINATED && before != null && before.status() != RobotStatus.ELIMINATED
+                && !removed.contains(state.robotId())) {
+                eliminatedTurns.putIfAbsent(state.robotId(), turn);
+            }
         }
     }
 
@@ -376,6 +416,26 @@ public final class GameModel {
     }
 
     /**
+     * Returns the results of the game, for the Game Over screen.
+     *
+     * @return the standings, from the state the game ended with
+     */
+    public Standings standings() {
+        return Standings.of(new ArrayList<>(players.values()), robots(), winnerRobotId, mySeat, board.flags().size(),
+            Robot.STARTING_LIVES, lastFlags, eliminatedTurns, removed);
+    }
+
+    /**
+     * Returns the seconds until the server takes everybody back to the lobby, counted from the moment the end of the game
+     * arrived.
+     *
+     * @return the seconds, rounded up; 0 when they are up, and 0 as well as long as the game has not ended
+     */
+    public int lobbySecondsLeft() {
+        return (int) Math.ceil(Math.max(0f, lobbyCountdown));
+    }
+
+    /**
      * Returns what happened in the last turn, for whoever plays it back.
      *
      * @return the message, or {@code null} before the first turn ended
@@ -414,11 +474,15 @@ public final class GameModel {
             return;
         }
         resolutionOpen = false;
+        // A resolution is only ever open after a TurnResolved has been taken in, which is what sets lastResolved.
+        int resolvedTurn = lastResolved == null ? 0 : lastResolved.turn();
         if (heldSnapshot != null) {
+            noteEliminations(heldSnapshot.robots(), resolvedTurn);
             replaceRobots(heldSnapshot.robots());
             heldSnapshot = null;
         }
         if (heldGameOver != null) {
+            noteEliminations(heldGameOver.robots(), resolvedTurn);
             finishGame(heldGameOver);
             heldGameOver = null;
         }
