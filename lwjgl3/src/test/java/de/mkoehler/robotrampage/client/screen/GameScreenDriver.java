@@ -20,9 +20,11 @@ import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
 import de.mkoehler.robotrampage.rules.Card;
+import de.mkoehler.robotrampage.lwjgl3.SampleTurn;
 import de.mkoehler.robotrampage.rules.CardType;
 
 import java.util.ArrayList;
@@ -99,6 +101,7 @@ public final class GameScreenDriver {
             public void create() {
                 super.create();
                 drive(this);
+                driveResolution(this);
                 System.out.println("GameScreenDriver: all checks passed");
                 Gdx.app.exit();
             }
@@ -173,6 +176,45 @@ public final class GameScreenDriver {
             3, 3, 90));
         frame(screen);
         check(game.getScreen() instanceof LobbyScreen, "the lobby state after the game should hand the connection to the lobby");
+    }
+
+    /**
+     * Plays back a real resolved turn and checks the replay: the board does not jump to the end state before the replay has
+     * played, skipping takes the end state over, and a new turn that arrives in the middle of a replay cuts it short.
+     *
+     * @param game the game
+     */
+    private static void driveResolution(RobotRampageGame game) {
+        List<String> names = List.of("Ann", "Bo", "Cy", "Di");
+        SampleTurn.Sample sample = SampleTurn.first(7L, names.size(), names);
+        List<RobotState> after = sample.after();
+        ConnectedServer connected = new ConnectedServer(new ScriptedLink(), new HandshakeResponse("Welcome", ME, "token", "test"),
+            List.of(), false);
+
+        GameScreen skipping = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(sample.boardJson(), sample.players(), ME), sample.messages());
+        game.setScreen(skipping);
+        skipping.resize(WIDTH, HEIGHT);
+        GameModel model = skipping.model();
+        frame(skipping);
+        check(model.stage() == GameModel.Stage.RESOLVING, "a resolved turn should be in the resolving stage");
+        check(model.isResolutionOpen(), "the end state should be held while the replay plays");
+        check(!model.robots().equals(after), "the robots must not have jumped to the end state");
+        click(skipping, 1718f, 38f);
+        check(!model.isResolutionOpen(), "skipping should complete the resolution");
+        check(model.robots().equals(after), "skipping should show the state the server reached");
+
+        GameScreen cut = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(sample.boardJson(), sample.players(), ME), sample.messages());
+        game.setScreen(cut);
+        cut.resize(WIDTH, HEIGHT);
+        frame(cut);
+        check(cut.model().isResolutionOpen(), "the second replay should be running");
+        cut.onMessage(new TurnStarted(2, List.of(), List.of(0, 1, 2, 3), 90));
+        frame(cut);
+        check(!cut.model().isResolutionOpen() && cut.model().robots().equals(after),
+            "a new turn should cut the replay short and show the end state");
+        check(cut.model().stage() == GameModel.Stage.PROGRAMMING, "the new turn should be in the programming stage");
     }
 
     /**

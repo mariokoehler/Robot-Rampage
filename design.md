@@ -508,7 +508,8 @@ of a game can therefore be non-contiguous.
 
 **Lobby and game flow (one game per server, 7).** `LOBBY` → host starts (needs
 ≥ 2 players, everyone else ready) → `PROGRAMMING` ↔ `RESOLVING` (a pause so clients can
-animate; *(unconfirmed)* default 2 s + 25 ms per event, at most 20 s) → `GAME_OVER` (back to
+animate; *(unconfirmed)* default 6 s + 130 ms per event, at most 30 s: this is the time the clients have to play the turn
+back, see 4.1) → `GAME_OVER` (back to
 `LOBBY` after 15 s *(unconfirmed)*). The first player to join is the host. Back in the lobby,
 players who dropped are forgotten, the others keep their seats and their **session tokens**
 and must ready up again; the host is still whoever joined first among them. A token is only
@@ -727,14 +728,37 @@ comes from **number-free sprites** in `assets/board` (derived from the canvas dr
 `tools/design-import/make-board-sprites.js`, which strips the floor background and the baked-in numbers), with the numbers
 of flags, start squares, pushers and robot badges drawn by the renderer with the game fonts, and laser beams drawn as bars.
 The pure geometry (turning a picture for a direction, the walls of a board once each, how far a beam reaches) is in
-`client.board.BoardGeometry` and is unit-tested. Belt curves are **not** yet drawn (belts are turned to their direction
-only, no corner pieces), and no damage tags, program preview, highlights or archive markers yet — those belong to the
-programming and resolution screens. Crusher squares show no register numbers. Pusher register numbers are turned to run along the bar on east and west
+`client.board.BoardGeometry` and is unit-tested. **Belt pieces:** a belt is drawn as a plain belt, a corner, a join, a T or an X, chosen from the belts around it that
+lead into it (`BoardGeometry.beltPiece`): fed from behind (or from nowhere) is plain; fed from one side only is a corner;
+from behind and one side is a join on that side; from both sides without a belt behind is a T; from all three is an X. The
+design draws these pieces for a belt leaving north; the renderer turns them, and normal and express belts have their own
+set. Damage tags are drawn on robots during a replay; there is no program preview, highlight or archive marker yet. Crusher squares show no register numbers. Pusher register numbers are turned to run along the bar on east and west
 pushers. The game screen parses the board in its constructor (`GameModel`); the server validated it and versions are checked, so a
 bad board is not expected, but a failure there would be an uncaught crash. `BoardSnapshot` (`lwjgl3/src/test`, a dev
 tool run by hand) renders a board with a robot on every start square into a PNG through a hidden window, so the renderer can
 be checked without playing. `lwjgl3/src/test/resources/renderer-probe.json` is a board with everything on it that
 `proving-grounds` lacks (pushers on all four sides, crushers, both gears, 1 to 3 beam lasers, express belts) for exactly that.
+
+**Implemented (M4 slice 5): the replay.** `client.replay.TurnReplay` (libGDX-free) turns the events of a resolved turn into
+**beats** and plays them at a speed of 1×, 2× or 4×. It starts from the robots' state before the turn and applies the events
+beat by beat, so it ends exactly where the server ended (a test compares it with the rules engine over many random turns).
+Beats: the reveal of a register; one beat per robot's card, with the pushes it causes; one beat each for express belts, all
+belts, pushers, gears, crushers, checkpoints and clean-up (everything in them happens at once); one beat for a whole laser
+volley. Damage is **merged per robot per volley** ("Kenji takes 2 damage — Board laser, then Sophie · damage 5 of 9").
+The game screen swaps to the resolution layout (cards played in priority order, the board at 64 px squares, "What happened"
+newest first with the current moment marked, the registers and the nine steps below, pause, speed and "Skip to end of turn")
+while a turn is being played, inside the same `GameScreen`, so the connection never changes hands.
+**Rules of the hand-over:** the server's state after the turn and the end of the game are **held back** by `GameModel` until
+the replay is over or skipped (`completeResolution`), so the board does not jump ahead and the winning move is seen; the next
+`TurnStarted` completes the resolution by itself, so a replay that is still running is cut short and the client is never
+stale. The server does not wait for the clients' animation: its pause after a turn (`SessionConfig`, 6 s + 130 ms per event, at most
+30 s) is the time the players have. Measured on random turns of the first board, a replay at 1× takes about 5 s + 0.11 s per
+event (9 s to 25 s for 2 to 8 players), which the pause covers. **Skipping does not shorten the pause:** a player who skips
+waits for the others. Letting the server end the pause when every client has finished (a `ReplayDone` message) is the
+obvious next step and needs a protocol addition. Robot lasers and board lasers are shown only
+while they fire (the idle beams of the board lasers are hidden during a replay), and a beam stops at the first robot it hits.
+Not built: the "auto-skip resolution" setting, icons in the "What happened" list (colored squares for now), and the
+respawn animation (robots that re-enter appear with the next turn).
 
 **Animation is event-driven.** During the Execute phase the client receives the
 turn's `GameEvent` list (3.4) and plays it through an *animation queue*: each
@@ -792,8 +816,7 @@ program. A `HandDealt` with an empty hand, free registers and a robot that is no
 **Deviations from the mockups (owner may revise):** cards are placed and taken back by **click only** (no drag and drop
 yet, so the hint text leaves it out); the power-down switch simply sets the flag (no dialog); the player in "Away" shows no
 countdown (needs the grace period in the protocol); the Leave dialog does not promise a rejoin (the client cannot rejoin
-yet); a resolved turn is not animated — the board jumps to the new state and the screen waits for the next turn (slice 5);
-the respawn-facing choice and the eliminated dialog are not built. **When time runs out the server fills the registers
+yet); the respawn-facing choice and the eliminated dialog are not built. **When time runs out the server fills the registers
 at random and the client is not told which cards** — the screen then shows "Time's up" with the five registers as hidden
 "?" slots and says so, instead of empty slots that would look as if nothing was programmed. The same happens when a player
 comes back to a turn they had already locked in. Showing the actual cards needs a `ProgramFilledIn` message (4.6), which
@@ -924,8 +947,8 @@ no UI and is where the test value is:
   game-screen placeholder. Slice 3 is **done**: the static board renderer (4.1). Slice 4 is **done**: the programming
   half of the game screen (4.3): `GameModel`/`ProgramDraft` (libGDX-free, tested, and checked against the real server), the
   cards and register widgets, players, robot and program panels, the Menu, Leave and Game over dialogs. The Settings button on the startup screen
-  is disabled until the Settings dialog exists. Still to come: Resolution with
-  the animation queue, the Game Over screen, the respawn-facing, power-down and eliminated dialogs, drag and drop, the
+  is disabled until the Settings dialog exists. Slice 5 is **done**: the replay of a resolved turn (4.1) and the belt corner,
+  join, T and X pieces. Still to come: the Game Over screen, the respawn-facing, power-down and eliminated dialogs, drag and drop, the
   "time's up" banner, reconnecting a dropped client,  and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down

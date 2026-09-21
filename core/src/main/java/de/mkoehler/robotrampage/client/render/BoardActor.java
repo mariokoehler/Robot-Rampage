@@ -6,6 +6,7 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.math.Matrix4;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TransformDrawable;
 import com.badlogic.gdx.utils.Align;
@@ -17,13 +18,16 @@ import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.board.Pusher;
 import de.mkoehler.robotrampage.board.SquareFeature;
 import de.mkoehler.robotrampage.board.StartSquare;
+import de.mkoehler.robotrampage.client.board.Beam;
 import de.mkoehler.robotrampage.client.board.BoardGeometry;
 import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.lobby.RobotLook;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
 
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -56,6 +60,8 @@ public final class BoardActor extends Actor {
     private final TextureRegionDrawable floor;
     private final TextureRegionDrawable belt;
     private final TextureRegionDrawable expressBelt;
+    private final Map<BoardGeometry.BeltPiece, TextureRegionDrawable> beltPieces = new EnumMap<>(BoardGeometry.BeltPiece.class);
+    private final Map<BoardGeometry.BeltPiece, TextureRegionDrawable> expressPieces = new EnumMap<>(BoardGeometry.BeltPiece.class);
     private final TextureRegionDrawable gearClockwise;
     private final TextureRegionDrawable gearCounterclockwise;
     private final TextureRegionDrawable pit;
@@ -72,6 +78,9 @@ public final class BoardActor extends Actor {
     private final TransformDrawable beamCore;
     private final TextureRegionDrawable[] bodies = new TextureRegionDrawable[RobotLook.COUNT];
     private List<RobotPose> robots = List.of();
+    private List<Beam> beams = List.of();
+    private boolean staticBeams = true;
+    private final Drawable tagShape;
 
     /**
      * Creates the actor for a board, with no robots.
@@ -87,6 +96,13 @@ public final class BoardActor extends Actor {
         floor = ui.image("tiles/floor.png");
         belt = ui.image("tiles/belt.png");
         expressBelt = ui.image("tiles/belt-express.png");
+        String[] suffix = {"", "-corner-left", "-corner-right", "-join-left", "-join-right", "-t", "-x"};
+        for (BoardGeometry.BeltPiece piece : BoardGeometry.BeltPiece.values()) {
+            if (piece != BoardGeometry.BeltPiece.STRAIGHT) {
+                beltPieces.put(piece, ui.image("tiles/belt" + suffix[piece.ordinal()] + ".png"));
+                expressPieces.put(piece, ui.image("tiles/belt-express" + suffix[piece.ordinal()] + ".png"));
+            }
+        }
         gearClockwise = ui.image("tiles/gear-clockwise.png");
         gearCounterclockwise = ui.image("tiles/gear-counterclockwise.png");
         pit = ui.image("tiles/pit.png");
@@ -101,6 +117,7 @@ public final class BoardActor extends Actor {
         badge = ui.image("board/robot-badge.png");
         beamOuter = (TransformDrawable) ui.solid(Theme.DANGER);
         beamCore = (TransformDrawable) ui.solid(Theme.SURFACE_RAISED);
+        tagShape = ui.rounded(Theme.DANGER, Theme.SURFACE_RAISED, Theme.BORDER_CONTROL, 8);
         for (int seat = 0; seat < bodies.length; seat++) {
             bodies[seat] = ui.image(RobotLook.picture(seat));
         }
@@ -114,6 +131,25 @@ public final class BoardActor extends Actor {
      */
     public void setRobots(List<RobotPose> poses) {
         this.robots = List.copyOf(poses);
+    }
+
+    /**
+     * Sets the laser beams that shine on top of the board right now, such as the volley of a replay.
+     *
+     * @param shining the beams
+     */
+    public void setBeams(List<Beam> shining) {
+        this.beams = List.copyOf(shining);
+    }
+
+    /**
+     * Chooses whether the beams of the board lasers are always drawn. A replay switches them off and shows only the beams
+     * that fire, which stop at the first robot they hit.
+     *
+     * @param shown {@code true} to draw the idle beams of the board lasers
+     */
+    public void setStaticBeams(boolean shown) {
+        this.staticBeams = shown;
     }
 
     /**
@@ -133,6 +169,7 @@ public final class BoardActor extends Actor {
         drawLasers(batch);
         drawWalls(batch);
         drawRobots(batch);
+        drawShots(batch);
     }
 
     /**
@@ -155,12 +192,29 @@ public final class BoardActor extends Actor {
                 } else if (feature == SquareFeature.REPAIR) {
                     square(batch, repairSite, position, 0f);
                 } else if (onBelt != null) {
-                    square(batch, onBelt.express() ? expressBelt : belt, position,
-                        BoardGeometry.rotationFrom(Direction.EAST, onBelt.direction()));
+                    drawBelt(batch, position, onBelt);
                 } else {
                     square(batch, floor, position, 0f);
                 }
             }
+        }
+    }
+
+    /**
+     * Draws the belt on a square with the piece that fits the belts around it: a plain belt, a corner, a join, a T or an X.
+     *
+     * @param batch    the batch
+     * @param position the square
+     * @param onBelt   the belt on it
+     */
+    private void drawBelt(Batch batch, Position position, Belt onBelt) {
+        BoardGeometry.BeltPiece piece = BoardGeometry.beltPiece(board, position);
+        if (piece == BoardGeometry.BeltPiece.STRAIGHT) {
+            square(batch, onBelt.express() ? expressBelt : belt, position,
+                BoardGeometry.rotationFrom(Direction.EAST, onBelt.direction()));
+        } else {
+            square(batch, (onBelt.express() ? expressPieces : beltPieces).get(piece), position,
+                BoardGeometry.rotationFrom(Direction.NORTH, onBelt.direction()));
         }
     }
 
@@ -232,7 +286,7 @@ public final class BoardActor extends Actor {
             float angle = (BoardGeometry.rotation(fire) + 90f) % 360f;
             float centerX = tileX(laser.position()) + tile / 2f;
             float centerY = tileY(laser.position()) + tile / 2f;
-            for (int beam = 0; beam < laser.beams(); beam++) {
+            for (int beam = 0; beam < (staticBeams ? laser.beams() : 0); beam++) {
                 float offset = (beam - (laser.beams() - 1) / 2f) * BEAM_SPACING * tile;
                 float startX = centerX + fire.dx() * (EMITTER_LENGTH - 0.5f) * tile - fire.dy() * offset;
                 float startY = centerY + fire.dy() * (EMITTER_LENGTH - 0.5f) * tile + fire.dx() * offset;
@@ -266,11 +320,65 @@ public final class BoardActor extends Actor {
         for (RobotPose pose : robots) {
             float x = getX() + pose.x() * tile;
             float y = getY() + pose.y() * tile;
+            batch.setColor(1f, 1f, 1f, getColor().a * pose.alpha());
             bodies[pose.seat()].draw(batch, x, y, tile, tile);
             wedge.draw(batch, x, y, tile / 2f, tile / 2f, tile, tile, 1f, 1f, pose.rotation());
             badge.draw(batch, x, y, tile, tile);
             text(batch, Theme.TextStyle.BUTTON, String.valueOf(pose.seat() + 1),
                 new float[] {x + tile * 108.8f / PICTURE, y + tile * (1f - 110.08f / PICTURE)}, 0.17f, Theme.ROBOT_OUTLINE);
+            if (pose.tag() > 0) {
+                drawTag(batch, x, y, pose.tag());
+            }
+        }
+        batch.setColor(1f, 1f, 1f, getColor().a);
+    }
+
+    /**
+     * Draws the red tag with the damage a robot just took, at the top left of its square.
+     *
+     * @param batch  the batch
+     * @param x      the left edge of the robot's square
+     * @param y      the bottom edge of the robot's square
+     * @param damage the damage to show
+     */
+    private void drawTag(Batch batch, float x, float y, int damage) {
+        float width = tile * 0.46f;
+        float height = tile * 0.28f;
+        float left = x + tile * 0.02f;
+        float bottom = y + tile * 0.7f;
+        tagShape.draw(batch, left, bottom - UiKit.SHAPE_RESERVE, width, height + UiKit.SHAPE_RESERVE);
+        text(batch, Theme.TextStyle.BUTTON, "+" + damage, new float[] {left + width / 2f, bottom + height / 2f}, 0.16f,
+            Color.WHITE);
+    }
+
+    /**
+     * Draws the beams that fire in the moment being shown: a bar from where the beam starts to the last square it reaches.
+     *
+     * @param batch the batch
+     */
+    private void drawShots(Batch batch) {
+        batch.setColor(1f, 1f, 1f, getColor().a);
+        for (Beam shot : beams) {
+            Direction fire = shot.direction();
+            float centerX = tileX(shot.from()) + tile / 2f;
+            float centerY = tileY(shot.from()) + tile / 2f;
+            float startAlong = (shot.board() ? EMITTER_LENGTH - 0.5f : 0.3f) * tile;
+            float endX = tileX(shot.to()) + tile / 2f;
+            float endY = tileY(shot.to()) + tile / 2f;
+            float endAlong = (endX - centerX) * fire.dx() + (endY - centerY) * fire.dy() + (0.5f - BEAM_END_GAP) * tile;
+            float length = endAlong - startAlong;
+            if (length <= 0f) {
+                continue;
+            }
+            float angle = (BoardGeometry.rotation(fire) + 90f) % 360f;
+            int count = shot.board() ? shot.beams() : 1;
+            for (int beam = 0; beam < count; beam++) {
+                float offset = (beam - (count - 1) / 2f) * BEAM_SPACING * tile;
+                float startX = centerX + fire.dx() * startAlong - fire.dy() * offset;
+                float startY = centerY + fire.dy() * startAlong + fire.dx() * offset;
+                bar(batch, beamOuter, startX, startY, length, BEAM_WIDTH * tile, angle);
+                bar(batch, beamCore, startX, startY, length, BEAM_CORE_WIDTH * tile, angle);
+            }
         }
     }
 

@@ -10,10 +10,25 @@ import de.mkoehler.robotrampage.board.Position;
  * @param seat     the seat of the robot's player, 0 to 7, which picks its picture
  * @param x        the horizontal position of the robot's square in squares from the left edge of the board
  * @param y        the vertical position of the robot's square in squares from the bottom edge of the board
- * @param rotation the heading in degrees, counter-clockwise, 0 for north, as {@link BoardGeometry#rotation} returns
+ * @param rotation the heading in degrees, counter-clockwise, 0 for north, as {@link BoardGeometry#rotation} returns; it may
+ *                 run past 360 or below 0 while a robot turns
+ * @param alpha    how opaque the robot is, from 0 (gone) to 1
+ * @param tag      the damage taken in the moment being shown, drawn as a tag next to the robot, or 0 for none
  * @author Mario Koehler
  */
-public record RobotPose(int seat, float x, float y, float rotation) {
+public record RobotPose(int seat, float x, float y, float rotation, float alpha, int tag) {
+
+    /**
+     * Creates the pose of a fully visible robot without a damage tag.
+     *
+     * @param seat     the seat of the robot's player
+     * @param x        the horizontal position in squares
+     * @param y        the vertical position in squares
+     * @param rotation the heading in degrees, counter-clockwise, 0 for north
+     */
+    public RobotPose(int seat, float x, float y, float rotation) {
+        this(seat, x, y, rotation, 1f, 0);
+    }
 
     /**
      * Creates the pose of a robot standing still on a square.

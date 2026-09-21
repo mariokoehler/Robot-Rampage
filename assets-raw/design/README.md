@@ -13,6 +13,7 @@ Vector art taken straight from the game's screen mockups
 | `overlays/` | archive marker, robot facing wedge + seat badge, program preview, damage tag, highlight | Reference drawings of things the client draws in code (they carry dynamic numbers and colours). |
 | `cards/` | the seven card icons (112 px) | Card faces; the card frame, priority and name are drawn by the client. |
 | `icons/` | lock, tick, chevron, close, settings, play, pause, power, host crown, flag, info, warning, eye, wifi | UI icons, drawn white or ink; tint them at runtime. |
+| `tiles/` (belt-corner-*, belt-join-*, belt-t, belt-x, and the belt-express- twins) | the belt pieces for merges and corners | Drawn for a belt leaving **north**; the client picks the piece from the neighbouring belts (design.md 4.1). |
 | `robots/` | the eight robots, one per seat (128 px) | Bodies without facing; the client draws the facing wedge and seat badge. |
 
 `edges/laser-emitter.svg`, `overlays/robot-wedge.svg` and `overlays/robot-badge.svg` are parts of the board laser and of the

@@ -60,6 +60,206 @@
     4,
     5
    ]
+  },
+  {
+   "x": 10,
+   "y": 2,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 10,
+   "y": 3,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 10,
+   "y": 4,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 10,
+   "y": 5,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 9,
+   "y": 4,
+   "belt": {
+    "dir": "EAST",
+    "express": false
+   }
+  },
+  {
+   "x": 11,
+   "y": 5,
+   "belt": {
+    "dir": "WEST",
+    "express": false
+   }
+  },
+  {
+   "x": 10,
+   "y": 7,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 9,
+   "y": 7,
+   "belt": {
+    "dir": "EAST",
+    "express": false
+   }
+  },
+  {
+   "x": 11,
+   "y": 7,
+   "belt": {
+    "dir": "WEST",
+    "express": false
+   }
+  },
+  {
+   "x": 10,
+   "y": 8,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 10,
+   "y": 9,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 9,
+   "y": 9,
+   "belt": {
+    "dir": "EAST",
+    "express": false
+   }
+  },
+  {
+   "x": 11,
+   "y": 9,
+   "belt": {
+    "dir": "WEST",
+    "express": false
+   }
+  },
+  {
+   "x": 8,
+   "y": 2,
+   "belt": {
+    "dir": "EAST",
+    "express": false
+   }
+  },
+  {
+   "x": 9,
+   "y": 2,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 9,
+   "y": 3,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 8,
+   "y": 6,
+   "belt": {
+    "dir": "WEST",
+    "express": false
+   }
+  },
+  {
+   "x": 7,
+   "y": 6,
+   "belt": {
+    "dir": "NORTH",
+    "express": false
+   }
+  },
+  {
+   "x": 3,
+   "y": 8,
+   "belt": {
+    "dir": "EAST",
+    "express": true
+   }
+  },
+  {
+   "x": 4,
+   "y": 8,
+   "belt": {
+    "dir": "NORTH",
+    "express": true
+   }
+  },
+  {
+   "x": 4,
+   "y": 9,
+   "belt": {
+    "dir": "NORTH",
+    "express": true
+   }
+  },
+  {
+   "x": 6,
+   "y": 8,
+   "belt": {
+    "dir": "NORTH",
+    "express": true
+   }
+  },
+  {
+   "x": 6,
+   "y": 9,
+   "belt": {
+    "dir": "NORTH",
+    "express": true
+   }
+  },
+  {
+   "x": 5,
+   "y": 9,
+   "belt": {
+    "dir": "EAST",
+    "express": true
+   }
+  },
+  {
+   "x": 7,
+   "y": 9,
+   "belt": {
+    "dir": "WEST",
+    "express": true
+   }
   }
  ],
  "edges": [

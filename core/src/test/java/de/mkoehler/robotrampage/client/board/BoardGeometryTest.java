@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -88,6 +89,79 @@ class BoardGeometryTest {
         List<WallSegment> segments = BoardGeometry.wallSegments(board);
 
         assertEquals(List.of(new WallSegment(at(1, 0), Direction.EAST)), segments);
+    }
+
+    private static Board belts(int width, int height, Object... belts) {
+        Board.Builder builder = new Board.Builder(width, height);
+        for (int i = 0; i < belts.length; i += 3) {
+            builder.belt((Position) belts[i], (Direction) belts[i + 1], (Boolean) belts[i + 2]);
+        }
+        return builder.build();
+    }
+
+    /**
+     * A belt with nothing around it, and a belt fed only from behind, are plain belts.
+     */
+    @Test
+    void aBeltInALineIsStraight() {
+        Board board = belts(3, 1, at(0, 0), Direction.EAST, false, at(1, 0), Direction.EAST, false);
+
+        assertEquals(BoardGeometry.BeltPiece.STRAIGHT, BoardGeometry.beltPiece(board, at(0, 0)));
+        assertEquals(BoardGeometry.BeltPiece.STRAIGHT, BoardGeometry.beltPiece(board, at(1, 0)));
+    }
+
+    /**
+     * A belt fed only from one side turns: from the left or from the right of its direction.
+     */
+    @Test
+    void aBeltFedFromOneSideIsACorner() {
+        Board left = belts(3, 3, at(1, 1), Direction.NORTH, false, at(0, 1), Direction.EAST, false);
+        Board right = belts(3, 3, at(1, 1), Direction.NORTH, false, at(2, 1), Direction.WEST, false);
+        Board turned = belts(3, 3, at(1, 1), Direction.EAST, false, at(1, 2), Direction.SOUTH, false);
+
+        assertEquals(BoardGeometry.BeltPiece.CORNER_LEFT, BoardGeometry.beltPiece(left, at(1, 1)));
+        assertEquals(BoardGeometry.BeltPiece.CORNER_RIGHT, BoardGeometry.beltPiece(right, at(1, 1)));
+        assertEquals(BoardGeometry.BeltPiece.CORNER_LEFT, BoardGeometry.beltPiece(turned, at(1, 1)));
+    }
+
+    /**
+     * A belt fed from behind and from one side is a join on that side.
+     */
+    @Test
+    void aBeltFedFromBehindAndOneSideIsAJoin() {
+        Board left = belts(3, 3, at(1, 1), Direction.NORTH, false, at(1, 0), Direction.NORTH, false,
+            at(0, 1), Direction.EAST, false);
+        Board right = belts(3, 3, at(1, 1), Direction.NORTH, false, at(1, 0), Direction.NORTH, false,
+            at(2, 1), Direction.WEST, false);
+
+        assertEquals(BoardGeometry.BeltPiece.JOIN_LEFT, BoardGeometry.beltPiece(left, at(1, 1)));
+        assertEquals(BoardGeometry.BeltPiece.JOIN_RIGHT, BoardGeometry.beltPiece(right, at(1, 1)));
+    }
+
+    /**
+     * Feeders from both sides make a T without a belt behind and an X with one.
+     */
+    @Test
+    void feedersFromBothSidesMakeATOrAnX() {
+        Board t = belts(3, 3, at(1, 1), Direction.NORTH, false, at(0, 1), Direction.EAST, false,
+            at(2, 1), Direction.WEST, true);
+        Board x = belts(3, 3, at(1, 1), Direction.NORTH, true, at(0, 1), Direction.EAST, false,
+            at(2, 1), Direction.WEST, false, at(1, 0), Direction.NORTH, false);
+
+        assertEquals(BoardGeometry.BeltPiece.T_JUNCTION, BoardGeometry.beltPiece(t, at(1, 1)));
+        assertEquals(BoardGeometry.BeltPiece.X_JUNCTION, BoardGeometry.beltPiece(x, at(1, 1)));
+    }
+
+    /**
+     * Belts that point away do not feed a square, and a square without a belt has no piece.
+     */
+    @Test
+    void beltsPointingAwayDoNotFeed() {
+        Board board = belts(3, 3, at(1, 1), Direction.NORTH, false, at(0, 1), Direction.WEST, false,
+            at(1, 0), Direction.SOUTH, false);
+
+        assertEquals(BoardGeometry.BeltPiece.STRAIGHT, BoardGeometry.beltPiece(board, at(1, 1)));
+        assertThrows(IllegalArgumentException.class, () -> BoardGeometry.beltPiece(board, at(2, 2)));
     }
 
     /**

@@ -42,7 +42,8 @@ import java.util.List;
  * {@code assets} folder as the working directory:
  * <pre>java -cp ... de.mkoehler.robotrampage.lwjgl3.ScreenSnapshot [output folder]</pre>
  * It writes {@code game-programming.png}, {@code game-ready.png}, {@code game-locked.png}, {@code game-confirmed.png},
- * {@code game-powered-down.png} and {@code game-time-up.png}.
+ * {@code game-powered-down.png} and {@code game-time-up.png}, and
+ * {@code resolution-*.png} for a real turn at several moments of its replay.
  *
  * @author Mario Koehler
  */
@@ -112,12 +113,17 @@ public final class ScreenSnapshot {
      * @throws IOException if writing fails
      */
     private static void renderAll(RobotRampageGame game, File folder) throws IOException {
-        write(game, folder, "game-programming.png", state(game, 0, 2, false, false, false));
-        write(game, folder, "game-ready.png", state(game, 0, 5, false, false, false));
-        write(game, folder, "game-locked.png", state(game, 2, 3, false, false, false));
-        write(game, folder, "game-confirmed.png", state(game, 0, 5, true, false, false));
-        write(game, folder, "game-powered-down.png", state(game, 0, 0, false, true, false));
-        write(game, folder, "game-time-up.png", state(game, 0, 2, false, false, true));
+        write(game, folder, "game-programming.png", state(game, 0, 2, false, false, false), 23f);
+        write(game, folder, "game-ready.png", state(game, 0, 5, false, false, false), 23f);
+        write(game, folder, "game-locked.png", state(game, 2, 3, false, false, false), 23f);
+        write(game, folder, "game-confirmed.png", state(game, 0, 5, true, false, false), 23f);
+        write(game, folder, "game-powered-down.png", state(game, 0, 0, false, true, false), 23f);
+        write(game, folder, "game-time-up.png", state(game, 0, 2, false, false, true), 23f);
+        float laser = SampleTurn.first(7L, NAMES.size(), NAMES).laserSecond();
+        write(game, folder, "resolution-laser.png", resolution(game), laser);
+        for (float seconds : new float[] {1.2f, 5f, 12f, 200f}) {
+            write(game, folder, "resolution-" + (int) seconds + "s.png", resolution(game), seconds);
+        }
     }
 
     /**
@@ -184,19 +190,35 @@ public final class ScreenSnapshot {
     }
 
     /**
+     * Builds the game screen for a turn that has just been resolved, from a real turn of the rules engine.
+     *
+     * @param game the game
+     * @return the screen, showing the replay from its start
+     */
+    private static GameScreen resolution(RobotRampageGame game) {
+        SampleTurn.Sample sample = SampleTurn.first(7L, NAMES.size(), NAMES);
+        ConnectedServer connected = new ConnectedServer(new DeadLink(), new HandshakeResponse("Welcome", ME, "token", "test"),
+            List.of(), false);
+        return new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(sample.boardJson(), sample.players(), ME), sample.messages());
+    }
+
+    /**
      * Draws a screen into an off-screen buffer and writes it out.
      *
      * @param game   the game
      * @param folder where to write
      * @param name   the file name
      * @param screen the screen
+     * @param seconds how much time passes before the picture is taken
      * @throws IOException if writing fails
      */
-    private static void write(RobotRampageGame game, File folder, String name, GameScreen screen) throws IOException {
+    private static void write(RobotRampageGame game, File folder, String name, GameScreen screen, float seconds)
+        throws IOException {
         screen.resize(WIDTH, HEIGHT);
         FrameBuffer buffer = new FrameBuffer(Pixmap.Format.RGBA8888, WIDTH, HEIGHT, false);
         buffer.begin();
-        screen.render(23f);
+        screen.render(seconds);
         screen.render(0f);
         Gdx.gl.glPixelStorei(GL20.GL_PACK_ALIGNMENT, 1);
         Pixmap pixmap = Pixmap.createFromFrameBuffer(0, 0, WIDTH, HEIGHT);

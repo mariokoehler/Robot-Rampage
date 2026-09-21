@@ -29,6 +29,27 @@ public final class BoardGeometry {
     }
 
     /**
+     * The pieces of belt the design has, each drawn for a belt that leaves its square towards the north. The sides are seen
+     * looking along the belt's direction.
+     */
+    public enum BeltPiece {
+        /** A plain belt: nothing joins it from the side, or a belt feeds it from behind. */
+        STRAIGHT,
+        /** A belt that turns: it is fed from its left side and from nowhere else. */
+        CORNER_LEFT,
+        /** A belt that turns: it is fed from its right side and from nowhere else. */
+        CORNER_RIGHT,
+        /** A belt fed from behind that another belt joins from the left. */
+        JOIN_LEFT,
+        /** A belt fed from behind that another belt joins from the right. */
+        JOIN_RIGHT,
+        /** A belt fed from both sides and not from behind. */
+        T_JUNCTION,
+        /** A belt fed from behind and from both sides. */
+        X_JUNCTION
+    }
+
+    /**
      * Not instantiable; this class only holds static helpers.
      */
     private BoardGeometry() {
@@ -59,6 +80,43 @@ public final class BoardGeometry {
      */
     public static float rotationFrom(Direction base, Direction target) {
         return (rotation(target) - rotation(base) + 360f) % 360f;
+    }
+
+    /**
+     * Works out which piece of belt to draw on a square that has a belt, from the belts around it that lead into it.
+     *
+     * @param board    the board
+     * @param position a square with a belt
+     * @return the piece, drawn for a belt leaving towards the north and then turned to the belt's direction
+     * @throws IllegalArgumentException if the square has no belt
+     */
+    public static BeltPiece beltPiece(Board board, Position position) {
+        Direction direction = board.beltAt(position)
+            .orElseThrow(() -> new IllegalArgumentException("No belt on " + position)).direction();
+        boolean behind = feeds(board, position.step(direction.opposite()), position);
+        boolean left = feeds(board, position.step(direction.rotateLeft()), position);
+        boolean right = feeds(board, position.step(direction.rotateRight()), position);
+        if (behind) {
+            return left && right ? BeltPiece.X_JUNCTION : left ? BeltPiece.JOIN_LEFT : right ? BeltPiece.JOIN_RIGHT
+                : BeltPiece.STRAIGHT;
+        }
+        if (left && right) {
+            return BeltPiece.T_JUNCTION;
+        }
+        return left ? BeltPiece.CORNER_LEFT : right ? BeltPiece.CORNER_RIGHT : BeltPiece.STRAIGHT;
+    }
+
+    /**
+     * Checks whether the belt on a square leads into another square.
+     *
+     * @param board  the board
+     * @param from   the square that may have a belt
+     * @param target the square it might lead into
+     * @return {@code true} if there is a belt on {@code from} that points at {@code target}
+     */
+    private static boolean feeds(Board board, Position from, Position target) {
+        return board.inBounds(from) && board.beltAt(from).map(belt -> from.step(belt.direction()).equals(target))
+            .orElse(false);
     }
 
     /**

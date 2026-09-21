@@ -204,7 +204,9 @@ public final class UiKit implements Disposable {
         /** Orange with white text: the player's own marker. */
         PRIMARY,
         /** Green with white text: something is done or ready. */
-        SUCCESS
+        SUCCESS,
+        /** Teal with white text: the thing that is happening now. */
+        ACCENT
     }
 
     /**
@@ -220,6 +222,7 @@ public final class UiKit implements Disposable {
             case INK -> Theme.INK;
             case PRIMARY -> Theme.PRIMARY;
             case SUCCESS -> Theme.SUCCESS;
+            case ACCENT -> Theme.ACCENT;
         };
         Color border = kind == ChipKind.OUTLINE ? Theme.LINE_STRONG : fill;
         Color textColor = kind == ChipKind.OUTLINE ? Theme.INK_MUTED : Theme.ON_PRIMARY;

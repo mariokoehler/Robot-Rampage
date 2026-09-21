@@ -2,6 +2,8 @@ package de.mkoehler.robotrampage.client.screen;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Group;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.Button;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
@@ -10,15 +12,18 @@ import com.badlogic.gdx.scenes.scene2d.ui.Stack;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Scaling;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
+import de.mkoehler.robotrampage.client.game.CardLook;
 import de.mkoehler.robotrampage.client.game.GameModel;
 import de.mkoehler.robotrampage.client.game.ProgramDraft;
 import de.mkoehler.robotrampage.client.lobby.RobotLook;
 import de.mkoehler.robotrampage.client.render.BoardActor;
+import de.mkoehler.robotrampage.client.replay.TurnReplay;
 import de.mkoehler.robotrampage.client.ui.CardView;
 import de.mkoehler.robotrampage.client.ui.ModalDialog;
 import de.mkoehler.robotrampage.client.ui.PillToggle;
@@ -32,6 +37,7 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.Robot;
+import de.mkoehler.robotrampage.rules.SubPhase;
 import de.mkoehler.robotrampage.rules.RobotStatus;
 
 import java.util.ArrayList;
@@ -75,6 +81,26 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private final Label timeLabel;
     private final ProgressPill timeBar;
     private final PillToggle powerToggle;
+    private final Group programmingGroup = new Group();
+    private final Group resolutionGroup = new Group();
+    private Group activeGroup;
+    private BoardActor resolutionBoard;
+    private final Table resolutionTitle = new Table();
+    private final Table cardsBody = new Table();
+    private final Table feedBody = new Table();
+    private final Table registersRibbon = new Table();
+    private final Table stepsRibbon = new Table();
+    private final Table speedBox = new Table();
+    private final Label cardsHeading;
+    private Button pauseButton;
+    private Image pauseIcon;
+    private TurnReplay replay;
+    private boolean showingResolution;
+    private boolean replayCompleted;
+    private boolean paused;
+    private float speed = 1f;
+    private int shownBeat = -1;
+    private boolean shownDone;
     private final List<Object> returnToLobby = new ArrayList<>();
     private LobbyState lobbyState;
     private ModalDialog dialog;
@@ -101,6 +127,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         this.timeLabel = ui.label("0:00", Theme.TextStyle.HEADING, Theme.INK);
         this.timeBar = new ProgressPill(ui, 10);
         this.powerToggle = ui.toggle();
+        this.cardsHeading = ui.label("Cards", Theme.TextStyle.HEADING, Theme.INK);
         float tile = Math.min(MAX_TILE, PANEL_HEIGHT / Math.max(model.board().width(), model.board().height()));
         this.boardActor = new BoardActor(ui, model.board(), tile);
         boardActor.setPosition(BOARD_LEFT + (PANEL_HEIGHT - boardActor.getWidth()) / 2f,
@@ -115,7 +142,16 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             }
         });
 
+        programmingGroup.setSize(Theme.VIEW_WIDTH, Theme.VIEW_HEIGHT);
+        resolutionGroup.setSize(Theme.VIEW_WIDTH, Theme.VIEW_HEIGHT);
+        stage.addActor(programmingGroup);
+        stage.addActor(resolutionGroup);
+        resolutionGroup.setVisible(false);
+        activeGroup = programmingGroup;
         buildFrame();
+        activeGroup = resolutionGroup;
+        buildResolutionFrame();
+        activeGroup = programmingGroup;
         carried.forEach(this::onMessage);
         refreshAll();
     }
@@ -143,7 +179,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             .left().padTop(Theme.SPACE_4);
         place(players, 32f, PANEL_TOP, 604f, PANEL_HEIGHT);
 
-        stage.addActor(boardActor);
+        activeGroup.addActor(boardActor);
 
         Table robot = ui.panel();
         robot.pad(20f).top().left();
@@ -172,7 +208,24 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         holder.setFillParent(true);
         holder.top().left().padLeft(left).padTop(top);
         holder.add(content).size(width, height);
-        stage.addActor(holder);
+        activeGroup.addActor(holder);
+    }
+
+    /**
+     * Places a widget at a position and size of the mockup, measured from the top right of the screen.
+     *
+     * @param content the widget
+     * @param right   the distance from the right edge
+     * @param top     the distance from the top edge
+     * @param width   the width
+     * @param height  the height
+     */
+    private void placeRight(Actor content, float right, float top, float width, float height) {
+        Table holder = new Table();
+        holder.setFillParent(true);
+        holder.top().right().padRight(right).padTop(top);
+        holder.add(content).size(width, height);
+        activeGroup.addActor(holder);
     }
 
     /**
@@ -234,6 +287,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         model.tick(delta);
         timeLabel.setText(model.timeText());
         timeBar.setFraction(model.timeFraction());
+        updateResolution(delta);
         if (model.revision() != shownRevision) {
             refreshAll();
         }
@@ -769,6 +823,332 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             server.link().send(model.submit());
             refreshProgram();
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------------
+    // Resolution
+    // ------------------------------------------------------------------------------------------------------
+
+    private static final String[] STEP_NAMES = {"Reveal", "Robot movement", "Express belts", "All belts", "Pushers", "Gears",
+        "Lasers", "Crushers", "Checkpoints"};
+    private static final float RESOLUTION_TOP = 84f;
+    private static final float RESOLUTION_HEIGHT = 768f;
+    private static final int MAX_FEED_LINES = 10;
+
+    /**
+     * Puts the panels of the resolution layout on the stage: the cards played, the board, what happened, and the ribbon of
+     * registers and steps below them, with the playback controls in the header.
+     */
+    private void buildResolutionFrame() {
+        resolutionTitle.left();
+        place(resolutionTitle, 32f, 14f, 800f, 52f);
+        placeRight(playbackControls(), 32f, 14f, 630f, 48f + UiKit.SHAPE_RESERVE);
+
+        Table cards = ui.panel();
+        cards.pad(20f).top().left();
+        cards.add(cardsHeading).left().row();
+        Label hint = ui.label("Played from the highest priority to the lowest.", Theme.TextStyle.BODY, Theme.INK_MUTED);
+        cards.add(hint).left().padTop(Theme.SPACE_1).row();
+        cardsBody.top().left();
+        cards.add(cardsBody).growX().expandY().top().padTop(Theme.SPACE_3);
+        place(cards, 32f, RESOLUTION_TOP, 520f, RESOLUTION_HEIGHT);
+
+        float tile = Math.min(64f, RESOLUTION_HEIGHT / Math.max(model.board().width(), model.board().height()));
+        resolutionBoard = new BoardActor(ui, model.board(), tile);
+        resolutionBoard.setStaticBeams(false);
+        resolutionBoard.setPosition(576f + (RESOLUTION_HEIGHT - resolutionBoard.getWidth()) / 2f,
+            Theme.VIEW_HEIGHT - RESOLUTION_TOP - RESOLUTION_HEIGHT + (RESOLUTION_HEIGHT - resolutionBoard.getHeight()) / 2f);
+        activeGroup.addActor(resolutionBoard);
+
+        Table feed = ui.panel();
+        feed.pad(20f).top().left();
+        feed.add(ui.label("What happened", Theme.TextStyle.HEADING, Theme.INK)).left().row();
+        feedBody.top().left();
+        feed.add(feedBody).growX().expandY().top().padTop(Theme.SPACE_3);
+        place(feed, 1368f, RESOLUTION_TOP, 520f, RESOLUTION_HEIGHT);
+
+        Table ribbon = ui.panel();
+        ribbon.pad(16f).top().left();
+        Table registers = new Table();
+        registers.left();
+        registers.add(ui.label("Registers", Theme.TextStyle.CHIP, Theme.INK_MUTED)).padRight(Theme.SPACE_3);
+        registers.add(registersRibbon).left();
+        registers.add(ui.label("Every register plays in the same nine steps.", Theme.TextStyle.BODY, Theme.INK_MUTED))
+            .expandX().right();
+        ribbon.add(registers).growX().row();
+        stepsRibbon.left();
+        ribbon.add(stepsRibbon).left().padTop(Theme.SPACE_3);
+        place(ribbon, 32f, 868f, 1856f, 150f);
+    }
+
+    /**
+     * Builds the playback controls: pause, the speed and skipping to the end of the turn.
+     *
+     * @return the controls
+     */
+    private Table playbackControls() {
+        Theme.TextStyle font = Theme.TextStyle.BUTTON;
+        pauseButton = new Button(ui.shapes().button(Theme.ButtonKind.GHOST, ui.fonts().get(font)));
+        pauseIcon = new Image(ui.image("icons/pause.png"));
+        pauseButton.add(pauseIcon).size(26f);
+        pauseButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                setPaused(!paused);
+            }
+        });
+        TextButton skip = ui.button("Skip to end of turn", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        skip.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                skipReplay();
+            }
+        });
+        speedBox.setBackground(ui.rounded(new Color(0f, 0f, 0f, 0f), Theme.LINE_STRONG, Theme.BORDER_CONTROL, Theme.RADIUS_MD));
+        speedBox.pad(2f, 2f, 2f + UiKit.SHAPE_RESERVE, 2f);
+        refreshSpeed();
+
+        Table controls = new Table();
+        controls.right();
+        controls.add(pauseButton).size(48f, 48f + UiKit.SHAPE_RESERVE);
+        controls.add(speedBox).height(48f + UiKit.SHAPE_RESERVE).padLeft(Theme.SPACE_3);
+        controls.add(skip).size(340f, 48f + UiKit.SHAPE_RESERVE).padLeft(Theme.SPACE_3);
+        return controls;
+    }
+
+    /**
+     * Rebuilds the switch that chooses the playback speed.
+     */
+    private void refreshSpeed() {
+        speedBox.clearChildren();
+        float[] speeds = {1f, 2f, 4f};
+        for (float value : speeds) {
+            boolean selected = value == speed;
+            Table item = new Table();
+            item.setBackground(selected ? ui.rounded(Theme.INK, Theme.INK, 0, 8)
+                : ui.rounded(new Color(0f, 0f, 0f, 0f), new Color(0f, 0f, 0f, 0f), 0, 8));
+            item.padLeft(16f).padRight(16f).padBottom(UiKit.SHAPE_RESERVE);
+            item.add(ui.label((int) value + "\u00d7", Theme.TextStyle.BODY, selected ? Theme.ON_PRIMARY : Theme.INK));
+            item.setTouchable(Touchable.enabled);
+            item.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    speed = value;
+                    refreshSpeed();
+                }
+            });
+            speedBox.add(item).height(44f + UiKit.SHAPE_RESERVE);
+        }
+    }
+
+    /**
+     * Pauses or resumes the replay and shows the matching button.
+     *
+     * @param pause {@code true} to pause
+     */
+    private void setPaused(boolean pause) {
+        paused = pause;
+        pauseButton.setStyle(ui.shapes().button(paused ? Theme.ButtonKind.PRIMARY : Theme.ButtonKind.GHOST,
+            ui.fonts().get(Theme.TextStyle.BUTTON)));
+        pauseIcon.setDrawable(ui.image(paused ? "icons/play.png" : "icons/pause.png"));
+    }
+
+    /**
+     * Jumps to the end of the turn: the board shows where everybody ended up and the state of the server is taken over.
+     */
+    private void skipReplay() {
+        if (replay != null) {
+            replay.skipToEnd();
+        }
+    }
+
+    /**
+     * Follows the game into the resolution layout when a turn is resolved and back out of it when the next turn begins, and
+     * moves the replay along while it is showing.
+     *
+     * @param delta seconds since the previous frame
+     */
+    private void updateResolution(float delta) {
+        boolean resolving = model.stage() == GameModel.Stage.RESOLVING
+            || model.stage() == GameModel.Stage.OVER && replay != null;
+        if (resolving != showingResolution) {
+            showingResolution = resolving;
+            programmingGroup.setVisible(!resolving);
+            resolutionGroup.setVisible(resolving);
+            if (resolving) {
+                replay = new TurnReplay(model.robotsBeforeResolution(), model.lastResolved().events(), model::nameOf);
+                replayCompleted = false;
+                shownBeat = -1;
+                setPaused(false);
+            } else {
+                replay = null;
+                shownRevision = -1;
+            }
+        }
+        if (!showingResolution || replay == null) {
+            return;
+        }
+        if (!paused && !replay.isDone()) {
+            replay.advance(delta * speed);
+        }
+        if (replay.isDone() && !replayCompleted) {
+            replayCompleted = true;
+            model.completeResolution();
+        }
+        TurnReplay.Frame frame = replay.frame();
+        resolutionBoard.setRobots(frame.poses());
+        resolutionBoard.setBeams(frame.beams());
+        if (shownBeat != replay.beatIndex() || shownDone != replay.isDone()) {
+            shownBeat = replay.beatIndex();
+            shownDone = replay.isDone();
+            refreshResolution();
+        }
+    }
+
+    /**
+     * Rebuilds the parts of the resolution layout that change from one moment to the next.
+     */
+    private void refreshResolution() {
+        resolutionTitle.clearChildren();
+        resolutionTitle.add(ui.label("Resolution", Theme.TextStyle.SUBTITLE, Theme.INK));
+        resolutionTitle.add(ui.chip("Turn " + model.turn(), UiKit.ChipKind.INK)).height(UiKit.CHIP_CELL_HEIGHT)
+            .padLeft(Theme.SPACE_4);
+        String where = replay.isDone() ? "Turn played" : replay.register() == 0 ? "Clean-up"
+            : "Register " + replay.register() + " of 5";
+        resolutionTitle.add(ui.chip(where, UiKit.ChipKind.INK)).height(UiKit.CHIP_CELL_HEIGHT).padLeft(Theme.SPACE_2);
+        refreshCards();
+        refreshFeed();
+        refreshRibbon();
+    }
+
+    /**
+     * Rebuilds the list of cards played in the register being played.
+     */
+    private void refreshCards() {
+        cardsBody.clearChildren();
+        int register = replay.register();
+        ui.setText(cardsHeading, Theme.TextStyle.HEADING, register == 0 ? "Cards" : "Cards, register " + register);
+        if (register == 0) {
+            return;
+        }
+        for (TurnReplay.Play play : replay.plays()) {
+            boolean you = play.robotId() == model.mySeat();
+            Table row = new Table();
+            row.setBackground(ui.rounded(Theme.SURFACE_RAISED, you ? Theme.ACCENT : Theme.LINE,
+                you ? Theme.BORDER_HEAVY : Theme.BORDER_HAIRLINE, 14));
+            row.padLeft(14f).padRight(14f).padBottom(UiKit.SHAPE_RESERVE);
+            Image robot = new Image(ui.image(RobotLook.picture(play.robotId())));
+            robot.setScaling(Scaling.fit);
+            row.add(robot).size(42f);
+            Table who = new Table();
+            who.left();
+            Table nameLine = new Table();
+            nameLine.add(ui.label(model.nameOf(play.robotId()), Theme.TextStyle.BODY_LARGE, Theme.INK));
+            if (you) {
+                nameLine.add(ui.chip("You", UiKit.ChipKind.PRIMARY)).height(UiKit.CHIP_CELL_HEIGHT).padLeft(Theme.SPACE_2);
+            }
+            who.add(nameLine).left().row();
+            who.add(ui.label(CardLook.name(play.card().type()), Theme.TextStyle.BODY, Theme.INK_MUTED)).left();
+            row.add(who).expandX().left().padLeft(12f);
+            Table priority = new Table();
+            priority.right();
+            priority.add(ui.label("Priority", Theme.TextStyle.CAPTION, Theme.INK_MUTED)).right().row();
+            priority.add(ui.label(String.valueOf(play.card().priority()), Theme.TextStyle.BUTTON_MEDIUM, Theme.INK)).right();
+            row.add(priority).padRight(Theme.SPACE_3);
+            Image icon = new Image(ui.image(CardLook.picture(play.card().type())));
+            icon.setScaling(Scaling.fit);
+            row.add(icon).size(30f);
+            cardsBody.add(row).growX().height(64f + UiKit.SHAPE_RESERVE).padBottom(8f - UiKit.SHAPE_RESERVE).row();
+        }
+    }
+
+    /**
+     * Rebuilds the list of what happened, newest first, with the moment being played marked.
+     */
+    private void refreshFeed() {
+        feedBody.clearChildren();
+        List<TurnReplay.Line> lines = replay.feed();
+        for (int i = 0; i < lines.size() && i < MAX_FEED_LINES; i++) {
+            feedBody.add(feedLine(lines.get(i), i == 0 && !replay.isDone())).growX().padBottom(8f).row();
+        }
+    }
+
+    /**
+     * Builds one line of the list of what happened.
+     *
+     * @param line    the line
+     * @param current whether it is the moment being played, which gets a teal border
+     * @return the line
+     */
+    private Table feedLine(TurnReplay.Line line, boolean current) {
+        Table row = new Table();
+        row.setBackground(ui.rounded(Theme.SURFACE_RAISED, current ? Theme.ACCENT : Theme.LINE,
+            current ? Theme.BORDER_HEAVY : Theme.BORDER_HAIRLINE, 12));
+        row.padTop(8f).padLeft(12f).padRight(12f).padBottom(8f + UiKit.SHAPE_RESERVE);
+        Color color = switch (line.kind()) {
+            case LASER, DESTROYED -> Theme.DANGER;
+            case BELT -> Theme.ACCENT;
+            case FLAG, REPAIR -> Theme.SUCCESS;
+            case CARD, GEAR, PUSH -> Theme.INK;
+        };
+        row.add(new Image(ui.rounded(color, color, 0, 10))).size(36f, 36f + UiKit.SHAPE_RESERVE);
+        Table text = new Table();
+        text.left();
+        Label title = ui.label(line.title(), Theme.TextStyle.BODY_LARGE, Theme.INK);
+        text.add(title).left().row();
+        if (!line.detail().isEmpty()) {
+            text.add(ui.label(line.detail(), Theme.TextStyle.CAPTION, Theme.INK_MUTED)).left();
+        }
+        row.add(text).left().expandX().padLeft(12f);
+        return row;
+    }
+
+    /**
+     * Rebuilds the ribbon with the registers and the nine steps, showing what has been played and what is being played.
+     */
+    private void refreshRibbon() {
+        registersRibbon.clearChildren();
+        int position = replay.isDone() ? 7 : replay.register() == 0 ? 6 : replay.register();
+        for (int i = 1; i <= 6; i++) {
+            UiKit.ChipKind kind = i < position ? UiKit.ChipKind.SUCCESS : i == position ? UiKit.ChipKind.ACCENT
+                : UiKit.ChipKind.OUTLINE;
+            registersRibbon.add(ui.chip(i == 6 ? "Cleanup" : String.valueOf(i), kind)).height(UiKit.CHIP_CELL_HEIGHT)
+                .padRight(6f);
+        }
+        stepsRibbon.clearChildren();
+        int current = replay.phase().ordinal() - SubPhase.REVEAL.ordinal();
+        boolean all = replay.isDone() || replay.register() == 0;
+        for (int i = 0; i < STEP_NAMES.length; i++) {
+            int state = all || i < current ? 0 : i == current ? 1 : 2;
+            stepsRibbon.add(stepChip(i + 1, STEP_NAMES[i], state)).size(190f, 48f + UiKit.SHAPE_RESERVE).padRight(6f);
+        }
+    }
+
+    /**
+     * Builds the chip of one step of a register.
+     *
+     * @param number the step number, 1 to 9
+     * @param name   the name of the step
+     * @param state  0 for played, 1 for being played, 2 for still to come
+     * @return the chip
+     */
+    private Table stepChip(int number, String name, int state) {
+        Color fill = state == 0 ? Theme.LINE : state == 1 ? Theme.ACCENT : new Color(0f, 0f, 0f, 0f);
+        Table chip = new Table();
+        chip.setBackground(state == 2 ? ui.rounded(fill, Theme.LINE_STRONG, Theme.BORDER_CONTROL, Theme.RADIUS_MD)
+            : ui.rounded(fill, fill, 0, Theme.RADIUS_MD));
+        chip.padLeft(12f).padRight(12f).padBottom(UiKit.SHAPE_RESERVE);
+        Table circle = new Table();
+        circle.setBackground(state == 1 ? ui.rounded(Color.WHITE, Color.WHITE, 0, 13)
+            : state == 0 ? ui.rounded(Theme.SURFACE_RAISED, Theme.SURFACE_RAISED, 0, 13)
+            : ui.rounded(new Color(0f, 0f, 0f, 0f), Theme.LINE_STRONG, Theme.BORDER_CONTROL, 13));
+        circle.padBottom(UiKit.SHAPE_RESERVE);
+        circle.add(ui.label(String.valueOf(number), Theme.TextStyle.BODY, state == 1 ? Theme.ACCENT
+            : state == 0 ? Theme.INK : Theme.INK_MUTED));
+        chip.add(circle).size(26f, 26f + UiKit.SHAPE_RESERVE);
+        chip.add(ui.label(name, Theme.TextStyle.BODY, state == 1 ? Theme.ON_PRIMARY : state == 0 ? Theme.INK
+            : Theme.INK_MUTED)).left().padLeft(8f);
+        return chip;
     }
 
     // ------------------------------------------------------------------------------------------------------

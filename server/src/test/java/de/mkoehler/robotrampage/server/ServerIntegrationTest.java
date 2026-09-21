@@ -8,6 +8,7 @@ import de.mkoehler.robotrampage.client.connect.ConnectionAttempt;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.game.GameModel;
 import de.mkoehler.robotrampage.client.lobby.LobbyView;
+import de.mkoehler.robotrampage.client.replay.TurnReplay;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.NetworkServer;
@@ -461,9 +462,20 @@ class ServerIntegrationTest {
             GameModel model = client == ann ? annModel : boModel;
             model.apply(client.take(PlayerConfirmed.class));
             model.apply(client.take(PlayerConfirmed.class));
-            model.apply(client.take(TurnResolved.class));
+            TurnResolved resolved = client.take(TurnResolved.class);
+            model.apply(resolved);
             assertEquals(GameModel.Stage.RESOLVING, model.stage());
             model.apply(client.take(StateSnapshot.class));
+            assertTrue(model.isResolutionOpen(), "the end state is held until the replay is over");
+            TurnReplay replay = new TurnReplay(model.robotsBeforeResolution(), resolved.events(), model::nameOf);
+            replay.skipToEnd();
+            model.completeResolution();
+            for (var pose : replay.frame().poses()) {
+                var robot = model.robots().get(pose.seat());
+                assertEquals(robot.position().x(), pose.x(), 0.001f);
+                assertEquals(robot.position().y(), pose.y(), 0.001f);
+                assertEquals(robot.facing(), TurnReplay.facingOf(pose.rotation()));
+            }
             model.apply(client.take(TurnStarted.class));
             model.apply(client.take(HandDealt.class));
             assertEquals(GameModel.Stage.PROGRAMMING, model.stage());

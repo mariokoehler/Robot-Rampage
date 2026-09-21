@@ -292,6 +292,64 @@ class GameModelTest {
     }
 
     /**
+     * While a resolved turn waits to be played back, the state the server sent for its end is held back, so the robots stay
+     * where they were before the turn; completing the resolution shows the end state.
+     */
+    @Test
+    void theEndStateIsHeldUntilTheResolutionIsComplete() {
+        GameModel model = programming(0);
+        List<RobotState> before = model.robots();
+        RobotState moved = new RobotState(0, new Position(9, 9), Direction.SOUTH, 2, 3, 0, new Position(2, 0),
+            RobotStatus.ACTIVE, false, false);
+
+        model.apply(new TurnResolved(1, List.of()));
+        model.apply(new StateSnapshot(1, List.of(moved), false, -1));
+
+        assertTrue(model.isResolutionOpen());
+        assertEquals(before, model.robotsBeforeResolution());
+        assertEquals(before.get(0), model.robots().get(0), "the robots have not jumped yet");
+        model.completeResolution();
+        assertFalse(model.isResolutionOpen());
+        assertEquals(moved, model.robots().get(0));
+        assertEquals(Stage.RESOLVING, model.stage(), "the next turn has not begun");
+    }
+
+    /**
+     * A new turn that arrives while a replay is still running takes in the held state first, so the client never plays on
+     * with a stale board.
+     */
+    @Test
+    void aNewTurnCutsTheReplayShort() {
+        GameModel model = programming(0);
+        RobotState moved = new RobotState(0, new Position(9, 9), Direction.SOUTH, 2, 3, 0, new Position(2, 0),
+            RobotStatus.ACTIVE, false, false);
+        model.apply(new TurnResolved(1, List.of()));
+        model.apply(new StateSnapshot(1, List.of(moved), false, -1));
+
+        model.apply(turn(2, List.of(0, 1, 2)));
+
+        assertFalse(model.isResolutionOpen());
+        assertEquals(moved, model.robots().get(0));
+        assertEquals(Stage.PROGRAMMING, model.stage());
+    }
+
+    /**
+     * The end of the game waits for the replay of the turn that ended it, so nobody misses the winning move.
+     */
+    @Test
+    void theEndOfTheGameWaitsForTheReplay() {
+        GameModel model = programming(0);
+        model.apply(new TurnResolved(1, List.of()));
+        model.apply(new GameOver(ME, model.robots()));
+
+        assertEquals(Stage.RESOLVING, model.stage());
+        assertEquals(GameEvent.NO_ROBOT, model.winnerRobotId());
+        model.completeResolution();
+        assertEquals(Stage.OVER, model.stage());
+        assertEquals(ME, model.winnerRobotId());
+    }
+
+    /**
      * The end of the game is remembered with the winner and the final states.
      */
     @Test

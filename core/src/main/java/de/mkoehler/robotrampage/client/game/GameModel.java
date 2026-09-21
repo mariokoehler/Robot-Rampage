@@ -112,6 +112,10 @@ public final class GameModel {
     private boolean submittedByMe;
     private boolean filledAtRandom;
     private TurnResolved lastResolved;
+    private List<RobotState> robotsBeforeResolution = List.of();
+    private boolean resolutionOpen;
+    private StateSnapshot heldSnapshot;
+    private GameOver heldGameOver;
     private int winnerRobotId = GameEvent.NO_ROBOT;
     private int revision;
 
@@ -154,10 +158,17 @@ public final class GameModel {
         } else if (message instanceof TimerUpdate update) {
             remainingSeconds = update.secondsRemaining();
         } else if (message instanceof TurnResolved resolved) {
+            completeResolution();
             lastResolved = resolved;
+            robotsBeforeResolution = robots();
+            resolutionOpen = true;
             stage = Stage.RESOLVING;
         } else if (message instanceof StateSnapshot snapshot) {
-            replaceRobots(snapshot.robots());
+            if (resolutionOpen) {
+                heldSnapshot = snapshot;
+            } else {
+                replaceRobots(snapshot.robots());
+            }
         } else if (message instanceof PlayerConnection connection) {
             if (connection.connected()) {
                 disconnected.remove(connection.robotId());
@@ -167,9 +178,11 @@ public final class GameModel {
         } else if (message instanceof PlayerLeft left) {
             removed.add(left.robotId());
         } else if (message instanceof GameOver over) {
-            replaceRobots(over.robots());
-            winnerRobotId = over.winnerRobotId();
-            stage = Stage.OVER;
+            if (resolutionOpen) {
+                heldGameOver = over;
+            } else {
+                finishGame(over);
+            }
         } else {
             return;
         }
@@ -194,6 +207,7 @@ public final class GameModel {
      * @param started the message
      */
     private void startTurn(TurnStarted started) {
+        completeResolution();
         turn = started.turn();
         awaited.clear();
         awaited.addAll(started.awaitedRobotIds());
@@ -218,6 +232,17 @@ public final class GameModel {
             }
         }
         stage = awaited.contains(mySeat) ? Stage.PROGRAMMING : Stage.SITTING_OUT;
+    }
+
+    /**
+     * Ends the game with the final states and the winner.
+     *
+     * @param over the message
+     */
+    private void finishGame(GameOver over) {
+        replaceRobots(over.robots());
+        winnerRobotId = over.winnerRobotId();
+        stage = Stage.OVER;
     }
 
     /**
@@ -350,6 +375,47 @@ public final class GameModel {
      */
     public TurnResolved lastResolved() {
         return lastResolved;
+    }
+
+    /**
+     * Returns the state of every robot as it was before the turn that has just been resolved, which is where a replay of the
+     * turn starts.
+     *
+     * @return the robots before the turn
+     */
+    public List<RobotState> robotsBeforeResolution() {
+        return robotsBeforeResolution;
+    }
+
+    /**
+     * Returns whether a resolved turn is waiting to be played back. While it is, the state the server sent for the end of
+     * the turn, and the end of the game if the turn ended it, are held back so they do not show before the replay.
+     *
+     * @return {@code true} from the moment a turn is resolved until {@link #completeResolution()}
+     */
+    public boolean isResolutionOpen() {
+        return resolutionOpen;
+    }
+
+    /**
+     * Takes in the state the server reached at the end of the resolved turn and, if that turn ended the game, the end of the
+     * game. Call it when the replay is over or skipped. A new turn or a new resolution calls it by itself, so a replay that
+     * is still running is cut short and the state is never stale.
+     */
+    public void completeResolution() {
+        if (!resolutionOpen) {
+            return;
+        }
+        resolutionOpen = false;
+        if (heldSnapshot != null) {
+            replaceRobots(heldSnapshot.robots());
+            heldSnapshot = null;
+        }
+        if (heldGameOver != null) {
+            finishGame(heldGameOver);
+            heldGameOver = null;
+        }
+        revision++;
     }
 
     /**
