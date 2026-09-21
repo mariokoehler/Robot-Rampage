@@ -22,14 +22,13 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0 done, M1 (rules engine) in progress** — see design.md 6 for the full list. Built and
-tested so far (105 unit tests): board model, cards/deck, robots/game state, event log,
-movement + pushing, destruction, conveyor belts, gears, pushers, lasers + damage, crushers,
-the architecture test, Kryo registration of the event types. Next: flags/archive/repair,
-respawn, power-down, cleanup, then the `TurnResolver` (design.md 2.4). Each sub-phase has
-its own package-private resolver (`MovementResolver`, `BeltResolver`, `GearResolver`,
-`PusherResolver`, `LaserResolver`, `CrusherResolver`) that the `TurnResolver` will call in
-the order of 2.4. After M1: M2 board
+**M0 and M1 (rules engine) done** — 145 unit tests. A whole turn can be resolved headlessly:
+`Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
+`TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
+Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
+`GearResolver`, `PusherResolver`, `LaserResolver`, `CrusherResolver`, `CheckpointResolver`,
+`CleanupResolver`) that the `TurnResolver` calls in the order of design.md 2.4. **Next: M2**
+(`BoardDefinition` JSON + `BoardValidator`, then the first board). After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
 not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed

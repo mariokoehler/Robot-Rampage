@@ -78,6 +78,80 @@ public sealed interface GameEvent {
     }
 
     /**
+     * A robot's card for the current register was revealed. Only cards that are about to be
+     * executed are revealed, in the {@link SubPhase#REVEAL} sub-phase of each register.
+     *
+     * @param robotId the robot whose card it is
+     * @param card    the revealed card
+     */
+    record RegisterRevealed(int robotId, Card card) implements GameEvent {
+    }
+
+    /**
+     * A robot touched its next flag.
+     *
+     * @param robotId    the robot
+     * @param flagNumber the number of the flag, starting at 1
+     * @param position   the flag's square
+     */
+    record FlagTouched(int robotId, int flagNumber, Position position) implements GameEvent {
+    }
+
+    /**
+     * A robot's archive marker moved, because it touched a flag or ended a turn on a repair
+     * site.
+     *
+     * @param robotId  the robot
+     * @param position the new archive marker position
+     */
+    record ArchiveMarkerMoved(int robotId, Position position) implements GameEvent {
+    }
+
+    /**
+     * A robot lost damage, from a repair site or from powering down.
+     *
+     * @param robotId     the repaired robot
+     * @param amount      the damage removed
+     * @param totalDamage its damage afterwards
+     */
+    record RobotRepaired(int robotId, int amount, int totalDamage) implements GameEvent {
+    }
+
+    /**
+     * A robot shut down for the coming turn, fully repaired (design.md 2.8).
+     *
+     * @param robotId the robot
+     */
+    record RobotPoweredDown(int robotId) implements GameEvent {
+    }
+
+    /**
+     * A robot came back on after a turn of being powered down.
+     *
+     * @param robotId the robot
+     */
+    record RobotPoweredUp(int robotId) implements GameEvent {
+    }
+
+    /**
+     * A destroyed robot re-entered the board with no damage.
+     *
+     * @param robotId  the robot
+     * @param position the square it re-entered on, normally its archive marker
+     * @param facing   the direction it faces
+     */
+    record RobotRespawned(int robotId, Position position, Direction facing) implements GameEvent {
+    }
+
+    /**
+     * The game ended.
+     *
+     * @param winnerRobotId the winning robot, or {@link #NO_ROBOT} if nobody won
+     */
+    record GameEnded(int winnerRobotId) implements GameEvent {
+    }
+
+    /**
      * A robot was destroyed and removed from the board.
      *
      * @param robotId the destroyed robot

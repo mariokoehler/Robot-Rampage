@@ -203,7 +203,8 @@ The robot still executes turn
 moved by belts/pushers/gears and still hit by
 lasers. At the start of turn `T+2`'s programming it is powered up again unless
 its player announces a new power-down. Announcements are public (other players
-see the power-down marker), the programmed cards are not.
+see the power-down marker), the programmed cards are not. A robot at 9 damage is dealt no
+cards but is still asked for a (then empty) program, so it can announce a power-down.
 
 ### 2.9 Board elements, damage and destruction
 
@@ -258,8 +259,8 @@ square itself.
 - Touching a flag moves the robot's archive marker to that square. A repair site
   also moves it, at cleanup.
 - The game ends immediately at the end of the register in which a robot touches
-  flag `N` (the rest of the turn is not played). If several robots touch it in that
-  same register, the one earlier in the register's descending-priority order wins.
+  flag `N` (the rest of the turn is not played). A finished game is terminal:
+  `TurnResolver.resolve` refuses a state that is already over.
 - If everyone but one player is eliminated or disconnected the remaining player
   wins by default.
 
@@ -415,9 +416,10 @@ fails the build on a violation.
   `RobotDestroyed(robotId, DestructionCause)`,
   `LaserFired(source, sourceRobotId, from, direction, to, hitRobotId, beams)` and
   `RobotDamaged(robotId, amount, totalDamage, LaserSource)` (an id of
-  `GameEvent.NO_ROBOT` = -1 means "no robot", e.g. a board laser's source); more
-  (`RegisterRevealed`, `RobotRespawned`, `FlagTouched`, `RobotRepaired`, …) are
-  added as the rules are implemented. Events carry everything a client needs to
+  `GameEvent.NO_ROBOT` = -1 means "no robot", e.g. a board laser's source),
+  `RegisterRevealed`, `FlagTouched`, `ArchiveMarkerMoved`, `RobotRepaired`,
+  `RobotPoweredDown`, `RobotPoweredUp`, `RobotRespawned` and `GameEnded`. Further
+  events are added as the rules need them. Events carry everything a client needs to
   animate them (from, to, cause) so the client never has to re-derive rules.
   Two properties are fixed: **events refer to robots by stable id** (robots are
   destroyed and re-enter, so an index would silently break the animation queue), and
@@ -663,15 +665,17 @@ no UI and is where the test value is:
 
 - **M0 — Project skeleton. Done.** Maven modules, launchers, version handshake
   classes, `MessageRegistry` + tests, `design.md`/`CLAUDE.md`, jgitver.
-- **M1 — Rules engine, headless. In progress.** Heavily unit-tested with the ASCII
-  board helper (`AsciiBoard`, test scope). *Done:* board model and `Board.Builder`,
-  cards/deck (seeded, resumable shuffles), `Robot`/`GameState`, event log with
-  register/sub-phase stamping, movement and pushing (2.6), destruction (2.9), belts
-  (2.12), gears, pushers, simultaneous laser volleys with damage and destruction at
-  10 damage, crushers, the `ArchitectureTest`, Kryo registration of the event types.
-  *Still to do:* flags/archive marker/repair, respawn, power-down, the cleanup phase
-  (discard, repair, locked registers when dealing) and the `TurnResolver` that ties the
-  sub-phases together in the order of 2.4.
+- **M1 — Rules engine, headless. Done.** Heavily unit-tested with the ASCII board
+  helper (`AsciiBoard`, test scope): board model and `Board.Builder`, seeded resumable
+  deck, `Robot`/`GameState`, the stamped event log, movement and pushing (2.6),
+  destruction (2.9), belts (2.12), gears, pushers, simultaneous laser volleys, crushers,
+  flags/archive marker/victory (2.10), cleanup (repair sites, power-down, discarding with
+  locked registers), respawn, dealing and program submission (`Programming`), and the
+  `TurnResolver` that runs a whole turn in the order of 2.4. Public entry points for the
+  server: `Programming.deal/submit`, `TurnResolver.resolve`, `Respawner.respawn`. A turn
+  on the server is: respawn → deal → (players program) → `submit` each → `resolve`.
+  The `ArchitectureTest` and the Kryo registration of every event type guard the layering
+  and the wire.
 - **M2 — Board format.** `BoardDefinition` + Jackson loading + `BoardValidator`;
   author the first original board.
 - **M3 — Server session + protocol.** Session state machine (deal → program →

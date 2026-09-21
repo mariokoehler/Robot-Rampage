@@ -66,5 +66,13 @@ public final class MessageRegistry {
         kryo.register(LaserSource.class);
         kryo.register(GameEvent.LaserFired.class);
         kryo.register(GameEvent.RobotDamaged.class);
+        kryo.register(GameEvent.RegisterRevealed.class);
+        kryo.register(GameEvent.FlagTouched.class);
+        kryo.register(GameEvent.ArchiveMarkerMoved.class);
+        kryo.register(GameEvent.RobotRepaired.class);
+        kryo.register(GameEvent.RobotPoweredDown.class);
+        kryo.register(GameEvent.RobotPoweredUp.class);
+        kryo.register(GameEvent.RobotRespawned.class);
+        kryo.register(GameEvent.GameEnded.class);
     }
 }

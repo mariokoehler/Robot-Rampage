@@ -13,6 +13,12 @@ package de.mkoehler.robotrampage.rules;
 public enum SubPhase {
 
     /**
+     * Start of a turn, before any register: destroyed robots re-enter the board. Not part of
+     * any register.
+     */
+    RESPAWN,
+
+    /**
      * Every robot's card for the register is revealed.
      */
     REVEAL,

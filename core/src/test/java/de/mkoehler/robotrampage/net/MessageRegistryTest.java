@@ -57,7 +57,10 @@ class MessageRegistryTest {
             Position.class, Direction.class, CardType.class, Card.class,
             MoveCause.class, RotationCause.class, DestructionCause.class, SubPhase.class,
             GameEvent.RobotMoved.class, GameEvent.RobotRotated.class, GameEvent.RobotDestroyed.class,
-            LoggedEvent.class, LaserSource.class, GameEvent.LaserFired.class, GameEvent.RobotDamaged.class};
+            LoggedEvent.class, LaserSource.class, GameEvent.LaserFired.class, GameEvent.RobotDamaged.class,
+            GameEvent.RegisterRevealed.class, GameEvent.FlagTouched.class, GameEvent.ArchiveMarkerMoved.class,
+            GameEvent.RobotRepaired.class, GameEvent.RobotPoweredDown.class, GameEvent.RobotPoweredUp.class,
+            GameEvent.RobotRespawned.class, GameEvent.GameEnded.class};
         for (Class<?> messageClass : messageClasses) {
             assertEquals(first.getRegistration(messageClass).getId(), second.getRegistration(messageClass).getId(),
                 "id mismatch for " + messageClass.getSimpleName());
@@ -106,7 +109,15 @@ class MessageRegistryTest {
             new GameEvent.RobotDestroyed(7, DestructionCause.PIT),
             new GameEvent.LaserFired(LaserSource.BOARD, GameEvent.NO_ROBOT, new Position(0, 2), Direction.EAST,
                 new Position(4, 2), 1, 2),
-            new GameEvent.RobotDamaged(1, 2, 5, LaserSource.ROBOT)};
+            new GameEvent.RobotDamaged(1, 2, 5, LaserSource.ROBOT),
+            new GameEvent.RegisterRevealed(2, new Card(CardType.MOVE_3, 800)),
+            new GameEvent.FlagTouched(0, 2, new Position(5, 5)),
+            new GameEvent.ArchiveMarkerMoved(0, new Position(5, 5)),
+            new GameEvent.RobotRepaired(4, 1, 3),
+            new GameEvent.RobotPoweredDown(4),
+            new GameEvent.RobotPoweredUp(4),
+            new GameEvent.RobotRespawned(6, new Position(1, 1), Direction.SOUTH),
+            new GameEvent.GameEnded(GameEvent.NO_ROBOT)};
         for (GameEvent event : events) {
             LoggedEvent original = new LoggedEvent(4, SubPhase.ALL_BELTS, event);
 

@@ -46,6 +46,7 @@ final class Destruction {
             }
         }
         robot.setPosition(null);
+        robot.setDestructionOrder(state.nextDestructionOrder());
         robot.setPoweredDown(false);
         robot.setPowerDownAnnounced(false);
         robot.setLives(robot.lives() - 1);

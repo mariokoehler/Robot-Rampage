@@ -50,6 +50,7 @@ public final class Robot {
     private boolean poweredDown;
     private boolean powerDownAnnounced;
     private RobotStatus status = RobotStatus.ACTIVE;
+    private int destructionOrder;
 
     /**
      * Creates an undamaged robot with full lives, standing on its own archive
@@ -81,6 +82,7 @@ public final class Robot {
         copy.poweredDown = poweredDown;
         copy.powerDownAnnounced = powerDownAnnounced;
         copy.status = status;
+        copy.destructionOrder = destructionOrder;
         return copy;
     }
 
@@ -274,6 +276,27 @@ public final class Robot {
      */
     public void setStatus(RobotStatus status) {
         this.status = status;
+    }
+
+    /**
+     * Returns when this robot was last destroyed, relative to all other destructions of the
+     * game: a smaller number means destroyed earlier. Decides who gets the archive square
+     * first when several robots re-enter at once (design.md 2.9).
+     *
+     * @return the destruction sequence number, meaningful only while the robot is
+     *         {@link RobotStatus#DESTROYED}
+     */
+    public int destructionOrder() {
+        return destructionOrder;
+    }
+
+    /**
+     * Records when this robot was destroyed.
+     *
+     * @param destructionOrder the sequence number from {@link GameState#nextDestructionOrder()}
+     */
+    public void setDestructionOrder(int destructionOrder) {
+        this.destructionOrder = destructionOrder;
     }
 
     /**
