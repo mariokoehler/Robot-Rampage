@@ -31,10 +31,15 @@
     </dependency>
     <dependency>
       <!-- Every native-backed libGDX piece needs its own *-platform natives-desktop dependency
-           (see CLAUDE.md "Maven + libGDX gotchas") - only core libGDX for now. Add
-           gdx-freetype-platform here the day gdx-freetype is added to core. -->
+           (see CLAUDE.md "Maven + libGDX gotchas"): core libGDX here, FreeType just below. -->
       <groupId>com.badlogicgames.gdx</groupId>
       <artifactId>gdx-platform</artifactId>
+      <version>${gdxVersion}</version>
+      <classifier>natives-desktop</classifier>
+    </dependency>
+    <dependency>
+      <groupId>com.badlogicgames.gdx</groupId>
+      <artifactId>gdx-freetype-platform</artifactId>
       <version>${gdxVersion}</version>
       <classifier>natives-desktop</classifier>
     </dependency>

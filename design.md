@@ -724,10 +724,14 @@ no rules logic to get wrong. **(unconfirmed)** the animation timings.
 
 ### 4.2 UI framework
 
-**VisUI** (Scene2D) for menu-style screens (connect, lobby, settings) and for the
-programming UI's widgets; plain Scene2D/`SpriteBatch` for the board itself. Fonts
-via libGDX `BitmapFont` initially; `gdx-freetype` is added when real TTF fonts are
-needed (which brings a `gdx-freetype-platform` natives dependency in `lwjgl3`).
+**Scene2D with a custom look, drawn in code** (`client.ui.Theme`, produced by Claude Design from the
+design system): the colours, spacing, radii and borders as constants; a `TextStyle` type scale whose
+`Fonts` are generated from the TrueType files with **gdx-freetype** (`assets/fonts`); and `Shapes`, which renders
+the stretchable rounded panels, buttons and fields with their hard, blur-free shadows into nine-patches from a signed
+distance field. The whole UI is laid out in a `FitViewport` of **1920×1080** (`Theme.VIEW_WIDTH/HEIGHT`), so every
+number in the mockups (4.6) can be used as is; the fonts are regenerated for the real window size. The board itself is
+drawn with `SpriteBatch`. **VisUI is no longer needed** — the mockups' look (Bungee labels, orange one-per-screen
+button, sinking press) is not VisUI's — and can be removed from the pom *(unconfirmed)*.
 
 ### 4.3 The programming UI
 
@@ -751,6 +755,45 @@ drops them (any filename, any format, PSDs welcome) and is committed as backup;
 `assets/` holds what the game actually loads at runtime, with proper names and
 atlases. Claude integrates: renames, converts, packs atlases, copies into
 `assets/`. The game never loads from `assets-raw/`.
+
+### 4.6 UI design: the mockups
+
+The owner designed every main screen and dialog in Claude Design; the canvas
+(`https://claude.ai/artifact/QdtnZisPjfGof2Uvsn8iqT`, built on the design system) is the **visual source of truth**
+for the client. It has 1920×1080 mockups for: **Startup** (Play / Settings / Quit), **Connect** (server address as
+`host:port`, display name up to 20 characters), **Lobby** (eight seats with robot names, ready / host / you chips,
+the board's facts, "I am ready", host-only "Start game"), **Programming** in four states (placing cards, ready to
+confirm, damaged with locked registers, program locked in), **Resolution** (the cards of the register in priority order,
+"What happened", the nine sub-phases, registers 1-5 + cleanup, playback 1×/2×/4×, "Skip to end of turn") and **Game
+Over** (standings ranked by flags, then lives); and ten dialogs: connecting, can't reach the server, different
+versions, settings, connection lost, menu, leave, power down, choose your facing, you're out. Plus toasts and banners
+(spectating, reconnecting, time's up). The programming screen is: players panel, your-robot panel, board key, the
+12×12 board (600 px, 50 px tiles), five register slots with Confirm and the power-down toggle, and the hand of cards
+below it.
+
+**What the mockups need beyond the current protocol** (to be added with the client slice):
+- `LobbyState` should carry the board's facts (size, flag count) and the game settings (lives, programming seconds).
+- The version-mismatch dialog shows both versions, so `HandshakeResponse` needs the server's version; the
+  connection-lost dialog and the "Away 9:12" chip need the reconnect grace period (seconds) from the server, in the
+  handshake and in `PlayerConnection`.
+- The "Time's up" banner ("empty registers were filled at random") and the register slots after a random fill need a
+  message telling a player which cards were filled in for them (`ProgramFilledIn`).
+- The connect timeout is 10 s in the mockups (currently 5 s); display names are limited to 20 characters (the server
+  currently allows 24).
+- Standings details ("touched flag 3 in turn 11, register 4", "eliminated in turn 9") are derived by the client from the
+  events it has replayed.
+
+**Client-only features the mockups imply:** local settings saved as JSON (music/effects volume, fullscreen, vsync, window
+size, playback speed, show my program on the board, auto-skip resolution), and the last server address, name and
+session token for rejoining "from this computer".
+
+**Marked by the designer as suggestions, not from this document — to be confirmed:** the Menu dialog, Settings, the
+leave confirmation, the board key, the ranking rules in the standings, and the archive-marker diamond.
+
+**Assets.** The board tiles, objects, card icons, UI icons and the eight robots are vector drawings in the mockups and
+have been extracted into `assets-raw/design/` (README there) with `tools/design-import`. What still has to be produced
+by the owner: sound effects and music (none exist), the window/application icon, and a logo if wanted (the design uses
+plain type). Rasterizing to PNG and packing an atlas is the next asset-pipeline step.
 
 ## 5. UX flow
 

@@ -37,6 +37,13 @@ contains the new picture to paste in). `TurnFuzzTest` plays 30 random full games
 invariants every turn — keep it passing, and extend its invariants when rules change.
 The server side is complete and playable by any client that speaks the protocol (design.md 3.5): `ServerLauncher`
 starts it, `ServerController` (server module) wires `NetworkServer` ↔ `GameSession` (core `session` package).
+**UI (M4) inputs, all in the repo:** the mockups are the visual source of truth — Claude Design canvas
+`https://claude.ai/artifact/QdtnZisPjfGof2Uvsn8iqT` (design.md 4.6 summarises every screen, dialog and what protocol
+additions they need; read the canvas with `Artifact read`, large `.dc.html` files are saved to disk, not printed —
+analyse them with a script). `client.ui.Theme` (from Claude Design, moved into `client.ui`, one fix: FreeType's letter
+spacing field is `spaceX`) holds all tokens; fonts are in `assets/fonts`; derived vector art is in `assets-raw/design`
+(re-derive with `tools/design-import`). Note `Theme.robotColor(seat)` takes the **displayed seat number 1..8 = robot id +
+1**. Design canvas is 1920×1080 → `FitViewport`.
 **Not done from M3: autosave** (design.md 3.10). **Next: M4**, the playable client (connect screen, board renderer,
 programming UI, animation queue) — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board

@@ -1,0 +1,8 @@
+{
+  "name": "robot-rampage-design-import",
+  "private": true,
+  "description": "Dev-time SVG rasterizer for the game's design assets",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
+}
