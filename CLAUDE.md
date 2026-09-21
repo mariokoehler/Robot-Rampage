@@ -23,10 +23,13 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 ## Current status
 
 **M0 done, M1 (rules engine) in progress** — see design.md 6 for the full list. Built and
-tested so far (76 unit tests): board model, cards/deck, robots/game state, event log,
-movement + pushing, destruction, conveyor belts, the architecture test, Kryo registration
-of the event types. Next: gears, pushers, lasers/damage, crushers, flags/archive/repair,
-respawn, power-down, cleanup, then the `TurnResolver` (design.md 2.4). After M1: M2 board
+tested so far (105 unit tests): board model, cards/deck, robots/game state, event log,
+movement + pushing, destruction, conveyor belts, gears, pushers, lasers + damage, crushers,
+the architecture test, Kryo registration of the event types. Next: flags/archive/repair,
+respawn, power-down, cleanup, then the `TurnResolver` (design.md 2.4). Each sub-phase has
+its own package-private resolver (`MovementResolver`, `BeltResolver`, `GearResolver`,
+`PusherResolver`, `LaserResolver`, `CrusherResolver`) that the `TurnResolver` will call in
+the order of 2.4. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
 not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed
@@ -143,6 +146,11 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   lines for walls between rows, robots as digits in a second picture). Use it for every
   rules test. Text blocks strip common indentation, so a `-` wall line must sit
   *under the character it belongs to* relative to the other lines.
+- **`AsciiBoard.state/board(..., builder -> ...)`** takes an extras hook for things without
+  a picture character (lasers, pushers, crushers active in given registers). Walls are
+  mirrored onto the neighbour: two adjacent pushers/lasers mounted on facing sides create a
+  wall *between* their squares, which blocks pushes across it — a scenario that looks
+  fine on paper can be geometrically impossible.
 - **Rule-test gotcha:** a test whose expected result contradicts the rules is usually a
   wrong test — re-derive from design.md before "fixing" the engine (e.g. entering a belt
   square bends a robot by the *turn between heading and belt direction*, not by the

@@ -17,6 +17,13 @@ import de.mkoehler.robotrampage.board.Position;
 public sealed interface GameEvent {
 
     /**
+     * Stands in for a robot id where an event has no robot to name, for example the
+     * source of a board laser or the target of a beam that hit nothing. Real robot ids
+     * are never negative.
+     */
+    int NO_ROBOT = -1;
+
+    /**
      * A robot moved from one square to another. When the destination lies off the
      * board or is a pit the robot is destroyed right afterwards, which is reported
      * by a following {@link RobotDestroyed}.
@@ -38,6 +45,36 @@ public sealed interface GameEvent {
      * @param cause   why it turned
      */
     record RobotRotated(int robotId, Direction from, Direction to, RotationCause cause) implements GameEvent {
+    }
+
+    /**
+     * A laser fired one shot, which stopped at a wall, at the edge of the board or at
+     * the first robot in its path. A board laser with several beams still produces a
+     * single event; {@code beams} tells how strong it is.
+     *
+     * @param source        whether a board laser or a robot's laser fired
+     * @param sourceRobotId the firing robot, or {@link #NO_ROBOT} for a board laser
+     * @param from          the square the beam starts on: the emitter's square, or the
+     *                      firing robot's square
+     * @param direction     the direction the beam travels in
+     * @param to            the last square the beam reached
+     * @param hitRobotId    the robot that was hit, or {@link #NO_ROBOT} if the beam hit
+     *                      nothing
+     * @param beams         the number of beams, i.e. the damage the hit robot takes
+     */
+    record LaserFired(LaserSource source, int sourceRobotId, Position from, Direction direction, Position to,
+                      int hitRobotId, int beams) implements GameEvent {
+    }
+
+    /**
+     * A robot took damage from a laser.
+     *
+     * @param robotId     the damaged robot
+     * @param amount      the damage taken by this hit
+     * @param totalDamage the robot's total damage after the hit
+     * @param source      the kind of laser that hit it
+     */
+    record RobotDamaged(int robotId, int amount, int totalDamage, LaserSource source) implements GameEvent {
     }
 
     /**

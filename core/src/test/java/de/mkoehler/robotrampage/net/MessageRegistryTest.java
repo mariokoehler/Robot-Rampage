@@ -11,6 +11,7 @@ import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
 import de.mkoehler.robotrampage.rules.DestructionCause;
 import de.mkoehler.robotrampage.rules.GameEvent;
+import de.mkoehler.robotrampage.rules.LaserSource;
 import de.mkoehler.robotrampage.rules.LoggedEvent;
 import de.mkoehler.robotrampage.rules.MoveCause;
 import de.mkoehler.robotrampage.rules.RotationCause;
@@ -56,7 +57,7 @@ class MessageRegistryTest {
             Position.class, Direction.class, CardType.class, Card.class,
             MoveCause.class, RotationCause.class, DestructionCause.class, SubPhase.class,
             GameEvent.RobotMoved.class, GameEvent.RobotRotated.class, GameEvent.RobotDestroyed.class,
-            LoggedEvent.class};
+            LoggedEvent.class, LaserSource.class, GameEvent.LaserFired.class, GameEvent.RobotDamaged.class};
         for (Class<?> messageClass : messageClasses) {
             assertEquals(first.getRegistration(messageClass).getId(), second.getRegistration(messageClass).getId(),
                 "id mismatch for " + messageClass.getSimpleName());
@@ -102,7 +103,10 @@ class MessageRegistryTest {
         GameEvent[] events = {
             new GameEvent.RobotMoved(3, new Position(1, 2), new Position(1, 3), MoveCause.PUSHED),
             new GameEvent.RobotRotated(0, Direction.NORTH, Direction.WEST, RotationCause.BELT),
-            new GameEvent.RobotDestroyed(7, DestructionCause.PIT)};
+            new GameEvent.RobotDestroyed(7, DestructionCause.PIT),
+            new GameEvent.LaserFired(LaserSource.BOARD, GameEvent.NO_ROBOT, new Position(0, 2), Direction.EAST,
+                new Position(4, 2), 1, 2),
+            new GameEvent.RobotDamaged(1, 2, 5, LaserSource.ROBOT)};
         for (GameEvent event : events) {
             LoggedEvent original = new LoggedEvent(4, SubPhase.ALL_BELTS, event);
 

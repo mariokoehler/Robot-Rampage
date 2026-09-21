@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -123,6 +124,20 @@ public final class AsciiBoard {
      * @throws IllegalArgumentException if the picture is malformed
      */
     public static Board board(String terrain) {
+        return board(terrain, builder -> {
+        });
+    }
+
+    /**
+     * Builds a board from a terrain picture and then lets the caller add whatever has no
+     * picture character, such as lasers, pushers or crushers active in specific registers.
+     *
+     * @param terrain the terrain picture, see the class documentation
+     * @param extras  called with the builder after the picture has been applied
+     * @return the board
+     * @throws IllegalArgumentException if the picture is malformed
+     */
+    public static Board board(String terrain, Consumer<Board.Builder> extras) {
         List<Row> rows = new ArrayList<>();
         List<String> wallLineAfterRow = new ArrayList<>();
         String wallLineBeforeFirstRow = null;
@@ -180,6 +195,7 @@ public final class AsciiBoard {
             }
             builder.flag(flag.getValue());
         }
+        extras.accept(builder);
         return builder.build();
     }
 
@@ -193,7 +209,22 @@ public final class AsciiBoard {
      * @throws IllegalArgumentException if either picture is malformed
      */
     public static GameState state(String terrain, String robots) {
-        Board board = board(terrain);
+        return state(terrain, robots, builder -> {
+        });
+    }
+
+    /**
+     * Like {@link #state(String, String)}, but lets the caller add board elements that have
+     * no picture character (see {@link #board(String, Consumer)}).
+     *
+     * @param terrain the terrain picture, see the class documentation
+     * @param robots  the robot picture, see the class documentation
+     * @param extras  called with the builder after the terrain picture has been applied
+     * @return the game state; robots are ordered by id and face north
+     * @throws IllegalArgumentException if either picture is malformed
+     */
+    public static GameState state(String terrain, String robots, Consumer<Board.Builder> extras) {
+        Board board = board(terrain, extras);
         List<String> lines = trimBlankEnds(robots).stream().filter(line -> !line.isBlank()).toList();
         if (lines.size() != board.height()) {
             throw new IllegalArgumentException("Robot picture has " + lines.size() + " rows, board has " + board.height());

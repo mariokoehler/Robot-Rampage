@@ -120,7 +120,10 @@ order. Each atomic change emits a `GameEvent` (3.5) so clients can animate it.
    Net effect: express belts move a robot two squares per register, normal belts
    one.
 5. **Pushers.** Pushers active in register `r` push the robot standing on their
-   square one square away from the wall they are mounted on (push rules: 2.6).
+   square one square away from the wall they are mounted on (push rules: 2.6). Who
+   is pushed is decided from the positions at the start of this sub-phase, so a robot
+   shoved onto another pusher's square is not pushed again in the same register
+   *(unconfirmed)*.
 6. **Gears.** Robots on gears rotate 90° in the gear's direction.
 7. **Lasers.** Board lasers and robot lasers all fire *simultaneously*; damage
    is applied to every hit robot, then destruction is checked (so two robots can
@@ -408,10 +411,13 @@ fails the build on a violation.
   server session.)
 - **Events:** a `sealed interface GameEvent` with a nested record per atomic change.
   Implemented so far: `RobotMoved(robotId, from, to, MoveCause)`,
-  `RobotRotated(robotId, from, to, RotationCause)` and
-  `RobotDestroyed(robotId, DestructionCause)`; more (`RegisterRevealed`,
-  `RobotDamaged`, `LaserFired`, `RobotRespawned`, `FlagTouched`, `RobotRepaired`, …)
-  are added as the rules are implemented. Events carry everything a client needs to
+  `RobotRotated(robotId, from, to, RotationCause)`,
+  `RobotDestroyed(robotId, DestructionCause)`,
+  `LaserFired(source, sourceRobotId, from, direction, to, hitRobotId, beams)` and
+  `RobotDamaged(robotId, amount, totalDamage, LaserSource)` (an id of
+  `GameEvent.NO_ROBOT` = -1 means "no robot", e.g. a board laser's source); more
+  (`RegisterRevealed`, `RobotRespawned`, `FlagTouched`, `RobotRepaired`, …) are
+  added as the rules are implemented. Events carry everything a client needs to
   animate them (from, to, cause) so the client never has to re-derive rules.
   Two properties are fixed: **events refer to robots by stable id** (robots are
   destroyed and re-enter, so an index would silently break the animation queue), and
@@ -661,10 +667,11 @@ no UI and is where the test value is:
   board helper (`AsciiBoard`, test scope). *Done:* board model and `Board.Builder`,
   cards/deck (seeded, resumable shuffles), `Robot`/`GameState`, event log with
   register/sub-phase stamping, movement and pushing (2.6), destruction (2.9), belts
-  (2.12), the `ArchitectureTest`, Kryo registration of the event types. *Still to do:*
-  gears, pushers, lasers and damage (incl. locked registers when dealing), crushers,
-  flags/archive/repair, respawn, power-down, the cleanup phase, and the `TurnResolver`
-  that ties the sub-phases together in the order of 2.4.
+  (2.12), gears, pushers, simultaneous laser volleys with damage and destruction at
+  10 damage, crushers, the `ArchitectureTest`, Kryo registration of the event types.
+  *Still to do:* flags/archive marker/repair, respawn, power-down, the cleanup phase
+  (discard, repair, locked registers when dealing) and the `TurnResolver` that ties the
+  sub-phases together in the order of 2.4.
 - **M2 — Board format.** `BoardDefinition` + Jackson loading + `BoardValidator`;
   author the first original board.
 - **M3 — Server session + protocol.** Session state machine (deal → program →

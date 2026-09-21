@@ -9,6 +9,7 @@ import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
 import de.mkoehler.robotrampage.rules.DestructionCause;
 import de.mkoehler.robotrampage.rules.GameEvent;
+import de.mkoehler.robotrampage.rules.LaserSource;
 import de.mkoehler.robotrampage.rules.LoggedEvent;
 import de.mkoehler.robotrampage.rules.MoveCause;
 import de.mkoehler.robotrampage.rules.RotationCause;
@@ -62,5 +63,8 @@ public final class MessageRegistry {
         kryo.register(GameEvent.RobotRotated.class);
         kryo.register(GameEvent.RobotDestroyed.class);
         kryo.register(LoggedEvent.class);
+        kryo.register(LaserSource.class);
+        kryo.register(GameEvent.LaserFired.class);
+        kryo.register(GameEvent.RobotDamaged.class);
     }
 }
