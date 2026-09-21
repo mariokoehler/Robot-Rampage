@@ -57,7 +57,7 @@ fully unit-testable without a window or natives (3.3, 3.8).
 ### 2.1 Board, coordinates and directions
 
 - The board is a rectangular grid of squares. **Coordinates:** `x` grows east,
-  `y` grows north, origin at the south-west corner **(unconfirmed)** — matches
+  `y` grows north, origin at the south-west corner — matches
   libGDX's y-up world coordinates, so board coordinates map to world coordinates
   without a flip.
 - **Directions:** `NORTH`, `EAST`, `SOUTH`, `WEST`. A robot always faces one of
@@ -126,10 +126,7 @@ order. Each atomic change emits a `GameEvent` (3.5) so clients can animate it.
    is applied to every hit robot, then destruction is checked (so two robots can
    destroy each other in the same volley) (2.9).
 8. **Crushers.** Crushers active in register `r` destroy any robot on their
-   square. **(verify)** — the two rule summaries consulted both list lasers
-   before crushers, but the position of crushers relative to lasers (and to
-   pushers/gears) must be checked against the rulebook, since a robot on an
-   active crusher that is also in a laser's line resolves differently.
+   square. 
 9. **Checkpoints.** A robot that ends the register on the next flag in its
    sequence touches it, and its archive marker moves there (2.10).
 
@@ -142,11 +139,10 @@ hit by lasers and pushed by other robots.
 - **Deck:** 84 cards shared by all players: **Move 1 ×18, Move 2 ×12, Move 3 ×6,
   Back Up ×6, Rotate Left ×18, Rotate Right ×18, U-Turn ×6**. Each card has a
   unique **priority** number.
-- **Priority table (verify):** priorities are `10, 20, … 840`, assigned in
+- **Priority table:** priorities are `10, 20, … 840`, assigned in
   ascending order by card type: U-Turn (10–60), Rotate Left/Right alternating
   (70–420), Back Up (430–480), Move 1 (490–660), Move 2 (670–780), Move 3
-  (790–840). Recalled from the classic deck; check against the rulebook before
-  implementation. What matters behaviourally is only that all 84 priorities are
+  (790–840). What matters behaviourally is that all 84 priorities are
   unique (no ties, ever) and that the type ordering above holds.
 - **Hand size:** `9 − damage` cards. 9 damage means 0 cards dealt.
 - **Locked registers:** from 5 damage upward, registers lock starting at register
@@ -197,11 +193,11 @@ programs (useful for bug reports and tests).
 ### 2.8 Power down
 
 A player may announce a power-down during the programming phase of turn `T`.
-**(verify all timing below against the rulebook)** The robot still executes turn
+The robot still executes turn
 `T`'s program normally; at the end of turn `T`'s cleanup it powers down, is
 **fully repaired** (damage 0, all registers unlock), and stays shut down for turn
-`T+1`: it is dealt no cards, executes no registers, fires no lasers
-**(unconfirmed)**, but is still moved by belts/pushers/gears and still hit by
+`T+1`: it is dealt no cards, executes no registers, fires no lasers, but is still 
+moved by belts/pushers/gears and still hit by
 lasers. At the start of turn `T+2`'s programming it is powered up again unless
 its player announces a new power-down. Announcements are public (other players
 see the power-down marker), the programmed cards are not.
@@ -226,9 +222,10 @@ subset of registers, push the robot standing on that square away from the wall);
 1–3 damage per hit).
 
 **Lasers:** a laser (board or robot) travels in a straight line until it hits a
-wall or the first robot in its path — robots block lasers. A robot hit takes 1
-damage per beam. Robot lasers fire forward from every active robot; whether
-powered-down robots fire is in 2.8. A robot never hits itself. All lasers in a
+wall or the first robot in its path — robots block lasers, robots are not pushed by lasers.
+A robot hit takes 1
+damage per beam. Robot lasers fire forward from every active robot; powered-down 
+robots fire no lasers (see 2.8). A robot never hits itself. All lasers in a
 volley fire simultaneously against the positions at the start of the volley
 (2.4, step 7).
 
@@ -239,15 +236,14 @@ is on an active crusher, or reaches 10 damage. A destroyed robot:
   its registers cleared (its cards are discarded);
 - loses one life. At 0 lives it is `ELIMINATED` and takes no further part;
 - otherwise re-enters at the **start of the next turn** on its archive marker, in
-  any facing of its player's choice, with **2 damage** **(verify)**.
+  any facing of its player's choice, with **no damage**.
 
-**Respawn conflicts (unconfirmed default):** if the archive square is occupied
+**Respawn conflicts:** if the archive square is occupied
 when a robot re-enters, the returning robot is placed on the nearest free square
 (breadth-first distance, ties broken by destruction order, then a fixed
 direction order); if several robots return to the same archive square, they are
 placed in the order they were destroyed, first-destroyed getting the archive
-square itself. The classic rulebook handles this with "virtual robots" in some
-editions; whether we want that instead is open (7).
+square itself.
 
 ### 2.10 Flags, archive marker and victory
 
@@ -258,14 +254,13 @@ editions; whether we want that instead is open (7).
   also moves it, at cleanup.
 - The game ends immediately at the end of the register in which a robot touches
   flag `N` (the rest of the turn is not played). If several robots touch it in that
-  same register, the one earlier in the register's descending-priority order wins
-  **(unconfirmed)**.
+  same register, the one earlier in the register's descending-priority order wins.
 - If everyone but one player is eliminated or disconnected the remaining player
   wins by default.
 
 ### 2.11 The first board
 
-v1 ships with one fixed board **(unconfirmed)**: an original 12×12 layout
+v1 ships with one fixed board: an original 12×12 layout
 (one classic board section) with 3 flags and up to 8 start squares, using the
 v1 feature set (walls, pits, normal/express belts, gears, board lasers, repair
 sites). Pushers, crushers and the power-down mechanic are part of the rules and
@@ -319,8 +314,7 @@ Details this pins down:
 ### 2.13 Programming timer and disconnects
 
 The programming phase must never let one absent or slow player block everyone
-(this is the most common complaint about existing digital versions). **All of
-this is (unconfirmed):**
+(this is the most common complaint about existing digital versions). 
 
 - **Hard cap:** each programming phase has a maximum length (default 90 s),
   starting at the deal.
@@ -332,7 +326,7 @@ this is (unconfirmed):**
 - **Confirmed = final.** A confirmed program cannot be edited; the server
   broadcasts only *that* a player has confirmed, never the cards.
 - **Disconnect during programming:** treated like an immediately expired timer
-  (random fill). The player gets a **reconnect grace period** (default 2 minutes)
+  (random fill). The player gets a **reconnect grace period** (default 10 minutes)
   during which their robot keeps executing random programs; after that the robot
   is removed from the board and the player is marked as having left. Reconnecting
   within the grace period resumes control (needs a session token, see 7).
@@ -446,7 +440,7 @@ robots is the largest message and must be measured once implemented).
 
 Requirement from the project owner: start with one fixed board, but keep the
 format open for **multiple authored boards** and **dynamically generated
-boards**. Design decisions **(unconfirmed)**:
+boards**. Design decisions:
 
 - **One flat grid at runtime.** The rules engine only ever sees a single
   rectangular grid (`Board`). Anything that composes boards (docking several 12×12
@@ -551,12 +545,15 @@ Not tested: screens, rendering, animation, VisUI wiring.
 Maven multi-module, same setup as the StarWars project (compiler plugin pinned
 for Java 25, surefire pinned for JUnit 5, `lwjgl-bom` import pinning LWJGL to
 3.4.x, shade plugin per runnable module, `exec-maven-plugin` for local runs).
-Versions are hand-maintained (`0.1.0-SNAPSHOT`) for now: this folder is not yet a
-git repository, and the StarWars project's jgitver setup needs one. **Once the
-repo lives on GitHub**, adopt the same jgitver + tag-driven release scheme
-(client zip via jpackage, server Docker image) — see StarWars `design.md`
-3.10–3.12 for the pattern; deliberately deferred until there is something to
-release.
+Versions are computed by **jgitver** (`.mvn/extensions.xml`) from git tags and
+history, exactly as in the StarWars project: every `pom.xml` carries the placeholder
+version `0`, and a build gets the real one — a release tag `vX.Y.Z` builds as
+`X.Y.Z`, every commit after it as `X.Y.(Z+1)-SNAPSHOT`, and before the first tag
+`0.0.0-SNAPSHOT`. `.mvn/jgitver.config.xml` drops the branch qualifier for `main`
+(jgitver only does that for `master` by default). The computed version is what
+`AppVersion` reports and what the handshake compares. The tag-driven release
+pipeline (client zip via jpackage, server Docker image) is deferred until there is
+something to release — see StarWars `design.md` 3.10–3.12 for the pattern.
 
 ### 3.10 Persistence and config
 
@@ -568,7 +565,7 @@ StarWars conventions:
 - **Server: autosave.** After every completed turn the server writes the full
   `GameState` (between turns there is no hidden hand data yet — the deck order and
   RNG state are all that is secret) to a JSON file, so a server restart can resume
-  running games **(unconfirmed)**. Also the natural basis for replays.
+  running games. Also the natural basis for replays.
 - **Boards:** `assets/boards/*.json`, read by the server (3.6).
 - **Accounts:** not designed (7).
 
@@ -624,7 +621,9 @@ atlases. Claude integrates: renames, converts, packs atlases, copies into
 ### 5.1 Screen flow
 
 `Startup` (placeholder implemented) → `Connect` (server address, display name) →
-`Lobby` (create/join a game, ready-up) → `Game` (alternating **Programming** and
+`Lobby` (the waiting room of the server's single game: see who joined, ready-up,
+the host starts — the first player to connect is the host; game
+options later belong in a "create game" step, see 7) → `Game` (alternating **Programming** and
 **Resolution** views) → `Game Over` (standings) → back to `Lobby`. Details of the
 lobby model are open (7).
 
@@ -637,7 +636,7 @@ is the mouse, keyboard-layout differences between players barely matter.
 
 ## 6. Components / TODOs
 
-Proposed implementation order **(unconfirmed)** — engine first, because it needs
+Proposed implementation order — engine first, because it needs
 no UI and is where the test value is:
 
 - **M0 — Project skeleton. Done.** Maven modules, launchers, version handshake
@@ -652,39 +651,30 @@ no UI and is where the test value is:
   integration test on localhost.
 - **M4 — Playable client.** Connect screen, board renderer, programming UI,
   animation queue. First real playtest.
-- **M5 — Second wave of rules.** Pushers, crushers, power-down, multiple games per
-  server, lobby.
-- **M6 — More boards.** Board selection, board composition, first procedural
-  generator (3.6).
-- **M7 — Release pipeline.** Once on GitHub: jgitver, jpackage client zip, Docker
-  server image (3.9).
+- **M5 — Second wave of rules.** Pushers, crushers, power-down. (Multiple concurrent
+  games per server / real lobbies come after v1, see 7.)
+- **M6 — More boards & Board Editor.** Board selection, board composition, first procedural
+  generator (3.6). Optional Board Editor, for authoring boards in a visual editor instead of JSON text.
+  Could be a separate tool in a new dev-tools sub module.
+- **M7 — Release pipeline.** jpackage client zip, Docker server image, tag-driven
+  GitHub releases (3.9). jgitver is already in place.
 
 ## 7. Open design questions
-
-Rules to verify against the actual rulebook (**verify** markers above):
-
-- The exact **priority table** of the classic deck (2.5).
-- **Crusher timing** relative to lasers, pushers and gears within a register (2.4).
-- **Power-down timing**, whether powered-down robots fire lasers, and when damage
-  is cleared (2.8).
-- **Respawn**: the 2-damage re-entry, and what happens when the archive square is
-  occupied — virtual robots vs. the "nearest free square" default (2.9).
-- **Simultaneous flag finish** tie-break (2.10).
 
 Design questions:
 
 - **Lobby model.** One game per server process, or several concurrent games in
-  lobbies? Affects the session layer, not the rules.
+  lobbies? Affects the session layer, not the rules. DECISION: one game per server process for v1, lobbies later.
 - **Accounts/identity.** Display name only for now. Do we want persistent accounts
   (stats, rejoin authentication), or a lighter session-token scheme just for
-  reconnecting (2.13)?
-- **Spectators**, including eliminated players watching on.
+  reconnecting (2.13)? DECISION: session token for reconnecting only, no persistent accounts for v1.
+- **Spectators**, including eliminated players watching on. DECISION: eliminated players can spectate, but no spectators-only mode for v1.
 - **Bots** to fill empty seats or replace disconnected players. The rules engine
-  makes a simple bot easy (it can simulate); no gdxAI needed.
+  makes a simple bot easy (it can simulate); no gdxAI needed. DECISION: no bots for v1, but the engine is designed to support them later.
 - **Fixed vs. random start squares and robot colours**; **game options** (number of
-  flags, lives, timer lengths).
-- **Chat.** In-game text chat is nearly free to add over the same TCP channel.
-- **Art direction** and audio — nothing decided.
+  flags, lives, timer lengths). DECISION: fixed start squares and colours for v1, options later (should be part of the 'create game' flow).
+- **Chat.** In-game text chat is nearly free to add over the same TCP channel. DECISION: no chat for v1, but the protocol is designed to support it later.
+- **Art direction** and audio — nothing decided. DECISION: the project owner will provide the necessary assets as they are needed for the next steps.
 - **Game length / pacing.** Classic RoboRally can run long and eliminate players
   early; the option of a shorter default course or a spectate-and-rejoin mechanic
   should be evaluated after the first real playtests.

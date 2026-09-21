@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  jgitver only omits the branch qualifier for a branch named "master" by default; this
+  project's default branch is "main", so ignore it here too. Without this, builds on main
+  are versioned like 0.1.1-main-SNAPSHOT instead of 0.1.1-SNAPSHOT. See design.md 3.9.
+-->
+<configuration xmlns="http://jgitver.github.io/maven/configuration/1.1.0"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xsi:schemaLocation="http://jgitver.github.io/maven/configuration/1.1.0 https://jgitver.github.io/maven/configuration/jgitver-configuration-v1_1_0.xsd">
+  <branchPolicies>
+    <branchPolicy>
+      <pattern>(main)</pattern>
+      <transformations>
+        <transformation>IGNORE</transformation>
+      </transformations>
+    </branchPolicy>
+  </branchPolicies>
+</configuration>

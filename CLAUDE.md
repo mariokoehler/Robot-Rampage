@@ -22,7 +22,8 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0 done (project skeleton).** Maven multi-module build works: `mvn clean package`
+**M0 done (project skeleton), design reviewed by the user** (2026-09-21: tags removed =
+confirmed, `DECISION:` notes in design.md 7). Maven multi-module build works: `mvn clean package`
 builds `core`, `lwjgl3`, `server`; 5 unit tests pass; the client opens a window
 showing a placeholder `StartupScreen`; the server jar starts and logs its version.
 No game logic exists yet. Next per design.md 6: **M1, the pure-Java rules engine**
@@ -40,10 +41,18 @@ design.md must be checked against the real rulebook before they are coded.
   in design.md 3.7. The user tests in-game themselves; that was faster than MCP in
   StarWars.
 - **Kept:** libGDX, Maven, KryoNet (TCP only), Jackson, VisUI, JUnit 5.
-- **Not a git repo yet** — the user will move it to GitHub later. Until then no
-  jgitver (it needs a repo): versions are hand-maintained `0.1.0-SNAPSHOT` in every
-  pom. When the repo appears, adopt StarWars' jgitver setup (`.mvn/extensions.xml`,
-  placeholder `<version>0</version>`) — see design.md 3.9.
+- **GitHub:** https://github.com/mariokoehler/Robot-Rampage (public, branch `main`,
+  created 2026-09-21; GitHub has no spaces in names, hence `Robot-Rampage`). The README
+  carries a prominent work-in-progress warning — keep it until the game is actually
+  playable. Commits are GPG-signed with the user's usual identity (same as StarWars; if
+  `git commit` fails with a `gpg-agent` error, start Kleopatra and retry, never
+  `--no-gpg-sign`) and contain no AI/Claude references (global rule).
+- **jgitver computes `${project.version}`** from git tags/history (`.mvn/extensions.xml`
+  + `.mvn/jgitver.config.xml`, which drops the branch qualifier for `main` — jgitver only
+  does that for `master` by default). Every pom carries the placeholder `<version>0</version>`;
+  never hand-edit versions. Untagged, builds are `0.0.0-SNAPSHOT`; release tags are plain
+  annotated `vX.Y.Z`, commits after a tag build as `X.Y.(Z+1)-SNAPSHOT`. Design in
+  design.md 3.9.
 - The rules engine (`rules`, `board` packages) **never imports libGDX**, `net` or
   `client` (design.md 3.3). **This is discipline only** — `core` depends on `gdx` and
   `vis-ui`, so nothing stops an accidental import (and `server` inherits vis-ui
@@ -75,8 +84,9 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   mvn -pl server compile exec:java
   ```
 - Re-run `mvn install -pl core -am -DskipTests` after **every** change to `core`
-  before running `lwjgl3`/`server` alone — they resolve `core` from `~/.m2`, so a
-  stale install silently runs old code.
+  **and after every new commit or tag** before running `lwjgl3`/`server` alone — they
+  resolve `core` from `~/.m2`, and a commit changes the jgitver version the next build
+  expects, so the old install silently stops matching (or runs old code).
 - `mvn -o` (offline) works once dependencies are cached. The first build needed
   network access for `org.lwjgl:lwjgl-bom` (not in the StarWars-populated cache).
 
@@ -127,7 +137,7 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
 ## Asset pipeline
 
 - `assets-raw/` — source files exactly as the user drops them (spontaneous filenames,
-  any format, PSDs welcome); committed once there's a repo, as backup. `assets/` —
+  any format, PSDs welcome); committed as backup. `assets/` —
   what the game loads at runtime; Claude integrates: rename properly, convert, pack
   atlases, copy over. **Never load from `assets-raw/`.**
 - Both are currently empty (`.gitkeep`). When atlases are needed, reuse StarWars'
@@ -144,14 +154,17 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
 - **Design decisions go into `design.md` immediately**, in the same session as the
   decision. Section numbers are stable anchors — don't renumber.
 - **When a sub-detail is unspecified, propose a concrete default directly in the doc
-  and mark it *(unconfirmed)*** instead of stalling. Reserve `AskUserQuestion` for
+  and mark it *(unconfirmed)*** instead of stalling. **The user confirms by deleting the
+  tag** — text whose *(unconfirmed)*/*(verify)* tag was removed is a confirmed/verified
+  decision (treat it as settled, don't re-litigate). Open questions in design.md 7 get a
+  `DECISION:` note behind them when settled. Reserve `AskUserQuestion` for
   foundational/hard-to-reverse choices (edition, a core library, a balance-defining
   rule).
 - **Rules recalled from memory are marked *(verify)*** in design.md and must be
   checked against the actual rulebook (web) before implementing.
 - **Proactively flag security-relevant concerns** during design (e.g. hidden hands
   must never be sent to other clients; hash passwords if accounts arrive), briefly.
-- **Never commit or push** unless asked (global rule). There is no repo yet anyway.
+- **Never commit or push** unless asked (global rule).
 - **Advisor before and after** on any multi-file feature: consult before writing code
   (design-level issues) and again once it looks complete (integration-level issues).
 - Sessions are incremental (evenings) — leave `design.md` and this file fully in sync

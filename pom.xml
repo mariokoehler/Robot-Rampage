@@ -6,9 +6,9 @@
 
   <groupId>de.mkoehler.robotrampage</groupId>
   <artifactId>robotrampage-parent</artifactId>
-  <!-- Hand-maintained for now: this folder is not a git repository yet, so there is no
-       jgitver (as used by the StarWars project). See design.md 3.9 for when that changes. -->
-  <version>0.1.0-SNAPSHOT</version>
+  <!-- Placeholder only - jgitver-maven-plugin (.mvn/extensions.xml) overrides the real
+       version from git tags/history at build time. See design.md 3.9. -->
+  <version>0</version>
   <packaging>pom</packaging>
 
   <name>RobotRampage</name>
