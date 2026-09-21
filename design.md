@@ -366,6 +366,14 @@ The programming phase must never let one absent or slow player block everyone
   stay.
 - **Confirmed = final.** A confirmed program cannot be edited; the server
   broadcasts only *that* a player has confirmed, never the cards.
+- **Host pause:** the host can stop the programming timer (breaks, rules discussions) and restart it; everybody sees
+  "Paused" in place of "Time left". Only while players are programming. The timer is frozen: the session goes by the instant
+  of the pause, so the time left, the last-player squeeze and the reconnect grace of disconnected players are all
+  unchanged by it (on restart the time spent paused is added to the deadline and to every disconnected player's time away).
+  Players can still program and confirm while it is paused. It is **not** carried over: when the turn resolves (everybody
+  confirmed) the timer restarts by itself, and the next turn begins with a running timer. A player who comes back while it is
+  paused is told. A pause also ends by itself if the host's connection drops, so nobody waits for a host who is gone. Only the host is obeyed; the button is only shown to the host, and if the host is removed from the game
+  the new host's client learns it is the host only on its next resync.
 - **Disconnect during programming:** treated like an immediately expired timer
   (random fill). The player gets a **reconnect grace period** (default 10 minutes)
   during which their robot keeps executing random programs; after that the robot
@@ -508,7 +516,7 @@ of a game can therefore be non-contiguous.
 
 **Lobby and game flow (one game per server, 7).** `LOBBY` → host starts (needs
 ≥ 2 players, everyone else ready) → `PROGRAMMING` ↔ `RESOLVING` (a pause so clients can
-animate; *(unconfirmed)* default 6 s + 130 ms per event, at most 30 s: this is the time the clients have to play the turn
+animate; *(unconfirmed)* default 12 s + 260 ms per event, at most 60 s: this is the time the clients have to play the turn
 back, see 4.1) → `GAME_OVER` (back to
 `LOBBY` after 15 s *(unconfirmed)*). The first player to join is the host. Back in the lobby,
 players who dropped are forgotten, the others keep their seats and their **session tokens**
@@ -543,6 +551,8 @@ derived from the game seed and a fill counter — like the deck, never a live
 | C→S | `SubmitProgram` | Card priorities (one per unlocked register, in order), power-down intent, optional respawn facing. |
 | S→each | `RequestRejected` | Why a request was refused (an invalid program, starting too early, ...); the player may try again. |
 | S→all | `PlayerConfirmed`, `TimerUpdate` | *That* a player locked in (never the cards); the remaining time when the last-player squeeze starts. |
+| C→S | `SetTimerPaused` | The host stops or restarts the programming timer (2.13). Anybody else, or any other phase, is refused with `RequestRejected`. |
+| S→all | `TimerPaused` | The timer was stopped or restarted (also when the turn resolves while it is stopped), with the seconds left; sent again to a player who comes back while it is stopped. |
 | S→all | `TurnResolved` | The ordered `LoggedEvent` list of the turn. |
 | S→all | `StateSnapshot` | Public state of every robot after the turn (no hands), for resync and as a check. |
 | S→all | `PlayerConnection`, `PlayerLeft` | A player dropped or came back; a player's grace period ended and their robot was removed. |
@@ -723,7 +733,7 @@ player.
 square size (the mockups' numbers are for 50 px) and the robots on it (`RobotPose`: a position in squares, possibly
 between two squares, and a heading in degrees, so animations can move robots smoothly). Layers, bottom to top: ground
 (floor, belts turned to their direction, gears, pits, repair sites), start squares, crushers, pushers, flags, board lasers,
-walls, robots (body, facing wedge, seat badge). Ground tiles come from `assets/tiles`; everything on top of the ground
+walls, robots (all bodies first, then all facing wedges, then the seat badges and damage tags, so a wedge is never hidden by a neighbouring robot; the wedge is a bright green arrow). Ground tiles come from `assets/tiles`; everything on top of the ground
 comes from **number-free sprites** in `assets/board` (derived from the canvas drawings by
 `tools/design-import/make-board-sprites.js`, which strips the floor background and the baked-in numbers), with the numbers
 of flags, start squares, pushers and robot badges drawn by the renderer with the game fonts, and laser beams drawn as bars.
@@ -751,9 +761,10 @@ while a turn is being played, inside the same `GameScreen`, so the connection ne
 **Rules of the hand-over:** the server's state after the turn and the end of the game are **held back** by `GameModel` until
 the replay is over or skipped (`completeResolution`), so the board does not jump ahead and the winning move is seen; the next
 `TurnStarted` completes the resolution by itself, so a replay that is still running is cut short and the client is never
-stale. The server does not wait for the clients' animation: its pause after a turn (`SessionConfig`, 6 s + 130 ms per event, at most
-30 s) is the time the players have. Measured on random turns of the first board, a replay at 1× takes about 5 s + 0.11 s per
-event (9 s to 25 s for 2 to 8 players), which the pause covers. **Skipping does not shorten the pause:** a player who skips
+stale. The server does not wait for the clients' animation: its pause after a turn (`SessionConfig`, 12 s + 260 ms per event, at most
+60 s) is the time the players have. Measured on random turns of the first board, a replay at 1× (every beat lasts `PACE` = 2× its
+base time in `TurnReplay`; 1× was made half as fast on the owner's request) takes about 10 s + 0.22 s per
+event (18 s to 50 s for 2 to 8 players), which the pause covers. Change `PACE` and the pause together. **Skipping does not shorten the pause:** a player who skips
 waits for the others. Letting the server end the pause when every client has finished (a `ReplayDone` message) is the
 obvious next step and needs a protocol addition. Robot lasers and board lasers are shown only
 while they fire (the idle beams of the board lasers are hidden during a replay), and a beam stops at the first robot it hits.
@@ -809,7 +820,8 @@ Away / Powered down / Out); the board; the "Your robot" panel with lives, damage
 the board key; and below them the five registers with Confirm and the power-down switch, and the hand. `GameModel` follows
 the server's messages (no rules are run on the client): turn 1 starts from the start squares and full lives, and the
 server's `StateSnapshot` corrects them; a respawn in `TurnStarted` moves the robot; the countdown runs locally from
-`TurnStarted.programmingSeconds` and is corrected by `TimerUpdate`. `ProgramDraft` holds the placement: locked registers
+`TurnStarted.programmingSeconds` and is corrected by `TimerUpdate`; `TimerPaused` freezes it (`GameModel.isTimerPaused`), and
+the host's client (`PlayerInfo.host` from `GameStarted`) shows a "Pause timer" / "Resume timer" button left of the time pill. `ProgramDraft` holds the placement: locked registers
 are always the **highest-numbered** ones, only the free registers are sent, and a robot with nine damage confirms an empty
 program. A `HandDealt` with an empty hand, free registers and a robot that is not powered down means "already locked in"
 (a player returning mid-turn). A powered-down player sits out and can only announce staying down.

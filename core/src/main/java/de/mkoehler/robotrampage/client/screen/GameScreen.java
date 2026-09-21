@@ -42,6 +42,7 @@ import de.mkoehler.robotrampage.rules.RobotStatus;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * The screen of a running game: the players, the board, this player's robot, and below them the five registers and the hand
@@ -79,6 +80,9 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private final Table robotBody = new Table();
     private final Table programBody = new Table();
     private final Label timeLabel;
+    private final Label timeCaption;
+    private TextButton timerButton;
+    private boolean timerButtonPaused;
     private final ProgressPill timeBar;
     private final PillToggle powerToggle;
     private final Group programmingGroup = new Group();
@@ -125,6 +129,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         this.model = new GameModel(started);
         this.cards = new CardView(ui);
         this.timeLabel = ui.label("0:00", Theme.TextStyle.HEADING, Theme.INK);
+        this.timeCaption = ui.label("Time left", Theme.TextStyle.CHIP, Theme.INK_MUTED);
         this.timeBar = new ProgressPill(ui, 10);
         this.powerToggle = ui.toggle();
         this.cardsHeading = ui.label("Cards", Theme.TextStyle.HEADING, Theme.INK);
@@ -168,6 +173,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         headerLeft.left();
         place(headerLeft, 32f, 14f, 1200f, 52f);
         place(timePill(), 1446f, 14f, 380f, 52f + UiKit.SHAPE_RESERVE);
+        place(timerButton(), 1240f, 14f, 194f, 48f + UiKit.SHAPE_RESERVE);
         place(menuButton(), 1840f, 14f, 48f, 48f + UiKit.SHAPE_RESERVE);
 
         Table players = ui.panel();
@@ -237,10 +243,43 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         Table pill = new Table();
         pill.setBackground(ui.rounded(Theme.SURFACE_RAISED, Theme.ACCENT, Theme.BORDER_CONTROL, 26));
         pill.padLeft(20f).padRight(20f).padBottom(UiKit.SHAPE_RESERVE);
-        pill.add(ui.label("Time left", Theme.TextStyle.CHIP, Theme.INK_MUTED)).width(76f).left();
+        pill.add(timeCaption).width(76f).left();
         pill.add(timeLabel).width(84f).left().padLeft(Theme.SPACE_2);
         pill.add(timeBar).growX().height(10f).padLeft(Theme.SPACE_2);
         return pill;
+    }
+
+    /**
+     * Builds the button with which the host stops and restarts the programming timer. It is only shown to the host.
+     *
+     * @return the button
+     */
+    private TextButton timerButton() {
+        timerButton = ui.button("Pause timer", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        timerButton.setVisible(false);
+        timerButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                server.link().send(model.toggleTimerPaused());
+            }
+        });
+        return timerButton;
+    }
+
+    /**
+     * Shows the state of the timer: the caption of the time pill for everybody, and for the host the button that stops or
+     * restarts it.
+     */
+    private void refreshTimer() {
+        boolean paused = model.isTimerPaused();
+        timeCaption.setText(paused ? "Paused" : "Time left");
+        timerButton.setVisible(model.canPauseTimer());
+        timerButton.setText((paused ? "Resume timer" : "Pause timer").toUpperCase(Locale.ROOT));
+        if (paused != timerButtonPaused) {
+            timerButtonPaused = paused;
+            timerButton.setStyle(ui.shapes().button(paused ? Theme.ButtonKind.PRIMARY : Theme.ButtonKind.GHOST,
+                ui.fonts().get(Theme.TextStyle.BUTTON)));
+        }
     }
 
     /**
@@ -355,6 +394,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private void refreshAll() {
         shownRevision = model.revision();
         refreshHeader();
+        refreshTimer();
         refreshPlayers();
         refreshRobot();
         refreshProgram();

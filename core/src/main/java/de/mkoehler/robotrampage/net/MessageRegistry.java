@@ -16,9 +16,11 @@ import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetReady;
+import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
@@ -127,5 +129,7 @@ public final class MessageRegistry {
         kryo.register(PlayerConnection.class);
         kryo.register(PlayerLeft.class);
         kryo.register(GameOver.class);
+        kryo.register(SetTimerPaused.class);
+        kryo.register(TimerPaused.class);
     }
 }

@@ -312,16 +312,21 @@ public final class BoardActor extends Actor {
     }
 
     /**
-     * Draws the robots: the body, the wedge showing where it faces, and the badge with the seat number.
+     * Draws the robots in two passes: first every body, then for every robot the wedge showing where it faces and the
+     * badge with the seat number. A robot's wedge therefore always lies on top of every body, so the facing stays readable
+     * where two robots overlap, for example while one pushes another.
      *
      * @param batch the batch
      */
     private void drawRobots(Batch batch) {
         for (RobotPose pose : robots) {
+            batch.setColor(1f, 1f, 1f, getColor().a * pose.alpha());
+            bodies[pose.seat()].draw(batch, getX() + pose.x() * tile, getY() + pose.y() * tile, tile, tile);
+        }
+        for (RobotPose pose : robots) {
             float x = getX() + pose.x() * tile;
             float y = getY() + pose.y() * tile;
             batch.setColor(1f, 1f, 1f, getColor().a * pose.alpha());
-            bodies[pose.seat()].draw(batch, x, y, tile, tile);
             wedge.draw(batch, x, y, tile / 2f, tile / 2f, tile, tile, 1f, 1f, pose.rotation());
             badge.draw(batch, x, y, tile, tile);
             text(batch, Theme.TextStyle.BUTTON, String.valueOf(pose.seat() + 1),

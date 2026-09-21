@@ -25,6 +25,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
+import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
@@ -119,6 +120,15 @@ public final class ScreenSnapshot {
         write(game, folder, "game-confirmed.png", state(game, 0, 5, true, false, false), 23f);
         write(game, folder, "game-powered-down.png", state(game, 0, 0, false, true, false), 23f);
         write(game, folder, "game-time-up.png", state(game, 0, 2, false, false, true), 23f);
+        write(game, folder, "game-host.png", state(game, 0, 0, 2, false, false, false), 23f);
+        GameScreen paused = state(game, 0, 0, 2, false, false, false);
+        paused.model().apply(new TimerPaused(true, 67));
+        paused.refresh();
+        write(game, folder, "game-host-paused.png", paused, 23f);
+        GameScreen guestPaused = state(game, 0, 2, false, false, false);
+        guestPaused.model().apply(new TimerPaused(true, 67));
+        guestPaused.refresh();
+        write(game, folder, "game-guest-paused.png", guestPaused, 23f);
         float laser = SampleTurn.first(7L, NAMES.size(), NAMES).laserSecond();
         write(game, folder, "resolution-laser.png", resolution(game), laser);
         for (float seconds : new float[] {1.2f, 5f, 12f, 200f}) {
@@ -139,6 +149,23 @@ public final class ScreenSnapshot {
      */
     private static GameScreen state(RobotRampageGame game, int locked, int place, boolean confirmed, boolean poweredDown,
                                     boolean timeUp) {
+        return state(game, ME, locked, place, confirmed, poweredDown, timeUp);
+    }
+
+    /**
+     * Builds the game screen for a turn in one of its states, as seen by the given player.
+     *
+     * @param game        the game
+     * @param me          the seat of the player looking at the screen; seat 0 is the host
+     * @param locked      how many registers are locked by damage
+     * @param place       how many cards to place, from the start of the hand
+     * @param confirmed   whether the player has locked in the program
+     * @param poweredDown whether the player's robot is powered down
+     * @param timeUp      whether the server filled in the registers because time ran out
+     * @return the screen
+     */
+    private static GameScreen state(RobotRampageGame game, int me, int locked, int place, boolean confirmed,
+                                    boolean poweredDown, boolean timeUp) {
         String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
         List<PlayerInfo> players = new ArrayList<>();
         for (int seat = 0; seat < NAMES.size(); seat++) {
@@ -152,7 +179,7 @@ public final class ScreenSnapshot {
         for (int seat = 0; seat < NAMES.size(); seat++) {
             Position start = new Position(2 + seat, 0);
             robots.add(new RobotState(seat, new Position(2 + seat * 2 % 8, 1 + seat), Direction.NORTH, damages[seat],
-                lives[seat], seat == ME ? 1 : 0, start, RobotStatus.ACTIVE, false, false));
+                lives[seat], seat == me ? 1 : 0, start, RobotStatus.ACTIVE, false, false));
         }
         messages.add(new StateSnapshot(3, robots, false, -1));
         List<Integer> awaited = poweredDown ? List.of(0, 2, 3, 4, 5) : List.of(0, 1, 2, 3, 4, 5);
@@ -170,19 +197,19 @@ public final class ScreenSnapshot {
         messages.add(new PlayerConfirmed(0));
         messages.add(new PlayerConfirmed(3));
         messages.add(new PlayerConnection(5, false));
-        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test");
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", me, "token", "test");
         GameScreen screen = new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
-            new ServerAddress("localhost", 45725), new GameStarted(board, players, ME), messages);
+            new ServerAddress("localhost", 45725), new GameStarted(board, players, me), messages);
         if (screen.model().draft() != null) {
             for (int i = 0; i < place && i < screen.model().draft().hand().size(); i++) {
                 screen.model().draft().place(screen.model().draft().hand().get(i));
             }
             if (confirmed) {
                 screen.model().submit();
-                screen.model().apply(new PlayerConfirmed(ME));
+                screen.model().apply(new PlayerConfirmed(me));
             }
             if (timeUp) {
-                screen.model().apply(new PlayerConfirmed(ME));
+                screen.model().apply(new PlayerConfirmed(me));
             }
             screen.refresh();
         }

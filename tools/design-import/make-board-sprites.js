@@ -19,9 +19,10 @@ const SPRITES = [
   ['objects/pusher.svg', 'pusher.png'],
   ['edges/wall.svg', 'wall.png'],
   ['edges/laser-emitter.svg', 'laser-emitter.png'],
-  ['overlays/robot-wedge.svg', 'robot-wedge.png'],
   ['overlays/robot-badge.svg', 'robot-badge.png'],
 ];
+// assets/board/robot-wedge.png is NOT generated: the owner repainted it by hand (bright green arrow, so the facing is easy
+// to read), and rendering overlays/robot-wedge.svg would overwrite it. Edit the PNG directly.
 
 const BACKGROUND = /<rect x="0" y="0" width="128" height="128" fill="#(?:d8d1bd|c3ccca)" stroke="#c2b9a2" stroke-width="1"><\/rect>/;
 const TEXT = /<text\b[^>]*>[^<]*<\/text>/g;

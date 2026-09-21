@@ -19,13 +19,13 @@ public record SessionConfig(long programmingMillis, long lastPlayerMillis, long 
 
     /**
      * The defaults for a real game: 90 s to program, 30 s for the last player, 10 minutes of reconnect grace, a
-     * turn pause of 6 s plus 130 ms per event (at most 30 s), which is the time the clients have to play the turn back at
+     * turn pause of 12 s plus 260 ms per event (at most 60 s), which is the time the clients have to play the turn back at
      * normal speed, 15 s of final results, and at least two players.
      *
      * @return the default configuration
      */
     public static SessionConfig defaults() {
-        return new SessionConfig(90_000, 30_000, 600_000, 6_000, 130, 30_000, 15_000, 2);
+        return new SessionConfig(90_000, 30_000, 600_000, 12_000, 260, 60_000, 15_000, 2);
     }
 
     /**

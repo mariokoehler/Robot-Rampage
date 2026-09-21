@@ -14,8 +14,10 @@ neither runs during a normal build.
    badges and pushers contain text).
 
 4. **Board sprites.** `node make-board-sprites.js` renders the pictures the board renderer draws on top of the ground
-   (flag, start square, crusher, pusher, wall, laser emitter, robot wedge and badge) from `assets-raw/design` into
+   (flag, start square, crusher, pusher, wall, laser emitter and robot badge) from `assets-raw/design` into
    `assets/board`, without the floor background and without numbers (the client draws numbers itself). The laser emitter,
-   wedge and badge SVGs in `assets-raw/design` were cut out of the canvas drawings by hand.
+   wedge and badge SVGs in `assets-raw/design` were cut out of the canvas drawings by hand. The robot wedge is **not** generated:
+   `assets/board/robot-wedge.png` was repainted by hand (bright green arrow with a dark outline, for readability), so edit the
+   PNG directly.
 
 The atlas packing that follows (libGDX `TexturePacker`, as in the StarWars project) is not built yet.

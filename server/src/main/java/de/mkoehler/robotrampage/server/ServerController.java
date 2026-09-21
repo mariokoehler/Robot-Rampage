@@ -6,6 +6,7 @@ import de.mkoehler.robotrampage.net.NetworkServer;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
 import de.mkoehler.robotrampage.net.messages.SetReady;
+import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
 import de.mkoehler.robotrampage.session.GameSession;
@@ -80,6 +81,8 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             session.startGame(seat);
         } else if (message instanceof SubmitProgram program) {
             session.submitProgram(seat, program);
+        } else if (message instanceof SetTimerPaused pause) {
+            session.setTimerPaused(seat, pause.paused());
         }
     }
 

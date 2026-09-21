@@ -14,6 +14,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
@@ -533,6 +534,160 @@ class GameSessionTest {
         other.tick();
 
         assertEquals(first, otherOutbox.receivedBy(0, TurnResolved.class).stream().map(m -> (Object) m).toList());
+    }
+
+    /**
+     * A stopped timer neither expires nor runs down: however long the host waits, nobody is filled in, and after the
+     * restart exactly the time that was left remains.
+     */
+    @Test
+    void aPausedTimerStandsStillAndResumesWithTheTimeLeft() {
+        startWith(3);
+        advance(CAP - 10_000);
+
+        session.setTimerPaused(0, true);
+
+        assertEquals(new TimerPaused(true, 10), outbox.lastReceivedBy(2, TimerPaused.class));
+        advance(5 * CAP);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        assertEquals(0, outbox.broadcasts(PlayerConfirmed.class));
+
+        session.setTimerPaused(0, false);
+
+        assertEquals(new TimerPaused(false, 10), outbox.lastReceivedBy(2, TimerPaused.class));
+        advance(9_999);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        advance(1);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+        assertEquals(3, outbox.broadcasts(PlayerConfirmed.class));
+    }
+
+    /**
+     * Only the host can stop the timer, and only while players are programming; everybody else is told why not and the
+     * timer keeps running.
+     */
+    @Test
+    void onlyTheHostCanPauseAndOnlyWhileProgramming() {
+        join("Ann");
+        join("Bo");
+        session.setTimerPaused(0, true);
+        assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("programming"));
+        session.setReady(1, true);
+        session.startGame(0);
+
+        session.setTimerPaused(1, true);
+
+        assertTrue(outbox.lastReceivedBy(1, RequestRejected.class).reason().contains("host"));
+        assertEquals(0, outbox.broadcasts(TimerPaused.class));
+        advance(CAP);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+        session.setTimerPaused(0, true);
+        assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("programming"));
+        assertEquals(0, outbox.broadcasts(TimerPaused.class));
+    }
+
+    /**
+     * Players can go on confirming while the timer is stopped. The squeeze on the last player starts from the moment of
+     * the pause, so the last player has their full 30 seconds after the restart.
+     */
+    @Test
+    void theSqueezeStartedWhilePausedRunsFromTheRestart() {
+        startWith(3);
+        advance(1_000);
+        session.setTimerPaused(0, true);
+        advance(CAP);
+
+        submitFor(0);
+        submitFor(1);
+
+        assertEquals(new TimerUpdate(30), outbox.lastReceivedBy(2, TimerUpdate.class));
+        advance(CAP);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        session.setTimerPaused(0, false);
+        advance(LAST_PLAYER - 1);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        advance(1);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+    }
+
+    /**
+     * A pause does not outlive its turn: when the last player confirms during it, the turn is resolved, everybody is told
+     * the timer runs again, and the next turn begins with a running timer.
+     */
+    @Test
+    void aPauseEndsWhenTheTurnIsResolved() {
+        startWith(2);
+        session.setTimerPaused(0, true);
+
+        submitFor(0);
+        submitFor(1);
+
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+        assertFalse(outbox.lastReceivedBy(0, TimerPaused.class).paused());
+        advance(PAUSE);
+        assertEquals(2, session.turn());
+        advance(CAP);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+        assertEquals(2, outbox.receivedBy(0, TurnResolved.class).size());
+    }
+
+    /**
+     * The reconnect grace of a disconnected player does not run down while the timer is stopped.
+     */
+    @Test
+    void thePauseDoesNotUseUpTheReconnectGrace() {
+        startWith(3);
+        session.disconnect(2);
+        session.setTimerPaused(0, true);
+        advance(2 * GRACE);
+        assertEquals(0, outbox.broadcasts(PlayerLeft.class));
+
+        session.setTimerPaused(0, false);
+
+        advance(GRACE - 1);
+        assertEquals(0, outbox.broadcasts(PlayerLeft.class));
+        advance(1);
+        assertEquals(1, outbox.broadcasts(PlayerLeft.class));
+    }
+
+    /**
+     * When the host drops while the timer is stopped, the timer runs again, so the game cannot be stuck waiting for a host
+     * who is gone.
+     */
+    @Test
+    void aPauseEndsWhenTheHostDisconnects() {
+        startWith(3);
+        session.setTimerPaused(0, true);
+        advance(30_000);
+
+        session.disconnect(0);
+
+        assertEquals(new TimerPaused(false, 90), outbox.lastReceivedBy(1, TimerPaused.class));
+        advance(CAP - 1);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        advance(1);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+    }
+
+    /**
+     * A player who comes back while the timer is stopped is told that it is.
+     */
+    @Test
+    void aReturningPlayerIsToldThatTheTimerIsPaused() {
+        startWith(2);
+        advance(20_000);
+        session.disconnect(1); // leaves the host as the last player, so the squeeze leaves 30 s
+        session.setTimerPaused(0, true);
+        advance(60_000);
+        int before = outbox.log.size();
+
+        session.join("ignored", tokens.get(1));
+        session.attach(1);
+
+        List<Object> resent = outbox.log.subList(before, outbox.log.size()).stream()
+            .filter(sent -> sent.seat() == 1).map(Sent::message).toList();
+        assertTrue(resent.contains(new TimerPaused(true, 30)));
+        assertTrue(resent.stream().anyMatch(message -> message instanceof TurnStarted started && started.programmingSeconds() == 30));
     }
 
     // ------------------------------------------------------------------------------ disconnect / reconnect

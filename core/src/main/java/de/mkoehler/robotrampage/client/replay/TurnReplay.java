@@ -127,13 +127,15 @@ public final class TurnReplay {
         }
     }
 
-    private static final float REVEAL_SECONDS = 0.5f;
-    private static final float ACTION_SECONDS = 0.4f;
-    private static final float PUSH_SECONDS = 0.1f;
-    private static final float BELT_SECONDS = 0.35f;
-    private static final float LASER_SECONDS = 0.6f;
-    private static final float OTHER_SECONDS = 0.4f;
-    private static final float CLEANUP_SECONDS = 0.5f;
+    /** How much longer every beat lasts than its base duration; the server's turn pause is sized for it. */
+    private static final float PACE = 2f;
+    private static final float REVEAL_SECONDS = 0.5f * PACE;
+    private static final float ACTION_SECONDS = 0.4f * PACE;
+    private static final float PUSH_SECONDS = 0.1f * PACE;
+    private static final float BELT_SECONDS = 0.35f * PACE;
+    private static final float LASER_SECONDS = 0.6f * PACE;
+    private static final float OTHER_SECONDS = 0.4f * PACE;
+    private static final float CLEANUP_SECONDS = 0.5f * PACE;
 
     private final IntFunction<String> names;
     private final List<Beat> beats = new ArrayList<>();

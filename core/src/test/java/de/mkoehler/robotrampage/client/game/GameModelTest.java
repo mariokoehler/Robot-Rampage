@@ -14,8 +14,10 @@ import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
@@ -127,6 +129,51 @@ class GameModelTest {
         assertEquals("0:30", model.timeText());
         model.tick(100f);
         assertEquals("0:00", model.timeText());
+    }
+
+    /**
+     * While the host has stopped the timer the clock stands still, whatever the frames do, and it starts again from the
+     * time the server names. A new turn always starts with a running timer.
+     */
+    @Test
+    void aPausedClockStandsStill() {
+        GameModel model = programming(0);
+        model.tick(10f);
+
+        model.apply(new TimerPaused(true, 80));
+        model.tick(50f);
+
+        assertTrue(model.isTimerPaused());
+        assertEquals("1:20", model.timeText());
+        model.apply(new TimerPaused(false, 80));
+        model.tick(20f);
+        assertFalse(model.isTimerPaused());
+        assertEquals("1:00", model.timeText());
+        model.apply(new TimerPaused(true, 60));
+        model.apply(turn(2, List.of(0, 1, 2)));
+        assertFalse(model.isTimerPaused());
+    }
+
+    /**
+     * Only the host is offered the timer button, and only while players are programming; it asks for the opposite of the
+     * timer's state.
+     */
+    @Test
+    void onlyTheHostCanPauseAndOnlyWhileProgramming() {
+        LoadedBoard board = BoardLoader.loadResource("boards/proving-grounds.json");
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", false, true, true), new PlayerInfo(1, "Bo", true, true, false));
+        GameModel host = new GameModel(new GameStarted(BoardLoader.toJson(board.definition()), players, 0));
+        GameModel guest = programming(0);
+        assertFalse(host.canPauseTimer(), "no turn yet");
+        host.apply(turn(1, List.of(0, 1)));
+
+        assertTrue(host.amHost());
+        assertTrue(host.canPauseTimer());
+        assertFalse(guest.amHost());
+        assertFalse(guest.canPauseTimer());
+        assertEquals(new SetTimerPaused(true), host.toggleTimerPaused());
+        host.apply(new TimerPaused(true, 90));
+        assertEquals(new SetTimerPaused(false), host.toggleTimerPaused());
     }
 
     /**

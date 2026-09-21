@@ -23,9 +23,11 @@ import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetReady;
+import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
@@ -132,6 +134,8 @@ class WireProtocolTest {
             new RequestRejected("Too few cards"),
             new PlayerConfirmed(3),
             new TimerUpdate(30),
+            new SetTimerPaused(true),
+            new TimerPaused(true, 41),
             new TurnResolved(4, List.of(event)),
             new StateSnapshot(4, List.of(gone, robot), true, 3),
             new PlayerConnection(3, false),
@@ -170,7 +174,7 @@ class WireProtocolTest {
                 messageClass.getSimpleName() + " is not registered");
             checked++;
         }
-        assertTrue(checked >= 19, "expected to find all message classes, found " + checked);
+        assertTrue(checked >= 21, "expected to find all message classes, found " + checked);
     }
 
     /**

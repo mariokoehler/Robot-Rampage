@@ -16,6 +16,7 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
@@ -107,6 +108,8 @@ public final class GameSession {
     private int turn;
     private Set<Integer> respawnedThisTurn = Set.of();
     private long programmingDeadline;
+    private boolean timerPaused;
+    private long pausedAt;
     private boolean squeezeActive;
     private long nextTurnAt;
     private long backToLobbyAt;
@@ -229,7 +232,8 @@ public final class GameSession {
 
     /**
      * Handles a player's connection dropping. In the lobby the player simply leaves. In a game their seat is kept
-     * for the reconnect grace period; if they still owe a program it is filled in at random at once.
+     * for the reconnect grace period; if they still owe a program it is filled in at random at once. If the player is the
+     * host and has the timer paused, it runs again, so nobody is left waiting for a host who is gone.
      *
      * @param seat the player's seat
      */
@@ -239,7 +243,10 @@ public final class GameSession {
             return;
         }
         player.connected = false;
-        player.disconnectedAt = clock.getAsLong();
+        player.disconnectedAt = now();
+        if (seat == hostSeat()) {
+            resumeTimer();
+        }
         if (phase == Phase.LOBBY) {
             players.remove(seat);
             broadcastLobby();
@@ -371,9 +378,12 @@ public final class GameSession {
     /**
      * Lets time pass: removes players whose reconnect grace period is over, fills in the programs of players who ran
      * out of time and resolves the turn, starts the next turn after the pause, and returns to the lobby after the
-     * game-over pause. Must be called regularly.
+     * game-over pause. Must be called regularly. While the host has the timer paused, nothing happens.
      */
     public void tick() {
+        if (timerPaused) {
+            return;
+        }
         long now = clock.getAsLong();
         if (phase == Phase.PROGRAMMING || phase == Phase.RESOLVING) {
             removePlayersAwayTooLong(now);
@@ -402,6 +412,54 @@ public final class GameSession {
             case LOBBY -> {
             }
         }
+    }
+
+    /**
+     * Stops or restarts the programming timer on the host's request, for example for a break or a discussion of the
+     * rules. Only the host may do it, and only while players are programming. Players can go on programming and
+     * confirming while the timer is stopped; the timer also restarts by itself when the turn is resolved, so a pause
+     * never carries over into the next turn. Everybody is told.
+     *
+     * @param seat   the requesting player's seat
+     * @param paused {@code true} to stop the timer, {@code false} to restart it
+     */
+    public void setTimerPaused(int seat, boolean paused) {
+        if (!players.containsKey(seat)) {
+            return;
+        }
+        if (seat != hostSeat()) {
+            reject(seat, "Only the host can pause the timer.");
+            return;
+        }
+        if (phase != Phase.PROGRAMMING) {
+            reject(seat, "The timer can only be paused while players are programming.");
+            return;
+        }
+        if (paused && !timerPaused) {
+            timerPaused = true;
+            pausedAt = clock.getAsLong();
+            outbox.broadcast(new TimerPaused(true, secondsUntil(programmingDeadline)));
+        } else if (!paused) {
+            resumeTimer();
+        }
+    }
+
+    /**
+     * Lets the programming timer run on after a pause: the time spent paused is added to the programming deadline and
+     * to the time every disconnected player has been away, so neither runs out because of the pause. Does nothing when
+     * the timer is not paused. Everybody is told.
+     */
+    private void resumeTimer() {
+        if (!timerPaused) {
+            return;
+        }
+        long paused = clock.getAsLong() - pausedAt;
+        timerPaused = false;
+        programmingDeadline += paused;
+        for (SessionPlayer player : players.values()) {
+            player.disconnectedAt += paused;
+        }
+        outbox.broadcast(new TimerPaused(false, secondsUntil(programmingDeadline)));
     }
 
     // ------------------------------------------------------------------------------------------------------
@@ -495,7 +553,7 @@ public final class GameSession {
             resolveTurn();
         } else if (!squeezeActive && awaited >= 2 && pending == 1) {
             squeezeActive = true;
-            long now = clock.getAsLong();
+            long now = now();
             programmingDeadline = Math.min(programmingDeadline, now + config.lastPlayerMillis());
             outbox.broadcast(new TimerUpdate(secondsUntil(programmingDeadline)));
         }
@@ -532,6 +590,7 @@ public final class GameSession {
      * Plays out the turn, tells everybody what happened, and either ends the game or schedules the next turn.
      */
     private void resolveTurn() {
+        resumeTimer();
         TurnResult result = TurnResolver.resolve(state);
         state = result.state();
         outbox.broadcast(new TurnResolved(turn, result.events()));
@@ -548,6 +607,7 @@ public final class GameSession {
      * Ends the game and shows the results.
      */
     private void finishGame() {
+        resumeTimer();
         phase = Phase.GAME_OVER;
         backToLobbyAt = clock.getAsLong() + config.gameOverMillis();
         outbox.broadcast(new GameOver(state.winnerId(), robotStates()));
@@ -630,6 +690,9 @@ public final class GameSession {
                     }
                 }
                 outbox.send(player.seat, new TurnStarted(turn, List.of(), awaited, secondsUntil(programmingDeadline)));
+                if (timerPaused) {
+                    outbox.send(player.seat, new TimerPaused(true, secondsUntil(programmingDeadline)));
+                }
                 for (SessionPlayer other : players.values()) {
                     if (other.awaiting && other.confirmed) {
                         outbox.send(player.seat, new PlayerConfirmed(other.seat));
@@ -747,13 +810,23 @@ public final class GameSession {
     }
 
     /**
-     * Converts the time left until a deadline to whole seconds, rounding up.
+     * Returns the time the session goes by: the clock, or while the timer is paused the instant it was paused at.
+     *
+     * @return the time in clock milliseconds
+     */
+    private long now() {
+        return timerPaused ? pausedAt : clock.getAsLong();
+    }
+
+    /**
+     * Converts the time left until a deadline to whole seconds, rounding up. While the timer is paused the time is the
+     * instant it was paused at, so the answer does not change.
      *
      * @param deadline the deadline, in clock milliseconds
      * @return the seconds left, at least 0
      */
     private int secondsUntil(long deadline) {
-        long remaining = Math.max(0, deadline - clock.getAsLong());
+        long remaining = Math.max(0, deadline - now());
         return (int) ((remaining + 999) / 1000);
     }
 }

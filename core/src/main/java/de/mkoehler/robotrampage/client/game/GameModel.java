@@ -12,8 +12,10 @@ import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
@@ -103,6 +105,7 @@ public final class GameModel {
     private int turn;
     private int programmingSeconds;
     private float remainingSeconds;
+    private boolean timerPaused;
     private ProgramDraft draft;
     private boolean poweredDownThisTurn;
     private boolean canChooseRespawnFacing;
@@ -157,6 +160,9 @@ public final class GameModel {
             }
         } else if (message instanceof TimerUpdate update) {
             remainingSeconds = update.secondsRemaining();
+        } else if (message instanceof TimerPaused pause) {
+            timerPaused = pause.paused();
+            remainingSeconds = pause.secondsRemaining();
         } else if (message instanceof TurnResolved resolved) {
             completeResolution();
             lastResolved = resolved;
@@ -190,13 +196,13 @@ public final class GameModel {
     }
 
     /**
-     * Lets time pass. Only the local countdown of the programming time moves; the server's own count is taken over whenever
-     * it sends one.
+     * Lets time pass. Only the local countdown of the programming time moves, and not while the host has stopped the timer;
+     * the server's own count is taken over whenever it sends one.
      *
      * @param seconds the seconds since the last call
      */
     public void tick(float seconds) {
-        if (stage == Stage.PROGRAMMING || stage == Stage.SUBMITTED || stage == Stage.SITTING_OUT) {
+        if (timerRuns() && !timerPaused) {
             remainingSeconds = Math.max(0f, remainingSeconds - seconds);
         }
     }
@@ -214,6 +220,7 @@ public final class GameModel {
         confirmed.clear();
         programmingSeconds = started.programmingSeconds();
         remainingSeconds = programmingSeconds;
+        timerPaused = false;
         draft = null;
         poweredDownThisTurn = false;
         canChooseRespawnFacing = false;
@@ -544,6 +551,53 @@ public final class GameModel {
             submittedByMe = false;
             revision++;
         }
+    }
+
+    /**
+     * Returns whether the programming timer is part of what the screen shows right now.
+     *
+     * @return {@code true} while players are programming, whether or not this player is one of them
+     */
+    private boolean timerRuns() {
+        return stage == Stage.PROGRAMMING || stage == Stage.SUBMITTED || stage == Stage.SITTING_OUT;
+    }
+
+    /**
+     * Returns whether the host has stopped the programming timer.
+     *
+     * @return {@code true} while it is stopped
+     */
+    public boolean isTimerPaused() {
+        return timerPaused;
+    }
+
+    /**
+     * Returns whether this player is the host of the game, the one who may stop the timer. The server has the last word: it
+     * refuses the request of anybody else.
+     *
+     * @return {@code true} for the host
+     */
+    public boolean amHost() {
+        PlayerInfo me = players.get(mySeat);
+        return me != null && me.host();
+    }
+
+    /**
+     * Returns whether the timer button is shown: to the host, while players are programming.
+     *
+     * @return {@code true} if the host can stop or restart the timer now
+     */
+    public boolean canPauseTimer() {
+        return amHost() && timerRuns();
+    }
+
+    /**
+     * Builds the message with which the host stops the timer, or restarts it if it is stopped.
+     *
+     * @return the message
+     */
+    public SetTimerPaused toggleTimerPaused() {
+        return new SetTimerPaused(!timerPaused);
     }
 
     /**
