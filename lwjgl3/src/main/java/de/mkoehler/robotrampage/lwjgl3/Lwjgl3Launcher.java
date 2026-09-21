@@ -2,7 +2,7 @@ package de.mkoehler.robotrampage.lwjgl3;
 
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
-import de.mkoehler.robotrampage.RobotRampageGame;
+import de.mkoehler.robotrampage.client.RobotRampageGame;
 
 /**
  * Launches the desktop (LWJGL3) client.

@@ -1,4 +1,4 @@
-package de.mkoehler.robotrampage;
+package de.mkoehler.robotrampage.client;
 
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Screen;

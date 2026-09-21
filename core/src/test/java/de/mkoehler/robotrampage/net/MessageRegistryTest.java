@@ -3,14 +3,25 @@ package de.mkoehler.robotrampage.net;
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import de.mkoehler.robotrampage.board.Direction;
+import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
+import de.mkoehler.robotrampage.rules.Card;
+import de.mkoehler.robotrampage.rules.CardType;
+import de.mkoehler.robotrampage.rules.DestructionCause;
+import de.mkoehler.robotrampage.rules.GameEvent;
+import de.mkoehler.robotrampage.rules.LoggedEvent;
+import de.mkoehler.robotrampage.rules.MoveCause;
+import de.mkoehler.robotrampage.rules.RotationCause;
+import de.mkoehler.robotrampage.rules.SubPhase;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -40,7 +51,12 @@ class MessageRegistryTest {
         MessageRegistry.register(first);
         MessageRegistry.register(second);
 
-        Class<?>[] messageClasses = {HandshakeRequest.class, HandshakeResponse.class};
+        Class<?>[] messageClasses = {
+            HandshakeRequest.class, HandshakeResponse.class,
+            Position.class, Direction.class, CardType.class, Card.class,
+            MoveCause.class, RotationCause.class, DestructionCause.class, SubPhase.class,
+            GameEvent.RobotMoved.class, GameEvent.RobotRotated.class, GameEvent.RobotDestroyed.class,
+            LoggedEvent.class};
         for (Class<?> messageClass : messageClasses) {
             assertEquals(first.getRegistration(messageClass).getId(), second.getRegistration(messageClass).getId(),
                 "id mismatch for " + messageClass.getSimpleName());
@@ -74,6 +90,54 @@ class MessageRegistryTest {
             HandshakeResponse.class);
         assertFalse(rejected.isAccepted());
         assertEquals("Version mismatch.", rejected.getMessage());
+    }
+
+    /**
+     * Every kind of {@link GameEvent}, wrapped in a {@link LoggedEvent} the way it travels
+     * in a turn's event log, must survive the wire. This is the proof that Kryo copes with
+     * records and with a field typed as a sealed interface.
+     */
+    @Test
+    void loggedEventsOfEveryKindSurviveRoundTrip() {
+        GameEvent[] events = {
+            new GameEvent.RobotMoved(3, new Position(1, 2), new Position(1, 3), MoveCause.PUSHED),
+            new GameEvent.RobotRotated(0, Direction.NORTH, Direction.WEST, RotationCause.BELT),
+            new GameEvent.RobotDestroyed(7, DestructionCause.PIT)};
+        for (GameEvent event : events) {
+            LoggedEvent original = new LoggedEvent(4, SubPhase.ALL_BELTS, event);
+
+            LoggedEvent copy = roundTrip(original, LoggedEvent.class);
+
+            assertEquals(original, copy);
+        }
+    }
+
+    /**
+     * Every kind of {@link GameEvent} the sealed interface permits must be registered, so
+     * adding an event record without registering it fails here instead of at runtime on
+     * the wire.
+     */
+    @Test
+    void everyGameEventTypeIsRegistered() {
+        Kryo kryo = new Kryo();
+        MessageRegistry.register(kryo);
+
+        Class<?>[] permitted = GameEvent.class.getPermittedSubclasses();
+        assertTrue(permitted.length > 0);
+        for (Class<?> eventType : permitted) {
+            assertNotNull(kryo.getClassResolver().getRegistration(eventType),
+                eventType.getSimpleName() + " is not registered");
+        }
+    }
+
+    /**
+     * A {@link Card} must keep its type and priority across the wire.
+     */
+    @Test
+    void cardSurvivesRoundTrip() {
+        Card original = new Card(CardType.U_TURN, 30);
+
+        assertEquals(original, roundTrip(original, Card.class));
     }
 
     /**

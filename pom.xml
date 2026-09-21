@@ -34,6 +34,8 @@
     <junitVersion>5.14.4</junitVersion>
     <!-- JSON handling for config files, boards and saved game state, see design.md 3.7 -->
     <jacksonVersion>2.22.2</jacksonVersion>
+    <!-- Enforces the package layering of design.md 3.3 in a unit test (core's ArchitectureTest) -->
+    <archUnitVersion>1.5.0</archUnitVersion>
     <!-- Scene2D UI toolkit for menu-style screens, see design.md 4.2 -->
     <visUiVersion>1.5.9</visUiVersion>
   </properties>
@@ -70,6 +72,12 @@
         <groupId>com.fasterxml.jackson.core</groupId>
         <artifactId>jackson-databind</artifactId>
         <version>${jacksonVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit</artifactId>
+        <version>${archUnitVersion}</version>
+        <scope>test</scope>
       </dependency>
     </dependencies>
   </dependencyManagement>

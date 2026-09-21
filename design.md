@@ -233,7 +233,9 @@ volley fire simultaneously against the positions at the start of the volley
 is on an active crusher, or reaches 10 damage. A destroyed robot:
 
 - is removed from the board at once, does not act again this turn, and has all
-  its registers cleared (its cards are discarded);
+  its registers cleared: every programmed card is discarded, *including cards in
+  locked registers* (2.5), since the robot returns with no damage and therefore no
+  locked registers;
 - loses one life. At 0 lives it is `ELIMINATED` and takes no further part;
 - otherwise re-enters at the **start of the next turn** on its archive marker, in
   any facing of its player's choice, with **no damage**.
@@ -369,8 +371,10 @@ netcode gotchas in its `CLAUDE.md` do not carry over.
 - `core` — everything shared. Package layout under `de.mkoehler.robotrampage`:
   - `rules` — **the rules engine.** Pure Java, no libGDX imports: cards, deck,
     `GameState`, `Robot`, the turn resolver, belt/laser/push logic, `GameEvent`s.
-  - `board` — the board *format* (`BoardDefinition`, JSON loading, validation)
-    and the runtime `Board` query API the rules engine uses. Also pure Java.
+  - `board` — geometry (`Direction`, `Position`), the immutable runtime `Board` the
+    rules engine queries (with its `Board.Builder`), and the board *format*
+    (`BoardDefinition`, JSON loading, validation, still to come). Also pure Java;
+    `board` never depends on `rules`.
   - `net` — `MessageRegistry`, wire messages, `NetworkServer`/`NetworkClient`
     wrappers, `AppVersion`. No libGDX.
   - `client` (and sub-packages) — screens, board renderer, animation, UI. Uses
@@ -383,27 +387,39 @@ netcode gotchas in its `CLAUDE.md` do not carry over.
   likely first one).
 
 **Rule:** `rules` and `board` never import from `client`, `net` or libGDX.
-Dependencies point inward: `client`/`server` → `net` → `rules`/`board`. This keeps
+Dependencies point inward: `client`/`server` → `net` → `rules` → `board`. This keeps
 the engine testable and lets a bot, a replay tool or a board generator use it
-without a window.
+without a window. The rule is **enforced by `ArchitectureTest`** (ArchUnit), which
+fails the build on a violation.
 
 ### 3.4 Rules engine design
 
-- **State:** `GameState` holds the board reference, robots, deck, discard pile,
-  turn number and RNG state. Plain classes/records; `GameState` offers `copy()`.
+- **State:** `GameState` holds the board reference, the robots and the `Deck` (draw
+  and discard pile). Robots are mutable plain classes identified by a stable integer
+  `id`; `GameState.copy()` deep-copies robots and deck and shares the immutable
+  `Board`. **There is no live `Random` in the state:** the deck derives every shuffle
+  from a `seed` plus a shuffle counter, so a deck is fully described by three plain
+  values plus its pile contents and can be persisted and resumed exactly (3.10).
 - **The core function:** `TurnResolver.resolve(state, programs) → TurnResult`,
   where `programs` is the five cards per robot and `TurnResult` is the new state
   plus the **ordered list of `GameEvent`s** that led from the old state to the
   new one. The resolver contains *no randomness* — given the same inputs it always
   produces the same result. (Shuffling and timeout fills happen outside it, in the
   server session.)
-- **Events:** a `sealed interface GameEvent` with a record per atomic change:
-  `RegisterRevealed`, `RobotMoved`, `RobotPushed`, `RobotRotated`,
-  `RobotDamaged`, `LaserFired`, `RobotDestroyed`, `RobotRespawned`,
-  `FlagTouched`, `RegisterLocked`, `RobotRepaired`, `PhaseStarted`… Events carry
-  everything a client needs to animate them (from, to, cause) so the client
-  never has to re-derive rules. **(unconfirmed)** exact event set; grows as the
-  rules are implemented.
+- **Events:** a `sealed interface GameEvent` with a nested record per atomic change.
+  Implemented so far: `RobotMoved(robotId, from, to, MoveCause)`,
+  `RobotRotated(robotId, from, to, RotationCause)` and
+  `RobotDestroyed(robotId, DestructionCause)`; more (`RegisterRevealed`,
+  `RobotDamaged`, `LaserFired`, `RobotRespawned`, `FlagTouched`, `RobotRepaired`, …)
+  are added as the rules are implemented. Events carry everything a client needs to
+  animate them (from, to, cause) so the client never has to re-derive rules.
+  Two properties are fixed: **events refer to robots by stable id** (robots are
+  destroyed and re-enter, so an index would silently break the animation queue), and
+  **every event is wrapped in a `LoggedEvent(register, subPhase, event)`** that records
+  which register (1–5, or 0 for cleanup) and which `SubPhase` (2.4) it happened in, so
+  clients can pace playback at phase boundaries and tests can assert on them. The
+  turn's `EventLog` stamps the wrapper. **(unconfirmed)** the exact event set beyond
+  the ones above; it grows as the rules are implemented.
 - **Events are also the test oracle:** unit tests assert on the event list (and
   the final state), not on internals.
 
@@ -640,10 +656,15 @@ Proposed implementation order — engine first, because it needs
 no UI and is where the test value is:
 
 - **M0 — Project skeleton. Done.** Maven modules, launchers, version handshake
-  classes, `MessageRegistry` + tests, `design.md`/`CLAUDE.md`.
-- **M1 — Rules engine, headless.** Cards/deck, `GameState`, movement + pushing,
-  belts (2.12), gears, lasers, damage/locking, flags, destruction/respawn,
-  `TurnResolver` + events. Heavily unit-tested with the ASCII board helper.
+  classes, `MessageRegistry` + tests, `design.md`/`CLAUDE.md`, jgitver.
+- **M1 — Rules engine, headless. In progress.** Heavily unit-tested with the ASCII
+  board helper (`AsciiBoard`, test scope). *Done:* board model and `Board.Builder`,
+  cards/deck (seeded, resumable shuffles), `Robot`/`GameState`, event log with
+  register/sub-phase stamping, movement and pushing (2.6), destruction (2.9), belts
+  (2.12), the `ArchitectureTest`, Kryo registration of the event types. *Still to do:*
+  gears, pushers, lasers and damage (incl. locked registers when dealing), crushers,
+  flags/archive/repair, respawn, power-down, the cleanup phase, and the `TurnResolver`
+  that ties the sub-phases together in the order of 2.4.
 - **M2 — Board format.** `BoardDefinition` + Jackson loading + `BoardValidator`;
   author the first original board.
 - **M3 — Server session + protocol.** Session state machine (deal → program →

@@ -1,8 +1,18 @@
 package de.mkoehler.robotrampage.net;
 
 import com.esotericsoftware.kryo.Kryo;
+import de.mkoehler.robotrampage.board.Direction;
+import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
+import de.mkoehler.robotrampage.rules.Card;
+import de.mkoehler.robotrampage.rules.CardType;
+import de.mkoehler.robotrampage.rules.DestructionCause;
+import de.mkoehler.robotrampage.rules.GameEvent;
+import de.mkoehler.robotrampage.rules.LoggedEvent;
+import de.mkoehler.robotrampage.rules.MoveCause;
+import de.mkoehler.robotrampage.rules.RotationCause;
+import de.mkoehler.robotrampage.rules.SubPhase;
 
 /**
  * Registers every class sent over the wire with a {@link Kryo} instance, in a
@@ -37,5 +47,20 @@ public final class MessageRegistry {
     public static void register(Kryo kryo) {
         kryo.register(HandshakeRequest.class);
         kryo.register(HandshakeResponse.class);
+        // Building blocks of the per-turn event log (design.md 3.4/3.5). Every GameEvent
+        // record must be registered here as it is added, since events travel inside
+        // LoggedEvent through a field typed as the GameEvent interface.
+        kryo.register(Position.class);
+        kryo.register(Direction.class);
+        kryo.register(CardType.class);
+        kryo.register(Card.class);
+        kryo.register(MoveCause.class);
+        kryo.register(RotationCause.class);
+        kryo.register(DestructionCause.class);
+        kryo.register(SubPhase.class);
+        kryo.register(GameEvent.RobotMoved.class);
+        kryo.register(GameEvent.RobotRotated.class);
+        kryo.register(GameEvent.RobotDestroyed.class);
+        kryo.register(LoggedEvent.class);
     }
 }

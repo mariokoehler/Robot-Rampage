@@ -22,13 +22,15 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0 done (project skeleton), design reviewed by the user** (2026-09-21: tags removed =
-confirmed, `DECISION:` notes in design.md 7). Maven multi-module build works: `mvn clean package`
-builds `core`, `lwjgl3`, `server`; 5 unit tests pass; the client opens a window
-showing a placeholder `StartupScreen`; the server jar starts and logs its version.
-No game logic exists yet. Next per design.md 6: **M1, the pure-Java rules engine**
-(`core/.../rules`), heavily unit-tested. Rule details still marked *(verify)* in
-design.md must be checked against the real rulebook before they are coded.
+**M0 done, M1 (rules engine) in progress** — see design.md 6 for the full list. Built and
+tested so far (76 unit tests): board model, cards/deck, robots/game state, event log,
+movement + pushing, destruction, conveyor belts, the architecture test, Kryo registration
+of the event types. Next: gears, pushers, lasers/damage, crushers, flags/archive/repair,
+respawn, power-down, cleanup, then the `TurnResolver` (design.md 2.4). After M1: M2 board
+format + validator, and **I draft the first original 12x12 board myself** (user's
+decision) — but only after `BoardValidator` exists, so the reachability check is
+not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed
+= confirmed, `DECISION:` notes in design.md 7. No assets are needed before M4.
 
 ## Decisions already made (with reasons)
 
@@ -59,6 +61,11 @@ design.md must be checked against the real rulebook before they are coded.
   transitively). If it ever slips, the clean fix is splitting client screens out of
   `core` into their own module; that is cheapest *before* M1 piles code into
   `core`, so reconsider at the start of M1 rather than after M4.
+- **`ArchitectureTest` (ArchUnit, core) enforces that rule** for `rules`/`board`/`net`/
+  `client`. It inspects bytecode, so a compile-time constant from a forbidden class
+  (e.g. `MathUtils.PI`) is inlined and slips through — a real class reference is
+  caught (verified by adding one deliberately). The first build after adding ArchUnit
+  needed network access.
 - **Screen disposal:** `Game.dispose()` only calls `hide()` on the current screen, not
   `dispose()`. `RobotRampageGame.dispose()` disposes the current screen; when M4
   adds screen transitions, each `setScreen` call site must dispose the screen it
@@ -110,9 +117,11 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
 - **Kryo wire compatibility depends on registration order, not class names.** Every
   class sent over the wire is registered in `MessageRegistry.register(Kryo)`,
   append-only, never reordered; `MessageRegistryTest` guards it. Add every new
-  message class to that registry *and* to the test. Java records and sealed types
-  need explicit registration too — verify Kryo's record support when the first
-  record message is added.
+  message class to that registry *and* to the test. **Kryo 5.5 handles records and a
+  field typed as a sealed interface** (verified with `LoggedEvent`/`GameEvent`), but
+  every concrete record must still be registered explicitly:
+  `MessageRegistryTest.everyGameEventTypeIsRegistered` fails if a new `GameEvent`
+  record is forgotten.
 - A plugin's top-level `<configuration>` applies to every goal of that plugin invoked
   from the CLI — the `lwjgl3` exec config is written for `exec:exec`; `exec:java`
   there would fail. Don't share one goal's config with another. Same-`groupId:artifactId`
@@ -128,8 +137,16 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   message registry and server session logic get real tests; screens, rendering and
   animation do not. Don't chase coverage numbers.
 - Assert on the resolver's **event list** and final state, not internals.
-- Plan: a small ASCII-art board parser test helper so scenarios read like the boards
-  they describe.
+- **`AsciiBoard`** (`core/src/test/.../testsupport`) builds a `Board`/`GameState` from an
+  ASCII picture — its grammar is documented in its class Javadoc (terrain characters
+  `. > < ^ v E W N S o c a + x 1-9`, `|` for a wall east of the previous square, `-`
+  lines for walls between rows, robots as digits in a second picture). Use it for every
+  rules test. Text blocks strip common indentation, so a `-` wall line must sit
+  *under the character it belongs to* relative to the other lines.
+- **Rule-test gotcha:** a test whose expected result contradicts the rules is usually a
+  wrong test — re-derive from design.md before "fixing" the engine (e.g. entering a belt
+  square bends a robot by the *turn between heading and belt direction*, not by the
+  robot's old facing).
 - Every new class and method gets HTML Javadoc (`@author Mario Koehler`), including
   private methods — see the global instructions. Never put session narrative
   ("changed because we discussed X") into Javadoc/comments.
