@@ -730,7 +730,7 @@ The pure geometry (turning a picture for a direction, the walls of a board once 
 `client.board.BoardGeometry` and is unit-tested. Belt curves are **not** yet drawn (belts are turned to their direction
 only, no corner pieces), and no damage tags, program preview, highlights or archive markers yet — those belong to the
 programming and resolution screens. Crusher squares show no register numbers. Pusher register numbers are turned to run along the bar on east and west
-pushers. `GameStartedScreen` parses the board in its constructor; the server validated it and versions are checked, so a
+pushers. The game screen parses the board in its constructor (`GameModel`); the server validated it and versions are checked, so a
 bad board is not expected, but a failure there would be an uncaught crash. `BoardSnapshot` (`lwjgl3/src/test`, a dev
 tool run by hand) renders a board with a robot on every start square into a PNG through a hidden window, so the renderer can
 be checked without playing. `lwjgl3/src/test/resources/renderer-probe.json` is a board with everything on it that
@@ -778,6 +778,30 @@ locked and pre-filled; a countdown timer (2.13) is always visible; a
 **Confirm** button locks the program in; a **Power Down** toggle is available;
 other players show only a "confirmed" tick. The "preview my program" ghost path
 (3.5) is drawn on the board as the program is being built.
+
+**Implemented (M4 slice 4)** — the game screen follows the mockups' four states of one screen (`GameScreen`, layout at
+1920×1080): a header with the turn, the deal and the time left; the players panel (lives, damage, Thinking / Confirmed /
+Away / Powered down / Out); the board; the "Your robot" panel with lives, damage, hand size, locked registers, next flag and
+the board key; and below them the five registers with Confirm and the power-down switch, and the hand. `GameModel` follows
+the server's messages (no rules are run on the client): turn 1 starts from the start squares and full lives, and the
+server's `StateSnapshot` corrects them; a respawn in `TurnStarted` moves the robot; the countdown runs locally from
+`TurnStarted.programmingSeconds` and is corrected by `TimerUpdate`. `ProgramDraft` holds the placement: locked registers
+are always the **highest-numbered** ones, only the free registers are sent, and a robot with nine damage confirms an empty
+program. A `HandDealt` with an empty hand, free registers and a robot that is not powered down means "already locked in"
+(a player returning mid-turn). A powered-down player sits out and can only announce staying down.
+**Deviations from the mockups (owner may revise):** cards are placed and taken back by **click only** (no drag and drop
+yet, so the hint text leaves it out); the power-down switch simply sets the flag (no dialog); the player in "Away" shows no
+countdown (needs the grace period in the protocol); the Leave dialog does not promise a rejoin (the client cannot rejoin
+yet); a resolved turn is not animated — the board jumps to the new state and the screen waits for the next turn (slice 5);
+the respawn-facing choice and the eliminated dialog are not built. **When time runs out the server fills the registers
+at random and the client is not told which cards** — the screen then shows "Time's up" with the five registers as hidden
+"?" slots and says so, instead of empty slots that would look as if nothing was programmed. The same happens when a player
+comes back to a turn they had already locked in. Showing the actual cards needs a `ProgramFilledIn` message (4.6), which
+is still to be added. `ScreenSnapshot` (`lwjgl3/src/test`, a dev tool run by hand) builds the game screen from canned
+messages in six states (placing, ready, locked registers, locked in, powered down, time's up) and writes PNGs, since most
+of these are hard to reach by playing. `GameScreenDriver` (same folder, in the package of the screens) drives the real
+screen with simulated clicks and canned messages and checks placing, taking back, confirming, a refused request, the menu
+and the way back to the lobby after the game.
 
 ### 4.4 Audio
 
@@ -853,8 +877,7 @@ draws a dashed one; the lobby has no "leave" confirmation (leaving costs nothing
 **A dropped connection in the lobby ends the seat** (the session removes a disconnected player in the lobby, so there is
 no reconnect and no grace period): the player is sent back to the connect screen with a dialog. The "Connection lost"
 dialog with reconnect attempts belongs to running games only. After `GameStarted` the lobby hands the connection, with
-the messages that arrived behind the start message, to the next screen; a `GameStartedScreen` placeholder stands in
-until the game screen is built. The lobby never closes the connection when it is disposed, only when the player leaves.
+the messages that arrived behind the start message, to the game screen (4.3). The lobby never closes the connection when it is disposed, only when the player leaves.
 
 ### 5.2 Controls
 
@@ -898,10 +921,12 @@ no UI and is where the test value is:
   couldn't-join dialogs, the background `ConnectionAttempt`, remembered address and name (`SettingsStore`, in
   `~/.robot-rampage/client-settings.json`), and a lobby placeholder. Slice 2 is **done**: the Lobby screen (`LobbyView` decides what it shows), chips, the
   pill switch, toasts, the robot and belt images, the redone (centered) Startup screen with the belt and robots, and the
-  `GameStartedScreen` placeholder. Slice 3 is **done**: the static board renderer (4.1), shown for now on the
-  `GameStartedScreen` placeholder with every robot on its start square. The Settings button on the startup screen
-  is disabled until the Settings dialog exists. Still to come: programming UI, Resolution with
-  the animation queue, Game Over, the remaining dialogs and toasts, and the PNG/atlas pipeline for the drawings.
+  game-screen placeholder. Slice 3 is **done**: the static board renderer (4.1). Slice 4 is **done**: the programming
+  half of the game screen (4.3): `GameModel`/`ProgramDraft` (libGDX-free, tested, and checked against the real server), the
+  cards and register widgets, players, robot and program panels, the Menu, Leave and Game over dialogs. The Settings button on the startup screen
+  is disabled until the Settings dialog exists. Still to come: Resolution with
+  the animation queue, the Game Over screen, the respawn-facing, power-down and eliminated dialogs, drag and drop, the
+  "time's up" banner, reconnecting a dropped client,  and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
   toggle, animations) and a board that uses pushers and crushers. (Multiple

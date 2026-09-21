@@ -48,6 +48,7 @@ public final class UiKit implements Disposable {
     private final TextField.TextFieldStyle fieldStyle;
     private final TextField.TextFieldStyle fieldErrorStyle;
     private final Map<String, Texture> images = new HashMap<>();
+    private final Map<String, NinePatchDrawable> shapeCache = new HashMap<>();
 
     /**
      * Generates the fonts and builds the shared shapes.
@@ -173,9 +174,23 @@ public final class UiKit implements Disposable {
      */
     public Table well() {
         Table table = new Table();
-        table.setBackground(shapes.rounded(Theme.SURFACE, Theme.LINE, Theme.BORDER_HAIRLINE, Theme.RADIUS_MD, null, 0,
-            false));
+        table.setBackground(rounded(Theme.SURFACE, Theme.LINE, Theme.BORDER_HAIRLINE, Theme.RADIUS_MD));
         return table;
+    }
+
+    /**
+     * Returns a stretchable rounded shape without a shadow. Shapes with the same parameters are built once and shared, so
+     * a screen that rebuilds its widgets often does not pile up textures.
+     *
+     * @param fill        the fill color
+     * @param border      the border color
+     * @param borderWidth the border width in pixels, 0 for none
+     * @param radius      the corner radius in pixels
+     * @return the drawable, owned by this kit; do not change its padding
+     */
+    public NinePatchDrawable rounded(Color fill, Color border, int borderWidth, int radius) {
+        String key = fill + "/" + border + "/" + borderWidth + "/" + radius;
+        return shapeCache.computeIfAbsent(key, k -> shapes.rounded(fill, border, borderWidth, radius, null, 0, false));
     }
 
     /**
@@ -209,8 +224,7 @@ public final class UiKit implements Disposable {
         Color border = kind == ChipKind.OUTLINE ? Theme.LINE_STRONG : fill;
         Color textColor = kind == ChipKind.OUTLINE ? Theme.INK_MUTED : Theme.ON_PRIMARY;
         Table chip = new Table();
-        chip.setBackground(shapes.rounded(fill, border, kind == ChipKind.OUTLINE ? Theme.BORDER_CONTROL : 0,
-            CHIP_HEIGHT / 2, null, 0, false));
+        chip.setBackground(rounded(fill, border, kind == ChipKind.OUTLINE ? Theme.BORDER_CONTROL : 0, CHIP_HEIGHT / 2));
         chip.padBottom(SHAPE_RESERVE);
         chip.add(label(text, Theme.TextStyle.CHIP, textColor)).padLeft(Theme.SPACE_3).padRight(Theme.SPACE_3);
         return chip;
@@ -296,5 +310,6 @@ public final class UiKit implements Disposable {
         pixel.dispose();
         images.values().forEach(Texture::dispose);
         images.clear();
+        shapeCache.clear();
     }
 }

@@ -1,0 +1,431 @@
+package de.mkoehler.robotrampage.client.game;
+
+import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.board.Direction;
+import de.mkoehler.robotrampage.board.LoadedBoard;
+import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.client.game.GameModel.PlayerRow;
+import de.mkoehler.robotrampage.client.game.GameModel.PlayerStatus;
+import de.mkoehler.robotrampage.client.game.GameModel.Stage;
+import de.mkoehler.robotrampage.net.messages.GameOver;
+import de.mkoehler.robotrampage.net.messages.GameStarted;
+import de.mkoehler.robotrampage.net.messages.HandDealt;
+import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
+import de.mkoehler.robotrampage.net.messages.PlayerConnection;
+import de.mkoehler.robotrampage.net.messages.PlayerInfo;
+import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.StateSnapshot;
+import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerUpdate;
+import de.mkoehler.robotrampage.net.messages.TurnResolved;
+import de.mkoehler.robotrampage.net.messages.TurnStarted;
+import de.mkoehler.robotrampage.rules.Card;
+import de.mkoehler.robotrampage.rules.CardType;
+import de.mkoehler.robotrampage.rules.GameEvent;
+import de.mkoehler.robotrampage.rules.LoggedEvent;
+import de.mkoehler.robotrampage.rules.Robot;
+import de.mkoehler.robotrampage.rules.RobotStatus;
+import de.mkoehler.robotrampage.rules.SubPhase;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * Verifies that {@link GameModel} follows a game the way the server tells it, and what it says about the turn on the way.
+ *
+ * @author Mario Koehler
+ */
+class GameModelTest {
+
+    private static final int ME = 1;
+
+    private static List<Card> cards(int count) {
+        List<Card> cards = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            cards.add(new Card(CardType.MOVE_1, 100 + i));
+        }
+        return cards;
+    }
+
+    private static GameModel newGame() {
+        LoadedBoard board = BoardLoader.loadResource("boards/proving-grounds.json");
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", false, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        return new GameModel(new GameStarted(BoardLoader.toJson(board.definition()), players, ME));
+    }
+
+    private static TurnStarted turn(int number, List<Integer> awaited) {
+        return new TurnStarted(number, List.of(), awaited, 90);
+    }
+
+    private static GameModel programming(int locked) {
+        GameModel model = newGame();
+        model.apply(turn(1, List.of(0, 1, 2)));
+        int handSize = 9 - (locked == 0 ? 0 : locked + 4);
+        model.apply(new HandDealt(1, cards(handSize), cards(locked), false, false));
+        return model;
+    }
+
+    /**
+     * A new game has every robot on its start square with full lives, so the panels have something to show before the
+     * server has sent any state.
+     */
+    @Test
+    void aNewGameStartsWithFullLivesOnTheStartSquares() {
+        GameModel model = newGame();
+
+        assertEquals(Stage.WAITING, model.stage());
+        assertEquals(3, model.robots().size());
+        RobotState robot = model.myRobot();
+        assertEquals(Robot.STARTING_LIVES, robot.lives());
+        assertEquals(0, robot.damage());
+        assertEquals(model.board().startSquares().get(ME).position(), robot.position());
+        assertEquals("Bo", model.nameOf(ME));
+        assertEquals("1 of 3", model.nextFlagText());
+    }
+
+    /**
+     * A turn that awaits this player starts the programming stage once the cards arrive, with a clock that counts down from
+     * the time the server gave.
+     */
+    @Test
+    void aTurnAndACardsStartTheProgramming() {
+        GameModel model = newGame();
+
+        model.apply(turn(4, List.of(0, 1, 2)));
+        assertEquals(Stage.PROGRAMMING, model.stage());
+        assertNull(model.draft(), "no cards yet");
+        assertEquals("Waiting for your cards.", model.confirmHint());
+        model.apply(new HandDealt(4, cards(9), List.of(), false, false));
+
+        assertNotNull(model.draft());
+        assertEquals(4, model.turn());
+        assertEquals("1:30", model.timeText());
+        assertEquals("Fill 5 more registers to confirm.", model.confirmHint());
+        assertFalse(model.canConfirm());
+    }
+
+    /**
+     * The clock runs down with the frames and is corrected by the server's timer message.
+     */
+    @Test
+    void theClockCountsDownAndTakesTheServersTime() {
+        GameModel model = programming(0);
+
+        model.tick(23.4f);
+        assertEquals("1:07", model.timeText());
+        assertEquals(66.6f / 90f, model.timeFraction(), 0.001f);
+        model.apply(new TimerUpdate(30));
+        assertEquals("0:30", model.timeText());
+        model.tick(100f);
+        assertEquals("0:00", model.timeText());
+    }
+
+    /**
+     * Once five cards are placed the program can be confirmed; confirming builds the message once and then waits for the
+     * server, and a refusal lets the player change the program and send it again.
+     */
+    @Test
+    void confirmingSendsTheProgramOnce() {
+        GameModel model = programming(0);
+        model.draft().hand().subList(0, 5).forEach(model.draft()::place);
+        assertTrue(model.canConfirm());
+        assertEquals("Your program is ready.", model.confirmHint());
+        model.setPowerDownNext(true);
+
+        SubmitProgram submit = model.submit();
+
+        assertEquals(List.of(100, 101, 102, 103, 104), submit.cardPriorities());
+        assertTrue(submit.powerDown());
+        assertEquals(1, submit.turn());
+        assertFalse(model.canConfirm(), "already sent");
+        assertThrows(IllegalStateException.class, model::submit);
+        model.submissionRefused();
+        assertTrue(model.canConfirm());
+        model.submit();
+        model.apply(new PlayerConfirmed(ME));
+        assertEquals(Stage.SUBMITTED, model.stage());
+    }
+
+    /**
+     * With two locked registers only three cards are needed, and the hint counts them.
+     */
+    @Test
+    void lockedRegistersReduceTheProgram() {
+        GameModel model = programming(2);
+
+        assertEquals(3, model.draft().freeRegisterCount());
+        assertEquals("Fill 3 more registers to confirm.", model.confirmHint());
+        model.draft().place(model.draft().hand().get(0));
+        model.draft().place(model.draft().hand().get(1));
+        assertEquals("Fill 1 more register to confirm.", model.confirmHint());
+    }
+
+    /**
+     * A robot with nine damage has all registers locked and an empty hand, and can confirm at once.
+     */
+    @Test
+    void aFullyLockedRobotCanConfirmAtOnce() {
+        GameModel model = newGame();
+        model.apply(turn(2, List.of(0, 1, 2)));
+
+        model.apply(new HandDealt(2, List.of(), cards(5), false, false));
+
+        assertEquals(Stage.PROGRAMMING, model.stage());
+        assertTrue(model.canConfirm());
+        assertEquals(List.of(), model.submit().cardPriorities());
+    }
+
+    /**
+     * An empty hand with free registers means the program was locked in before, as when a player returns to a running game.
+     */
+    @Test
+    void anEmptyHandMeansTheProgramIsAlreadyLockedIn() {
+        GameModel model = newGame();
+        model.apply(turn(3, List.of(0, 1, 2)));
+
+        model.apply(new HandDealt(3, List.of(), List.of(), false, false));
+
+        assertEquals(Stage.SUBMITTED, model.stage());
+        assertEquals(PlayerStatus.CONFIRMED, row(model, ME).status());
+    }
+
+    /**
+     * A powered-down robot is not awaited: the player sits out and can only say whether the robot stays down.
+     */
+    @Test
+    void aPoweredDownRobotSitsOut() {
+        GameModel model = newGame();
+        model.apply(turn(5, List.of(0, 2)));
+
+        model.apply(new HandDealt(5, List.of(), List.of(), false, true));
+
+        assertEquals(Stage.SITTING_OUT, model.stage());
+        assertTrue(model.isPoweredDownThisTurn());
+        model.setPowerDownNext(true);
+        assertEquals(new SubmitProgram(5, List.of(), true, null), model.announceStayingDown());
+    }
+
+    /**
+     * The players panel says who is thinking, who has confirmed and who is away, and takes lives and damage from the
+     * server's snapshot.
+     */
+    @Test
+    void thePlayerRowsFollowTheTurn() {
+        GameModel model = programming(0);
+        model.apply(new PlayerConfirmed(0));
+        model.apply(new PlayerConnection(2, false));
+        RobotState damaged = model.robots().get(0);
+        model.apply(new StateSnapshot(0, List.of(new RobotState(0, damaged.position(), damaged.facing(), 3, 2, 1,
+            damaged.archiveMarker(), RobotStatus.ACTIVE, false, false)), false, -1));
+
+        assertEquals(new PlayerRow(0, "Ann", false, 2, 3, PlayerStatus.CONFIRMED), row(model, 0));
+        assertEquals(new PlayerRow(1, "Bo", true, 3, 0, PlayerStatus.THINKING), row(model, 1));
+        assertEquals(PlayerStatus.AWAY, row(model, 2).status());
+        model.apply(new PlayerConnection(2, true));
+        assertEquals(PlayerStatus.THINKING, row(model, 2).status());
+    }
+
+    /**
+     * A robot that re-enters at the start of a turn stands on its new square with no damage and is active again.
+     */
+    @Test
+    void aRespawnMovesTheRobot() {
+        GameModel model = newGame();
+        RobotState old = model.myRobot();
+        model.apply(new StateSnapshot(1, List.of(new RobotState(ME, null, old.facing(), 10, 2, 1, old.archiveMarker(),
+            RobotStatus.DESTROYED, false, false)), false, -1));
+        LoggedEvent respawn = new LoggedEvent(0, SubPhase.RESPAWN,
+            new GameEvent.RobotRespawned(ME, new Position(4, 4), Direction.WEST));
+
+        model.apply(new TurnStarted(2, List.of(respawn), List.of(0, 1, 2), 90));
+
+        RobotState robot = model.myRobot();
+        assertEquals(new Position(4, 4), robot.position());
+        assertEquals(Direction.WEST, robot.facing());
+        assertEquals(0, robot.damage());
+        assertEquals(RobotStatus.ACTIVE, robot.status());
+        assertEquals(2, robot.lives());
+    }
+
+    /**
+     * The respawn facing goes out with the program only in the turn the robot re-entered.
+     */
+    @Test
+    void theRespawnFacingIsSentOnlyInTheTurnOfTheReentry() {
+        GameModel model = newGame();
+        model.apply(turn(2, List.of(0, 1, 2)));
+        model.apply(new HandDealt(2, cards(9), List.of(), true, false));
+        model.draft().hand().subList(0, 5).forEach(model.draft()::place);
+        model.chooseRespawnFacing(Direction.SOUTH);
+
+        assertEquals(Direction.SOUTH, model.submit().respawnFacing());
+
+        GameModel other = programming(0);
+        other.draft().hand().subList(0, 5).forEach(other.draft()::place);
+        other.chooseRespawnFacing(Direction.SOUTH);
+        assertNull(other.submit().respawnFacing());
+    }
+
+    /**
+     * A resolved turn moves the model to the resolving stage and keeps the events for whoever plays them back; the snapshot
+     * after it brings the new robot states.
+     */
+    @Test
+    void aResolvedTurnIsKept() {
+        GameModel model = programming(0);
+        TurnResolved resolved = new TurnResolved(1, List.of());
+
+        model.apply(resolved);
+
+        assertEquals(Stage.RESOLVING, model.stage());
+        assertEquals(resolved, model.lastResolved());
+        assertEquals(PlayerStatus.NONE, row(model, 0).status());
+    }
+
+    /**
+     * The end of the game is remembered with the winner and the final states.
+     */
+    @Test
+    void theGameCanEnd() {
+        GameModel model = programming(0);
+        RobotState winner = model.myRobot();
+
+        model.apply(new GameOver(ME, List.of(winner)));
+
+        assertEquals(Stage.OVER, model.stage());
+        assertEquals(ME, model.winnerRobotId());
+    }
+
+    /**
+     * Every change counts up the revision, so a screen knows when to redraw, and messages that do not concern the game
+     * change nothing.
+     */
+    @Test
+    void theRevisionCountsChanges() {
+        GameModel model = newGame();
+        int before = model.revision();
+
+        model.apply("not a game message");
+        assertEquals(before, model.revision());
+        model.apply(turn(1, List.of(0, 1, 2)));
+
+        assertEquals(before + 1, model.revision());
+    }
+
+    /**
+     * The texts of the screen follow the stage, the locks and the damage.
+     */
+    @Test
+    void theTextsOfTheScreen() {
+        GameModel model = newGame();
+        assertEquals("Get ready", model.headline());
+        model.apply(turn(1, List.of(0, 1, 2)));
+        model.apply(new HandDealt(1, cards(3), cards(2), false, false));
+
+        assertEquals("Program your robot", model.headline());
+        assertEquals("4, 5", model.lockedRegistersText());
+        assertEquals("Registers 4 and 5 are locked by damage. They repeat last turn's cards, so you fill 3 registers with 3 "
+            + "cards.", model.lockedHint());
+        assertEquals("Waiting for Ann and Cy", model.waitingForText());
+        model.apply(new PlayerConfirmed(0));
+        assertEquals("Waiting for Cy", model.waitingForText());
+        model.apply(new PlayerConfirmed(2));
+        assertEquals("Waiting for the turn to start", model.waitingForText());
+        assertEquals("9 cards (9 − 0)", model.handText());
+    }
+
+    /**
+     * One locked register and a fully locked robot are worded in the singular and as nothing to fill.
+     */
+    @Test
+    void lockedHintsInTheSingularAndWhenEverythingIsLocked() {
+        GameModel one = newGame();
+        one.apply(turn(1, List.of(0, 1, 2)));
+        one.apply(new HandDealt(1, cards(4), cards(1), false, false));
+        assertEquals("Register 5 is locked by damage. It repeats last turn's card, so you fill 4 registers with 4 cards.",
+            one.lockedHint());
+
+        GameModel all = newGame();
+        all.apply(turn(1, List.of(0, 1, 2)));
+        all.apply(new HandDealt(1, List.of(), cards(5), false, false));
+        assertEquals("1, 2, 3, 4, 5", all.lockedRegistersText());
+        assertTrue(all.lockedHint().endsWith("so there is nothing to fill: just confirm."));
+        assertEquals("", programming(0).lockedHint());
+        assertEquals("None", programming(0).lockedRegistersText());
+    }
+
+    /**
+     * When the server fills the registers because time ran out, the player was not the one who sent a program: the model says
+     * so, the registers are not shown as if the player had chosen them, and the title says time is up.
+     */
+    @Test
+    void aProgramFilledInByTheServerIsNotShownAsTheirs() {
+        GameModel model = programming(0);
+        model.draft().place(model.draft().hand().get(0));
+
+        model.apply(new PlayerConfirmed(ME));
+
+        assertEquals(Stage.SUBMITTED, model.stage());
+        assertFalse(model.programVisible());
+        assertEquals("Time's up", model.headline());
+        assertTrue(model.lockedInNote().startsWith("Time ran out"));
+    }
+
+    /**
+     * A program the player locked in themselves is shown, and the confirmation of the server does not turn it into a random
+     * fill.
+     */
+    @Test
+    void aProgramTheyLockedInIsShown() {
+        GameModel model = programming(0);
+        model.draft().hand().subList(0, 5).forEach(model.draft()::place);
+        model.submit();
+
+        model.apply(new PlayerConfirmed(ME));
+
+        assertTrue(model.programVisible());
+        assertEquals("Program locked in", model.headline());
+        assertTrue(model.lockedInNote().startsWith("A confirmed program is final"));
+    }
+
+    /**
+     * A refused program is not treated as sent, so the registers show again as the player's own only once a program is
+     * really locked in.
+     */
+    @Test
+    void aRefusedProgramIsNotVisible() {
+        GameModel model = programming(0);
+        model.draft().hand().subList(0, 5).forEach(model.draft()::place);
+        model.submit();
+        model.submissionRefused();
+
+        assertFalse(model.programVisible());
+    }
+
+    /**
+     * A program that was locked in before the player came back has hidden cards, and the note says so.
+     */
+    @Test
+    void aProgramLockedInBeforeComingBackIsHidden() {
+        GameModel model = newGame();
+        model.apply(turn(3, List.of(0, 1, 2)));
+        model.apply(new HandDealt(3, List.of(), List.of(), false, false));
+
+        assertFalse(model.programVisible());
+        assertTrue(model.lockedInNote().startsWith("Your program was locked in before"));
+        assertEquals("Program locked in", model.headline());
+    }
+
+    private static PlayerRow row(GameModel model, int seat) {
+        return model.playerRows().stream().filter(row -> row.seat() == seat).findFirst().orElseThrow();
+    }
+}

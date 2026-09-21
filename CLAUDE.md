@@ -22,8 +22,8 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-3 (client shell, Startup,
-Connect, Lobby, static board renderer) done** — 289 unit tests in `core` plus 10 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-4 (client shell, Startup,
+Connect, Lobby, static board renderer, programming screen) done** — 317 unit tests in `core` plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -51,7 +51,7 @@ were **confirmed as decisions** by the owner — build them as drawn.
 that blocks (connecting, disconnecting) runs off the render thread inside `ConnectionAttempt`, whose outcomes are only
 drained by `update()` on the render thread; screens read `ConnectFlow`, never a captured screen reference from another
 thread. `client.connect` and `client.settings` stay libGDX-free (`ArchitectureTest`), which is why they have unit tests and the
-screens do not. The Settings button is disabled (no Settings dialog yet); `GameStartedScreen` is a placeholder for the game screen. **Lobby (slice 2):** `client.lobby.LobbyView` (libGDX-free, tested) decides
+screens do not. The Settings button is disabled (no Settings dialog yet); `GameScreen` is the game screen (programming half only; resolution is not animated yet). **Lobby (slice 2):** `client.lobby.LobbyView` (libGDX-free, tested) decides
 rows/chips/Start enablement and mirrors `GameSession.startGame` exactly (host + `minPlayers` + everyone *but the host* ready);
 keep it in step with the server. A `LobbyScreen` never disconnects in `dispose()` (the link moves on to the next screen,
 and disposal is deferred a frame) — only its explicit leave path does. Shapes from `Theme.Shapes` are **3 px taller than they
@@ -68,7 +68,14 @@ classpath with `mvn -pl lwjgl3 dependency:build-classpath -Dmdep.includeScope=te
 it flips the read-back rows itself; pass a board *file path* instead of a resource, e.g.
 `lwjgl3/src/test/resources/renderer-probe.json`, to see pushers/crushers/multi-beam lasers, which `proving-grounds` has
 none of). Not yet drawn: belt corner pieces, damage tags, program preview, archive markers.
-**Next: M4 slice 4**, the programming UI (players panel, register slots, hand of cards), then the animation queue — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
+**Programming screen (slice 4):** `client.game` (`GameModel`, `ProgramDraft`, `CardLook`; libGDX-free, tested, ArchUnit-guarded) +
+`GameScreen`, `CardView`, `ProgressPill`. Locked registers are the highest-numbered; send only free registers; nine damage confirms an
+empty program. Rebuilding widgets often? Use `UiKit.rounded(...)` (cached), never `shapes.rounded` in a rebuild loop (it leaks a texture
+each call). **Server-filled programs (timeout, squeeze, reconnect) are shown as hidden "?" slots** (the client is not told the cards; needs a
+`ProgramFilledIn` message). **Run `GameScreenDriver`** (`lwjgl3/src/test`, package `client.screen`, same classpath recipe) after changing
+`GameScreen`: it clicks through the real widgets on a hidden window and stops at the first wrong thing. **Look at states you cannot reach by playing with `ScreenSnapshot`** (`lwjgl3/src/test`, same classpath recipe as
+`BoardSnapshot`; writes `game-*.png`). Cards/icons PNGs: `tools/design-import/rasterize.js` into `assets/cards`, `assets/icons`.
+**Next: M4 slice 5**, Resolution (play back `TurnResolved` with the animation queue), then Game Over, respawn/power-down/eliminated dialogs — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is

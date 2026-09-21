@@ -186,7 +186,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         server.link().poll(this);
         if (started != null && !closed) {
             closed = true;
-            game.setScreen(new GameStartedScreen(game, server, started, afterStart));
+            game.setScreen(new GameScreen(game, server, address, started, afterStart));
         }
     }
 
@@ -258,8 +258,8 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
      */
     private Table occupiedRow(LobbyView.Row row) {
         Table line = new Table();
-        line.setBackground(ui.shapes().rounded(Theme.SURFACE_RAISED, row.you() ? Theme.ACCENT : Theme.LINE,
-            row.you() ? Theme.BORDER_HEAVY : Theme.BORDER_HAIRLINE, Theme.RADIUS_LG, null, 0, false));
+        line.setBackground(ui.rounded(Theme.SURFACE_RAISED, row.you() ? Theme.ACCENT : Theme.LINE,
+            row.you() ? Theme.BORDER_HEAVY : Theme.BORDER_HAIRLINE, Theme.RADIUS_LG));
         line.padLeft(20f).padRight(20f).padBottom(UiKit.SHAPE_RESERVE);
         line.add(ui.label(String.valueOf(row.seat() + 1), Theme.TextStyle.HEADING, Theme.INK_MUTED)).width(32f);
         Image robot = new Image(ui.image(RobotLook.picture(row.seat())));
@@ -289,8 +289,8 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
      */
     private Table freeRow(LobbyView.Row row) {
         Table line = new Table();
-        line.setBackground(ui.shapes().rounded(new Color(0f, 0f, 0f, 0f), Theme.LINE_STRONG, Theme.BORDER_CONTROL,
-            Theme.RADIUS_LG, null, 0, false));
+        line.setBackground(ui.rounded(new Color(0f, 0f, 0f, 0f), Theme.LINE_STRONG, Theme.BORDER_CONTROL,
+            Theme.RADIUS_LG));
         line.padLeft(20f).padRight(20f).padBottom(UiKit.SHAPE_RESERVE);
         line.add(ui.label(String.valueOf(row.seat() + 1), Theme.TextStyle.HEADING, Theme.INK_MUTED)).width(32f);
         line.add(ui.label("Waiting for a player…", Theme.TextStyle.BODY_LARGE, Theme.INK_MUTED)).expandX().left()

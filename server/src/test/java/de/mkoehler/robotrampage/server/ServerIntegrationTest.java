@@ -6,6 +6,7 @@ import de.mkoehler.robotrampage.client.connect.ConnectFlow;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ConnectionAttempt;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
+import de.mkoehler.robotrampage.client.game.GameModel;
 import de.mkoehler.robotrampage.client.lobby.LobbyView;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkClient;
@@ -427,5 +428,66 @@ class ServerIntegrationTest {
 
         ann.send(new StartGameRequest());
         assertNotNull(ann.take(GameStarted.class));
+    }
+
+    /**
+     * Two clients follow a whole turn with the game model of the client: they get their cards, place five each, lock them
+     * in, see the turn resolved and are dealt the cards of the next turn. This checks the model against the real server, in
+     * particular that a program built by the model is accepted and that the stages come in the order the screen expects.
+     *
+     * @throws Exception on any failure
+     */
+    @Test
+    void theGameModelFollowsAWholeTurnOnTheRealServer() throws Exception {
+        TestClient ann = connect("Ann", null);
+        int annSeat = ann.take(HandshakeResponse.class).getSeat();
+        TestClient bo = connect("Bo", null);
+        int boSeat = bo.take(HandshakeResponse.class).getSeat();
+        bo.send(new SetReady(true));
+        LobbyState lobby = ann.take(LobbyState.class);
+        while (!new LobbyView(lobby, annSeat).canStart()) {
+            lobby = ann.take(LobbyState.class);
+        }
+        ann.send(new StartGameRequest());
+        GameModel annModel = new GameModel(ann.take(GameStarted.class));
+        GameModel boModel = new GameModel(bo.take(GameStarted.class));
+        assertEquals(annSeat, annModel.mySeat());
+        assertEquals(boSeat, boModel.mySeat());
+
+        programTurn(ann, annModel, 1);
+        programTurn(bo, boModel, 1);
+
+        for (TestClient client : List.of(ann, bo)) {
+            GameModel model = client == ann ? annModel : boModel;
+            model.apply(client.take(PlayerConfirmed.class));
+            model.apply(client.take(PlayerConfirmed.class));
+            model.apply(client.take(TurnResolved.class));
+            assertEquals(GameModel.Stage.RESOLVING, model.stage());
+            model.apply(client.take(StateSnapshot.class));
+            model.apply(client.take(TurnStarted.class));
+            model.apply(client.take(HandDealt.class));
+            assertEquals(GameModel.Stage.PROGRAMMING, model.stage());
+            assertEquals(2, model.turn());
+            assertEquals(5, model.draft().freeRegisterCount());
+        }
+        assertEquals(2, annModel.robots().size());
+    }
+
+    /**
+     * Plays the programming part of a turn for one client through its model: takes the turn start and the cards, places
+     * five cards and sends the program.
+     *
+     * @param client the client
+     * @param model  its model
+     * @param turn   the turn number
+     */
+    private static void programTurn(TestClient client, GameModel model, int turn) {
+        model.apply(client.take(TurnStarted.class));
+        model.apply(client.take(HandDealt.class));
+        assertEquals(GameModel.Stage.PROGRAMMING, model.stage());
+        assertEquals(turn, model.turn());
+        model.draft().hand().subList(0, 5).forEach(model.draft()::place);
+        assertTrue(model.canConfirm());
+        client.send(model.submit());
     }
 }
