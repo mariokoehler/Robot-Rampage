@@ -414,14 +414,20 @@ netcode gotchas in its `CLAUDE.md` do not carry over.
     rules engine queries (with its `Board.Builder`), and the board *format*
     (`BoardDefinition`, JSON loading, validation, still to come). Also pure Java;
     `board` never depends on `rules`.
-  - `net` — `MessageRegistry`, wire messages, `NetworkServer`/`NetworkClient`
-    wrappers, `AppVersion`. No libGDX.
+  - `net` — `MessageRegistry`, the wire messages (`net.messages`), the thin
+    `NetworkServer`/`NetworkClient` wrappers around KryoNet (they only enqueue on
+    KryoNet's threads and hand events out via `poll`, 3.5), `AppVersion`. No libGDX.
+  - `session` — the protocol-agnostic game-session state machine (`GameSession`,
+    `SessionConfig`, `Outbox`; 3.5). Depends on `rules`, `board` and the message
+    classes only — never on libGDX, KryoNet or the client (`ArchitectureTest`).
   - `client` (and sub-packages) — screens, board renderer, animation, UI. Uses
     libGDX.
 - `lwjgl3` — desktop client launcher (`Lwjgl3Launcher`, `StartupHelper`),
   packaging, natives.
 - `server` — dedicated server: `ServerLauncher` + `GameServer` on the libGDX
-  headless backend, game sessions, autosave.
+  headless backend, and `ServerController`, which maps connections to seats and moves
+  messages between the network and the session. (Autosave, 3.10, is not implemented
+  yet.)
 - No `dev-tools` module until a concrete need appears (a board editor is the
   likely first one).
 
@@ -466,25 +472,77 @@ fails the build on a violation.
 - **Events are also the test oracle:** unit tests assert on the event list (and
   the final state), not on internals.
 
-### 3.5 Networking and protocol
+### 3.5 Networking, threading and protocol
 
 KryoNet over **TCP only**. `MessageRegistry` is the single place both ends
 register wire classes, in a fixed append-only order (`MessageRegistryTest`
 checks two independent `Kryo` instances agree on every id and that every message
-round-trips). Implemented so far: `HandshakeRequest`/`HandshakeResponse` with the
-build-version check (`AppVersion`, filtered from the Maven version).
+round-trips, and that every `GameEvent` type is registered).
 
-Turn protocol **(unconfirmed, to be refined when implemented)**:
+**Threading contract (decided, M3).** KryoNet invokes its `connected`/
+`disconnected`/`received` callbacks on its *own network thread*, and the rules
+engine and the session are not thread-safe. Therefore: **network callbacks only
+enqueue** (onto a `ConcurrentLinkedQueue` inside `NetworkServer`/`NetworkClient`);
+the owning loop — the headless server's `render()`, the client's `render()` —
+**drains that queue on its own thread** and is the only thread that ever touches
+the session (server) or the client state. There is no locking anywhere in the
+session. Consequence worth stating: a disconnect can never interleave with the
+middle of a session operation; it is just another queued event handled between
+two operations.
+
+**Session = a protocol-agnostic state machine (decided, M3).** `GameSession`
+(`core`, package `session`, no libGDX, no sockets, no threads) is driven by
+commands (`join`, `attach`, `disconnect`, `setReady`, `startGame`,
+`submitProgram`, `tick`) and emits messages through an `Outbox`
+(`send(seat, message)` / `broadcast(message)`). Time comes from an **injected
+clock** (`LongSupplier`), never from `System.currentTimeMillis()`, so every timer
+in 2.13 is tested by advancing a fake clock. The server module only maps
+connections to seats and moves messages (`ServerController`).
+
+**Seats.** A player's *seat* (0..7, the lowest free one at join) is also its robot
+id and picks its start square and colour: fixed for the whole game (7). Robot ids
+of a game can therefore be non-contiguous.
+
+**Lobby and game flow (one game per server, 7).** `LOBBY` → host starts (needs
+≥ 2 players, everyone else ready) → `PROGRAMMING` ↔ `RESOLVING` (a pause so clients can
+animate; *(unconfirmed)* default 2 s + 25 ms per event, at most 20 s) → `GAME_OVER` (back to
+`LOBBY` after 15 s *(unconfirmed)*). The first player to join is the host. Back in the lobby,
+players who dropped are forgotten, the others keep their seats and their **session tokens**
+and must ready up again; the host is still whoever joined first among them. A token is only
+ever forgotten with its player, so it stays valid as long as the server process runs
+(*(unconfirmed)* — no expiry yet; §7 only decided that tokens exist).
+
+**Reconnect.** `HandshakeResponse` hands out a random **session token**;
+`HandshakeRequest` may present one. A valid token re-attaches the player to its
+seat at any time before the grace period (2.13) ends, whatever phase the game is
+in, and the session **resyncs** them: `GameStarted`, a `StateSnapshot`, the
+current turn's status and — if they still owe a program — their `HandDealt` and the
+remaining time. Unknown or absent tokens can only join in the lobby.
+
+**Respawn facing.** A robot re-enters with the direction it had; its player may
+change that in the same `SubmitProgram` (`respawnFacing`), which the session
+applies before execution — equivalent to choosing at respawn, because nothing
+happens in between. Only honoured for robots that respawned this turn.
+
+**Randomness in the session** (timeout random-fill) comes from a seeded stream
+derived from the game seed and a fill counter — like the deck, never a live
+`Random` — so a game stays reproducible and resumable (3.10).
 
 | Direction | Message | Purpose |
 |---|---|---|
-| S→C | `GameStarted` | Board (as JSON text, 3.6), players, seat/robot assignment, seed *not* included. |
-| S→C (per player) | `HandDealt` | That player's cards only. |
-| C→S | `SubmitProgram` | 5 card ids (locked registers excluded) + power-down intent. |
-| S→all | `PlayerConfirmed` | *That* a player locked in — never the cards. |
-| S→all | `TurnResolved` | Full reveal + the ordered `GameEvent` list for the turn. |
-| S→all | `StateSnapshot` | Authoritative state after the turn (hands excluded), for resync/rejoin. |
-| S→all | `GameOver` | Winner, final standings. |
+| C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name, optional session token; the response carries the seat and token. |
+| S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name. |
+| C→S | `SetReady`, `StartGameRequest` | Lobby actions (start: host only). |
+| S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
+| S→all | `TurnStarted` | Turn number, the respawn events, who must program, the time limit. |
+| S→each | `HandDealt` | That player's cards only, their locked-register cards, whether they may pick a respawn facing, whether they are powered down. |
+| C→S | `SubmitProgram` | Card priorities (one per unlocked register, in order), power-down intent, optional respawn facing. |
+| S→each | `RequestRejected` | Why a request was refused (an invalid program, starting too early, ...); the player may try again. |
+| S→all | `PlayerConfirmed`, `TimerUpdate` | *That* a player locked in (never the cards); the remaining time when the last-player squeeze starts. |
+| S→all | `TurnResolved` | The ordered `LoggedEvent` list of the turn. |
+| S→all | `StateSnapshot` | Public state of every robot after the turn (no hands), for resync and as a check. |
+| S→all | `PlayerConnection`, `PlayerLeft` | A player dropped or came back; a player's grace period ended and their robot was removed. |
+| S→all | `GameOver` | Winner and final robot states. |
 
 **Clients replay the event list; they do not re-simulate.** (The alternative —
 send programs and let every client run the rules — was rejected: a rules bug or a
@@ -492,8 +550,8 @@ version skew would silently desync clients.) The engine still lives in `core`, s
 the client can *also* use it locally for a "preview my program" ghost path in the
 programming UI, which is a pure convenience and never authoritative.
 
-Buffer sizes in `NetworkConstants` are placeholders (a resolved turn with 8
-robots is the largest message and must be measured once implemented).
+Buffer sizes in `NetworkConstants` are sized from measurement: a test serialises the
+largest turns the fuzz test produces and asserts they fit.
 
 ### 3.6 Board format
 
@@ -733,9 +791,15 @@ no UI and is where the test value is:
 - **M2 — Board format. Done.** `BoardDefinition` + Jackson loading + `BoardValidator`
   + canonical export (3.6); first original board `assets/boards/proving-grounds.json`
   (2.11); `TurnFuzzTest` plays random full games on it.
-- **M3 — Server session + protocol.** Session state machine (deal → program →
-  execute), timer/timeout/disconnect handling (2.13), `NetworkServer`/`Client`,
-  integration test on localhost.
+- **M3 — Server session + protocol. Done** (except autosave, below). `GameSession`
+  state machine with an injected clock (lobby, programming, resolving, game over;
+  timer, last-player squeeze, random fill, disconnect/reconnect with resync, grace
+  expiry and forfeit — 2.13), the protocol messages (3.5), `NetworkServer`/
+  `NetworkClient`, `ServerController`, and `ServerIntegrationTest`, which plays whole
+  turns over real sockets with real threads. *Still open from the design:*
+  **autosave** of the game state after every turn (3.10) — needs a JSON form of
+  `GameState` (robots, deck order and shuffle counter, the session's fill counter) and a
+  resume path; planned as its own slice.
 - **M4 — Playable client.** Connect screen, board renderer, programming UI,
   animation queue. First real playtest.
 - **M5 — Second wave in the client and on the boards.** The engine already

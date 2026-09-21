@@ -11,10 +11,11 @@ notes for the AI-assisted development process.
 
 > [!WARNING]
 > **This project is a work in progress and is not playable yet.** So far the
-> repository contains only the project skeleton (a client window that shows a
-> title, and a server that starts) and the game design document. There is no
-> gameplay, no release and no stable API. Everything, including the design,
-> may change without notice.
+> repository contains the game design document, a complete headless rules engine,
+> the board format with a first board, the network protocol and a dedicated
+> server that can host a game. There is **no playable client yet** (the client
+> window only shows a title), no release and no stable API. Everything,
+> including the design, may change without notice.
 
 ## Building from source
 

@@ -59,6 +59,28 @@ class ArchitectureTest {
     }
 
     /**
+     * The session state machine is protocol- and transport-agnostic: it may use the message classes and the rules, but
+     * never libGDX, the client or KryoNet itself, which is what keeps it testable with a fake clock and no sockets.
+     */
+    @Test
+    void sessionStaysFreeOfTransportAndClient() {
+        noClasses().that().resideInAPackage("de.mkoehler.robotrampage.session..")
+            .should().dependOnClassesThat().resideInAnyPackage(
+                "com.badlogic..", "com.esotericsoftware.kryonet..", "de.mkoehler.robotrampage.client..")
+            .check(productionClasses);
+    }
+
+    /**
+     * The rules and the board must not depend on the session that drives them.
+     */
+    @Test
+    void rulesAndBoardDoNotKnowTheSession() {
+        noClasses().that().resideInAnyPackage("de.mkoehler.robotrampage.rules..", "de.mkoehler.robotrampage.board..")
+            .should().dependOnClassesThat().resideInAPackage("de.mkoehler.robotrampage.session..")
+            .check(productionClasses);
+    }
+
+    /**
      * The network layer must not depend on the client, so the server can use it
      * without pulling in screens.
      */

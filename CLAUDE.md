@@ -22,7 +22,8 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine) and M2 (board format) done** — 177 unit tests. A whole turn can be resolved headlessly:
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done** — 218 unit tests in
+`core` plus 6 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -34,7 +35,11 @@ picture in design.md 2.11 — that picture is *generated* by `BoardPicture` (tes
 `DesignDocPictureTest` fails if design.md no longer shows the current board; its failure message
 contains the new picture to paste in). `TurnFuzzTest` plays 30 random full games on it and checks engine
 invariants every turn — keep it passing, and extend its invariants when rules change.
-**Next: M3** (server session + protocol, design.md 6). After M1: M2 board
+The server side is complete and playable by any client that speaks the protocol (design.md 3.5): `ServerLauncher`
+starts it, `ServerController` (server module) wires `NetworkServer` ↔ `GameSession` (core `session` package).
+**Not done from M3: autosave** (design.md 3.10). **Next: M4**, the playable client (connect screen, board renderer,
+programming UI, animation queue) — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
+Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
 not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed
@@ -160,6 +165,21 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   bean-style classes of the StarWars config files: they are immutable data, and Jackson 2.22 reads
   records directly. Strict loading (unknown properties fail) is deliberate. Board coordinates in
   JSON use the enum names of `SquareFeature`/`Direction` (`GEAR_CLOCKWISE`, `NORTH`, ...).
+- **Threading contract (design.md 3.5):** KryoNet callbacks only enqueue; the owning loop drains via
+  `NetworkServer.poll`/`NetworkClient.poll` on ITS thread; the session and the rules engine are never touched from
+  another thread and have no locks. `ServerIntegrationTest` runs a dedicated loop thread + KryoNet threads + client
+  threads at once — keep it that way, don't call session methods directly from a test thread there.
+- **Session tests use a fake clock** (`GameSession` takes a `LongSupplier`) and a recording `Outbox` — never sleep in a
+  session test. Use the 5×30 test board (no robot can reach the flag in one turn), otherwise a lucky random program
+  ends the game in turn 1 and your test measures the wrong thing. To check card conservation *between* turns remember
+  the next hands are already dealt (`cardsInPlay` + hands = 84); a disconnected player is always auto-filled, so a
+  player is never removed while owing a hand.
+- **M4 must remember:** `NetworkClient.connect` BLOCKS (up to 5 s) — never call it from the render thread (StarWars'
+  socket-stall lesson); use a background thread and hand the result over via the poll queue. Nothing enforces this in code.
+- **The game seed** is logged by the server at startup (`game seed N`) and can be given as the 2nd launcher argument
+  (`ServerLauncher [port] [seed]`); put it in any bug report — random fills and shuffles are reproducible from it.
+- **Modules:** run `mvn install -pl core -am -DskipTests` before `mvn -pl server test` (server resolves core from
+  `~/.m2`, see Build system).
 - **Rule-test gotcha:** a test whose expected result contradicts the rules is usually a
   wrong test — re-derive from design.md before "fixing" the engine (e.g. entering a belt
   square bends a robot by the *turn between heading and belt direction*, not by the

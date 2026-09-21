@@ -19,19 +19,18 @@ public final class NetworkConstants {
     public static final int TCP_PORT = 45725;
 
     /**
-     * Size, in bytes, of the buffer used to write queued objects to the
-     * network. A placeholder sized generously for the per-turn resolution log;
-     * to be revisited once real message sizes are known.
+     * Size, in bytes, of the buffer used to write queued objects to the network. Several messages can
+     * be queued at once, so it is a multiple of {@link #OBJECT_BUFFER_SIZE}.
      */
-    public static final int WRITE_BUFFER_SIZE = 65536;
+    public static final int WRITE_BUFFER_SIZE = 262144;
 
     /**
-     * Size, in bytes, of the buffer used to serialize or deserialize a single
-     * object. Must be at least as large as the biggest single message, which is
-     * expected to be the per-turn resolution log; a placeholder to be
-     * revisited together with {@link #WRITE_BUFFER_SIZE}.
+     * Size, in bytes, of the buffer used to serialize or deserialize a single object. Must be larger
+     * than the biggest single message, which is a {@code TurnResolved} with the events of a whole
+     * turn; {@code WireProtocolTest} serialises the biggest turns a randomised game produces and
+     * asserts they fit with plenty of room to spare.
      */
-    public static final int OBJECT_BUFFER_SIZE = 16384;
+    public static final int OBJECT_BUFFER_SIZE = 65536;
 
     /**
      * Maximum time, in milliseconds, a client waits for a connection attempt to

@@ -25,5 +25,11 @@ public enum DestructionCause {
     /**
      * It stood on an active crusher.
      */
-    CRUSHER
+    CRUSHER,
+
+    /**
+     * Its player left the game for good, for example because they stayed disconnected past the
+     * reconnect grace period (design.md 2.13).
+     */
+    FORFEIT
 }

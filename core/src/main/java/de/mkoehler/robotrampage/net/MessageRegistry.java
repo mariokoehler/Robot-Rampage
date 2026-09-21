@@ -3,8 +3,25 @@ package de.mkoehler.robotrampage.net;
 import com.esotericsoftware.kryo.Kryo;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.net.messages.GameOver;
+import de.mkoehler.robotrampage.net.messages.GameStarted;
+import de.mkoehler.robotrampage.net.messages.HandDealt;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
+import de.mkoehler.robotrampage.net.messages.LobbyState;
+import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
+import de.mkoehler.robotrampage.net.messages.PlayerConnection;
+import de.mkoehler.robotrampage.net.messages.PlayerInfo;
+import de.mkoehler.robotrampage.net.messages.PlayerLeft;
+import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.SetReady;
+import de.mkoehler.robotrampage.net.messages.StartGameRequest;
+import de.mkoehler.robotrampage.net.messages.StateSnapshot;
+import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TimerUpdate;
+import de.mkoehler.robotrampage.net.messages.TurnResolved;
+import de.mkoehler.robotrampage.net.messages.TurnStarted;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
 import de.mkoehler.robotrampage.rules.DestructionCause;
@@ -12,8 +29,11 @@ import de.mkoehler.robotrampage.rules.GameEvent;
 import de.mkoehler.robotrampage.rules.LaserSource;
 import de.mkoehler.robotrampage.rules.LoggedEvent;
 import de.mkoehler.robotrampage.rules.MoveCause;
+import de.mkoehler.robotrampage.rules.RobotStatus;
 import de.mkoehler.robotrampage.rules.RotationCause;
 import de.mkoehler.robotrampage.rules.SubPhase;
+
+import java.util.ArrayList;
 
 /**
  * Registers every class sent over the wire with a {@link Kryo} instance, in a
@@ -33,10 +53,23 @@ import de.mkoehler.robotrampage.rules.SubPhase;
  */
 public final class MessageRegistry {
 
+    private static final String PROTOCOL_PACKAGE_PREFIX = "de.mkoehler.robotrampage.";
+
     /**
-     * Not instantiable; this class only exposes a static registration method.
+     * Not instantiable; this class only exposes static methods.
      */
     private MessageRegistry() {
+    }
+
+    /**
+     * Tells this game's own messages apart from KryoNet's housekeeping objects (keep-alive frames and the like), which
+     * the network wrappers must never hand on to the game.
+     *
+     * @param object what KryoNet delivered
+     * @return {@code true} if it is an instance of one of this game's classes
+     */
+    public static boolean isProtocolMessage(Object object) {
+        return object != null && object.getClass().getName().startsWith(PROTOCOL_PACKAGE_PREFIX);
     }
 
     /**
@@ -74,5 +107,25 @@ public final class MessageRegistry {
         kryo.register(GameEvent.RobotPoweredUp.class);
         kryo.register(GameEvent.RobotRespawned.class);
         kryo.register(GameEvent.GameEnded.class);
+        // Session protocol (design.md 3.5). Messages hold their lists as ArrayList, which is registered here.
+        kryo.register(ArrayList.class);
+        kryo.register(RobotStatus.class);
+        kryo.register(PlayerInfo.class);
+        kryo.register(RobotState.class);
+        kryo.register(LobbyState.class);
+        kryo.register(SetReady.class);
+        kryo.register(StartGameRequest.class);
+        kryo.register(GameStarted.class);
+        kryo.register(TurnStarted.class);
+        kryo.register(HandDealt.class);
+        kryo.register(SubmitProgram.class);
+        kryo.register(RequestRejected.class);
+        kryo.register(PlayerConfirmed.class);
+        kryo.register(TimerUpdate.class);
+        kryo.register(TurnResolved.class);
+        kryo.register(StateSnapshot.class);
+        kryo.register(PlayerConnection.class);
+        kryo.register(PlayerLeft.class);
+        kryo.register(GameOver.class);
     }
 }

@@ -1,0 +1,27 @@
+package de.mkoehler.robotrampage.net.messages;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * The state of the lobby, sent to everybody whenever it changes (someone joins, leaves, gets
+ * ready, or the host changes).
+ *
+ * @param players everyone in the lobby, ordered by seat
+ * @param boardName the name of the board that will be played
+ * @param maxPlayers how many players the board has start squares for
+ * @author Mario Koehler
+ */
+public record LobbyState(List<PlayerInfo> players, String boardName, int maxPlayers) {
+
+    /**
+     * Creates the message. Lists are copied into {@link ArrayList}s, the list type the wire format registers.
+     *
+     * @param players everyone in the lobby, ordered by seat
+     * @param boardName the name of the board that will be played
+     * @param maxPlayers how many players the board has start squares for
+     */
+    public LobbyState {
+        players = new ArrayList<>(players);
+    }
+}
