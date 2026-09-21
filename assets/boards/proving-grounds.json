@@ -1,0 +1,63 @@
+{
+  "formatVersion": 1,
+  "id": "proving-grounds",
+  "name": "Proving Grounds",
+  "author": "Robot Rampage project",
+  "width": 12,
+  "height": 12,
+  "squares": [
+    {"x": 1, "y": 2, "belt": {"dir": "NORTH", "express": true}},
+    {"x": 10, "y": 2, "feature": "REPAIR"},
+    {"x": 1, "y": 3, "belt": {"dir": "NORTH", "express": true}},
+    {"x": 8, "y": 3, "feature": "GEAR_CLOCKWISE"},
+    {"x": 1, "y": 4, "belt": {"dir": "NORTH", "express": true}},
+    {"x": 4, "y": 4, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 5, "y": 4, "belt": {"dir": "WEST", "express": false}},
+    {"x": 6, "y": 4, "belt": {"dir": "WEST", "express": false}},
+    {"x": 7, "y": 4, "belt": {"dir": "WEST", "express": false}},
+    {"x": 10, "y": 4, "feature": "PIT"},
+    {"x": 1, "y": 5, "belt": {"dir": "NORTH", "express": true}},
+    {"x": 4, "y": 5, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 5, "y": 5, "feature": "PIT"},
+    {"x": 6, "y": 5, "feature": "PIT"},
+    {"x": 7, "y": 5, "belt": {"dir": "SOUTH", "express": false}},
+    {"x": 10, "y": 5, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 1, "y": 6, "belt": {"dir": "NORTH", "express": true}},
+    {"x": 4, "y": 6, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 5, "y": 6, "feature": "PIT"},
+    {"x": 6, "y": 6, "feature": "PIT"},
+    {"x": 7, "y": 6, "belt": {"dir": "SOUTH", "express": false}},
+    {"x": 10, "y": 6, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 4, "y": 7, "belt": {"dir": "EAST", "express": false}},
+    {"x": 5, "y": 7, "belt": {"dir": "EAST", "express": false}},
+    {"x": 6, "y": 7, "belt": {"dir": "EAST", "express": false}},
+    {"x": 7, "y": 7, "belt": {"dir": "SOUTH", "express": false}},
+    {"x": 10, "y": 7, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 10, "y": 8, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 10, "y": 9, "belt": {"dir": "NORTH", "express": false}},
+    {"x": 1, "y": 10, "feature": "REPAIR"}
+  ],
+  "edges": [
+    {"x": 11, "y": 6, "side": "EAST", "laser": {"beams": 1}},
+    {"x": 2, "y": 8, "side": "EAST", "wall": true},
+    {"x": 0, "y": 9, "side": "WEST", "laser": {"beams": 1}},
+    {"x": 4, "y": 9, "side": "EAST", "wall": true},
+    {"x": 8, "y": 9, "side": "NORTH", "wall": true},
+    {"x": 7, "y": 10, "side": "EAST", "wall": true}
+  ],
+  "flags": [
+    {"x": 9, "y": 3},
+    {"x": 2, "y": 8},
+    {"x": 8, "y": 10}
+  ],
+  "startSquares": [
+    {"x": 2, "y": 0, "facing": "NORTH"},
+    {"x": 3, "y": 0, "facing": "NORTH"},
+    {"x": 4, "y": 0, "facing": "NORTH"},
+    {"x": 5, "y": 0, "facing": "NORTH"},
+    {"x": 6, "y": 0, "facing": "NORTH"},
+    {"x": 7, "y": 0, "facing": "NORTH"},
+    {"x": 8, "y": 0, "facing": "NORTH"},
+    {"x": 9, "y": 0, "facing": "NORTH"}
+  ]
+}

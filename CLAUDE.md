@@ -22,13 +22,19 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0 and M1 (rules engine) done** — 145 unit tests. A whole turn can be resolved headlessly:
+**M0, M1 (rules engine) and M2 (board format) done** — 177 unit tests. A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
 `GearResolver`, `PusherResolver`, `LaserResolver`, `CrusherResolver`, `CheckpointResolver`,
-`CleanupResolver`) that the `TurnResolver` calls in the order of design.md 2.4. **Next: M2**
-(`BoardDefinition` JSON + `BoardValidator`, then the first board). After M1: M2 board
+`CleanupResolver`) that the `TurnResolver` calls in the order of design.md 2.4. Boards load with
+`BoardLoader.loadResource("boards/<id>.json")` (validated; throws `InvalidBoardException` listing
+every problem); the first board is `assets/boards/proving-grounds.json` (drafted by Claude,
+picture in design.md 2.11 — that picture is *generated* by `BoardPicture` (test support) and
+`DesignDocPictureTest` fails if design.md no longer shows the current board; its failure message
+contains the new picture to paste in). `TurnFuzzTest` plays 30 random full games on it and checks engine
+invariants every turn — keep it passing, and extend its invariants when rules change.
+**Next: M3** (server session + protocol, design.md 6). After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
 not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed
@@ -150,6 +156,10 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   mirrored onto the neighbour: two adjacent pushers/lasers mounted on facing sides create a
   wall *between* their squares, which blocks pushes across it — a scenario that looks
   fine on paper can be geometrically impossible.
+- **JSON classes for boards are records** (`BoardDefinition` and its nested records), not the
+  bean-style classes of the StarWars config files: they are immutable data, and Jackson 2.22 reads
+  records directly. Strict loading (unknown properties fail) is deliberate. Board coordinates in
+  JSON use the enum names of `SquareFeature`/`Direction` (`GEAR_CLOCKWISE`, `NORTH`, ...).
 - **Rule-test gotcha:** a test whose expected result contradicts the rules is usually a
   wrong test — re-derive from design.md before "fixing" the engine (e.g. entering a belt
   square bends a robot by the *turn between heading and belt direction*, not by the

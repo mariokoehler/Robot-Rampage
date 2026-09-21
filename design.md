@@ -269,10 +269,45 @@ square itself.
 v1 ships with one fixed board: an original 12×12 layout
 (one classic board section) with 3 flags and up to 8 start squares, using the
 v1 feature set (walls, pits, normal/express belts, gears, board lasers, repair
-sites). Pushers, crushers and the power-down mechanic are part of the rules and
-the board format from day one but are implemented in a second wave (6). The
-actual layout is authored as its own step, as a JSON file in `assets/boards/`
-(3.6), and is *not* a copy of any published board.
+sites). Pushers, crushers and power-down are part of the rules, the engine and the
+board format (all implemented in M1/M2); this first board just does not use pushers
+or crushers yet. The layout is the JSON file `assets/boards/proving-grounds.json`
+(3.6) and is *not* a copy of any published board. It was drafted by Claude for the
+project owner to review and adjust.
+
+**Proving Grounds** — north (`y = 11`) at the top, `x` from 0 to 11 (`A` = 10, `B` = 11). Generated
+from the JSON file; a `|` between two squares is a wall, a `-` under a square is a wall between it and the
+square below.
+
+```
+      0 1 2 3 4 5 6 7 8 9 A B
+ y11  . . . . . . . . . . . .
+ y10  . + . . . . . .|3 . . .
+                      -
+ y9   L . . . .|. . . . . ^ .
+ y8   . . 2|. . . . . . . ^ .
+ y7   . . . . > > > v . . ^ .
+ y6   . N . . ^ o o v . . ^ L
+ y5   . N . . ^ o o v . . ^ .
+ y4   . N . . ^ < < < . . o .
+ y3   . N . . . . . . c 1 . .
+ y2   . N . . . . . . . . + .
+ y1   . . . . . . . . . . . .
+ y0   . . @ @ @ @ @ @ @ @ . .
+
+@ start square (8, all facing north)   1 2 3 flags   L laser on the outer edge (fires across the row)
+o pit   > < ^ v normal belt   E W N S express belt   c clockwise gear   + repair site
+```
+
+- Flag 1 is close to the start, next to a gear. Flag 2 sits behind the belt ring in the
+  north-west, across a laser-swept row; the west express lane (`x = 1`) is the fast way
+  up. Flag 3 is tucked into a walled nook in the north-east; a belt lane (`x = 10`)
+  leads towards it, with a pit at its foot.
+- The 12 belts around the 2×2 pit form a closed clockwise ring: robots on it circle
+  until they step off, and a robot pushed off its edge into the pit is destroyed.
+- The board passes validation with **no warnings** (no belt leads into a wall, pit or
+  off the edge) and every flag is reachable from every start square; that is checked by
+  `ProvingGroundsBoardTest`, and `TurnFuzzTest` plays random games on it.
 
 ### 2.12 Conveyor-belt resolution algorithm
 
@@ -489,7 +524,15 @@ boards**. Design decisions:
   reachable from every start square over a path that avoids pits and walls. A
   generator's output must pass the same validator as a hand-made board.
 
-Sketch of the JSON shape (field names are a starting proposal):
+**Implemented in M2:** `BoardDefinition` (the JSON model, immutable records),
+`BoardValidator`, `BoardConverter` (definition ↔ `Board`), `BoardLoader` (read/write JSON,
+strict: unknown properties are rejected; reports *all* errors in an `InvalidBoardException`)
+and `LoadedBoard`. The export is **canonical** — a wall is written once whichever side it
+was added from, the wall implied by a laser or pusher mount is not written separately, and
+everything is sorted — so export → import → export is the identity, which keeps generated
+and edited files diff-friendly. Sizes are capped at 64×64.
+
+The JSON shape (see `assets/boards/proving-grounds.json` for a real file):
 
 ```json
 {
@@ -504,8 +547,9 @@ Sketch of the JSON shape (field names are a starting proposal):
   "squares": [
     { "x": 3, "y": 4, "belt": { "dir": "EAST", "express": false } },
     { "x": 5, "y": 5, "feature": "PIT" },
-    { "x": 6, "y": 2, "feature": "GEAR_CW" },
-    { "x": 7, "y": 7, "feature": "REPAIR" }
+    { "x": 6, "y": 2, "feature": "GEAR_CLOCKWISE" },
+    { "x": 7, "y": 7, "feature": "REPAIR" },
+    { "x": 9, "y": 1, "feature": "CRUSHER", "registers": [3, 5] }
   ],
   "edges": [
     { "x": 4, "y": 4, "side": "NORTH", "wall": true },
@@ -517,9 +561,19 @@ Sketch of the JSON shape (field names are a starting proposal):
 }
 ```
 
-- A square has at most one *belt* and at most one *feature* (`PIT`, `GEAR_CW`,
-  `GEAR_CCW`, `REPAIR`, `CRUSHER` with a `registers` list). A crusher may sit on a
-  belt.
+- A square has at most one *belt* and at most one *feature* (`PIT`,
+  `GEAR_CLOCKWISE`, `GEAR_COUNTERCLOCKWISE`, `REPAIR`, `CRUSHER` with a `registers`
+  list). A crusher may sit on a belt. An edge carries a `wall`, a `laser` or a
+  `pusher` (never both a laser and a pusher); lasers and pushers imply a wall on
+  their mount side.
+- **Validation as implemented.** *Errors* (board unusable): wrong `formatVersion`, no
+  id/name, size outside 1..64, anything off the grid, duplicate squares/flags/starts,
+  a crusher or pusher with no or invalid registers, laser beams outside 1..3, no flag
+  or no start square, more than 8 start squares, a flag or start square on a pit, and
+  any flag or start square that cannot be reached from the first start square by
+  walking over non-pit squares not separated by walls. *Warnings* (legal, suspicious):
+  a flag or start square on a belt or crusher, a start square on a flag, a belt that
+  runs into a wall, off the board or into a pit.
 - Generated boards carry `generator` (id) and `seed` in their metadata so a board
   can be reproduced exactly.
 - Belt curve/merge artwork is derived by the renderer from which neighbours feed a
@@ -676,15 +730,18 @@ no UI and is where the test value is:
   on the server is: respawn → deal → (players program) → `submit` each → `resolve`.
   The `ArchitectureTest` and the Kryo registration of every event type guard the layering
   and the wire.
-- **M2 — Board format.** `BoardDefinition` + Jackson loading + `BoardValidator`;
-  author the first original board.
+- **M2 — Board format. Done.** `BoardDefinition` + Jackson loading + `BoardValidator`
+  + canonical export (3.6); first original board `assets/boards/proving-grounds.json`
+  (2.11); `TurnFuzzTest` plays random full games on it.
 - **M3 — Server session + protocol.** Session state machine (deal → program →
   execute), timer/timeout/disconnect handling (2.13), `NetworkServer`/`Client`,
   integration test on localhost.
 - **M4 — Playable client.** Connect screen, board renderer, programming UI,
   animation queue. First real playtest.
-- **M5 — Second wave of rules.** Pushers, crushers, power-down. (Multiple concurrent
-  games per server / real lobbies come after v1, see 7.)
+- **M5 — Second wave in the client and on the boards.** The engine already
+  implements pushers, crushers and power-down (M1); this adds their UI (power-down
+  toggle, animations) and a board that uses pushers and crushers. (Multiple
+  concurrent games per server / real lobbies come after v1, see 7.)
 - **M6 — More boards & Board Editor.** Board selection, board composition, first procedural
   generator (3.6). Optional Board Editor, for authoring boards in a visual editor instead of JSON text.
   Could be a separate tool in a new dev-tools sub module.

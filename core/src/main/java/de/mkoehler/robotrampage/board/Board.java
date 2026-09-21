@@ -102,6 +102,44 @@ public final class Board {
     }
 
     /**
+     * Returns every wall side of every square, so a board can be exported. A wall between two
+     * squares appears once for each of them.
+     *
+     * @return an unmodifiable map from square to the sides of it that have a wall
+     */
+    public Map<Position, Set<Direction>> walls() {
+        return walls;
+    }
+
+    /**
+     * Returns every belt of the board, so a board can be exported.
+     *
+     * @return an unmodifiable map from square to its belt
+     */
+    public Map<Position, Belt> belts() {
+        return belts;
+    }
+
+    /**
+     * Returns every square that has a feature, so a board can be exported.
+     *
+     * @return an unmodifiable map from square to its feature; plain floor is not included
+     */
+    public Map<Position, SquareFeature> features() {
+        return features;
+    }
+
+    /**
+     * Returns the registers a crusher on a square is active in.
+     *
+     * @param position the square
+     * @return the registers, or an empty set if the square has no crusher
+     */
+    public Set<Integer> crusherRegisters(Position position) {
+        return crusherRegisters.getOrDefault(position, Set.of());
+    }
+
+    /**
      * Returns the belt on a square, if any.
      *
      * @param position the square
@@ -300,7 +338,7 @@ public final class Board {
             if (features.putIfAbsent(position, SquareFeature.CRUSHER) != null) {
                 throw new IllegalArgumentException("Square " + position + " already has a feature");
             }
-            crusherRegisters.put(position, active);
+            crusherRegisters.put(position, Set.copyOf(active));
             return this;
         }
 
