@@ -1,0 +1,160 @@
+# CLAUDE.md — Robot Rampage project notes
+
+Cross-session memory for this repo: gotchas, decisions and their reasons,
+conventions — so future sessions don't have to rediscover them. Game
+design/architecture (what the game *is*, how each system is meant to work)
+belongs in `design.md`, not here; this file is about *how we work on this
+codebase* — build/tooling gotchas, testing conventions, working style. Both files
+get updated the same session a decision/gotcha is found, not after. The user's
+global `~/.claude/CLAUDE.md` (Javadoc, unit-test and git rules) also applies and is
+not repeated here except where this project has its own twist.
+
+## What this project is
+
+**Robot Rampage** — an online multiplayer adaptation of the board game
+**RoboRally** (classic 2005 rules), 2–8 players, dedicated authoritative server,
+turn-based (simultaneous secret programming, then deterministic resolution). Full
+design in [`design.md`](./design.md) — read that first for rules or architecture.
+Sibling project and architecture template: `C:\Users\MKOEHLER\intellij-workspace\StarWars`
+(real-time shooter, same frameworks; its `design.md`/`CLAUDE.md` are the model for
+ours). Its netcode is *not* a template — ours is TCP-only and turn-based
+(design.md 3.1).
+
+## Current status
+
+**M0 done (project skeleton).** Maven multi-module build works: `mvn clean package`
+builds `core`, `lwjgl3`, `server`; 5 unit tests pass; the client opens a window
+showing a placeholder `StartupScreen`; the server jar starts and logs its version.
+No game logic exists yet. Next per design.md 6: **M1, the pure-Java rules engine**
+(`core/.../rules`), heavily unit-tested. Rule details still marked *(verify)* in
+design.md must be checked against the real rulebook before they are coded.
+
+## Decisions already made (with reasons)
+
+- **Classic 2005 rules**, not the 2016 edition (asked and confirmed by the user).
+- **One fixed original board for v1**, but the board format must stay open for many
+  boards and *procedurally generated* boards (user requirement — design.md 3.6:
+  flat runtime grid, composition/generation as pre-processing, server ships the board
+  over the wire).
+- **No Ashley, no Box2D, no gdxAI, no MCP server, no `dev-tools` module** — reasons
+  in design.md 3.7. The user tests in-game themselves; that was faster than MCP in
+  StarWars.
+- **Kept:** libGDX, Maven, KryoNet (TCP only), Jackson, VisUI, JUnit 5.
+- **Not a git repo yet** — the user will move it to GitHub later. Until then no
+  jgitver (it needs a repo): versions are hand-maintained `0.1.0-SNAPSHOT` in every
+  pom. When the repo appears, adopt StarWars' jgitver setup (`.mvn/extensions.xml`,
+  placeholder `<version>0</version>`) — see design.md 3.9.
+- The rules engine (`rules`, `board` packages) **never imports libGDX**, `net` or
+  `client` (design.md 3.3). **This is discipline only** — `core` depends on `gdx` and
+  `vis-ui`, so nothing stops an accidental import (and `server` inherits vis-ui
+  transitively). If it ever slips, the clean fix is splitting client screens out of
+  `core` into their own module; that is cheapest *before* M1 piles code into
+  `core`, so reconsider at the start of M1 rather than after M4.
+- **Screen disposal:** `Game.dispose()` only calls `hide()` on the current screen, not
+  `dispose()`. `RobotRampageGame.dispose()` disposes the current screen; when M4
+  adds screen transitions, each `setScreen` call site must dispose the screen it
+  leaves (same discipline as StarWars).
+
+## Build system
+
+Maven, multi-module. Modules: `core` (rules, board format, net, client screens),
+`lwjgl3` (desktop client launcher), `server` (`gdx-backend-headless` dedicated
+server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
+
+- `mvn clean package` from the repo root builds everything and runs the tests;
+  client jar `lwjgl3/target/RobotRampage-<version>.jar`, server jar
+  `server/target/RobotRampage-Server-<version>.jar`. Run a jar with
+  `java --enable-native-access=ALL-UNNAMED -jar <jar>`.
+- `start_client.cmd` / `start_server.cmd` reinstall `core` and run the module. By
+  hand: install `core` first, **then** run the target module *alone* — no `-am` on
+  the exec step (a bare exec goal with `-am` walks the whole reactor, including the
+  `pom`-packaging parent, and fails there):
+  ```
+  mvn install -pl core -am -DskipTests
+  mvn -pl lwjgl3 compile exec:exec
+  mvn -pl server compile exec:java
+  ```
+- Re-run `mvn install -pl core -am -DskipTests` after **every** change to `core`
+  before running `lwjgl3`/`server` alone — they resolve `core` from `~/.m2`, so a
+  stale install silently runs old code.
+- `mvn -o` (offline) works once dependencies are cached. The first build needed
+  network access for `org.lwjgl:lwjgl-bom` (not in the StarWars-populated cache).
+
+### Maven + libGDX gotchas (carried over from StarWars, still valid)
+
+- Maven's default `maven-compiler-plugin` ignores `maven.compiler.release`; the
+  parent pins 3.13.0. Surefire is pinned to 3.2.5 for JUnit 5.
+- **LWJGL is pinned via an `lwjgl-bom` import** in the parent's `dependencyManagement`
+  (`lwjgl3Version` 3.4.3) — one import covers every artifact and native classifier,
+  replacing StarWars' ~200-line per-classifier block. Verified with
+  `mvn -pl lwjgl3 -am dependency:tree` (needs `-am`, and no `-q`).
+- **Each native-backed libGDX piece needs its *own* `*-platform` `natives-desktop`
+  dependency**, independently, in every runnable module (`lwjgl3`, `server`). Missing
+  one only fails at *runtime* (`SharedLibraryLoadRuntimeException`), never at
+  build/test time. Currently only core libGDX (`gdx-platform`). Adding `gdx-freetype`
+  to `core` means adding `gdx-freetype-platform` to `lwjgl3` (and `server` if it
+  uses it).
+- `${project.parent.basedir}` is not a valid property — use
+  `${project.basedir}/../assets` for the shared `assets/` resource dir.
+- The KryoNet fork is JitPack-only; the parent pom declares the JitPack repository.
+- **Kryo wire compatibility depends on registration order, not class names.** Every
+  class sent over the wire is registered in `MessageRegistry.register(Kryo)`,
+  append-only, never reordered; `MessageRegistryTest` guards it. Add every new
+  message class to that registry *and* to the test. Java records and sealed types
+  need explicit registration too — verify Kryo's record support when the first
+  record message is added.
+- A plugin's top-level `<configuration>` applies to every goal of that plugin invoked
+  from the CLI — the `lwjgl3` exec config is written for `exec:exec`; `exec:java`
+  there would fail. Don't share one goal's config with another. Same-`groupId:artifactId`
+  duplicate `<plugin>` blocks: Maven silently drops one — merge into one block.
+- XML comments in poms can't contain a literal `--` anywhere in their text.
+- The `Unsafe`/`System::load` JVM warnings at startup (from LWJGL, Kryo, libGDX) are
+  harmless and identical to StarWars'; `--enable-native-access=ALL-UNNAMED` silences
+  the last one.
+
+## Testing conventions
+
+- **JUnit 5, used selectively** (design.md 3.8): the rules engine, board format,
+  message registry and server session logic get real tests; screens, rendering and
+  animation do not. Don't chase coverage numbers.
+- Assert on the resolver's **event list** and final state, not internals.
+- Plan: a small ASCII-art board parser test helper so scenarios read like the boards
+  they describe.
+- Every new class and method gets HTML Javadoc (`@author Mario Koehler`), including
+  private methods — see the global instructions. Never put session narrative
+  ("changed because we discussed X") into Javadoc/comments.
+
+## Asset pipeline
+
+- `assets-raw/` — source files exactly as the user drops them (spontaneous filenames,
+  any format, PSDs welcome); committed once there's a repo, as backup. `assets/` —
+  what the game loads at runtime; Claude integrates: rename properly, convert, pack
+  atlases, copy over. **Never load from `assets-raw/`.**
+- Both are currently empty (`.gitkeep`). When atlases are needed, reuse StarWars'
+  `AtlasPacker` approach (libGDX `TexturePacker`, `gdx-tools` test-scoped in `lwjgl3`,
+  the packer class under `lwjgl3/src/test`) — see StarWars `CLAUDE.md` "Asset
+  pipeline" for the numeric-suffix and atlas-vs-`Texture` gotchas.
+- The user has Photoshop and will hand-edit image assets on request — just ask.
+- `assets/*.json` config files (connection config etc.) are runtime-generated and
+  gitignored; the `*.cmd` helpers and the `exec:exec` config run the client with
+  `assets/` as its working directory.
+
+## Conventions / preferences
+
+- **Design decisions go into `design.md` immediately**, in the same session as the
+  decision. Section numbers are stable anchors — don't renumber.
+- **When a sub-detail is unspecified, propose a concrete default directly in the doc
+  and mark it *(unconfirmed)*** instead of stalling. Reserve `AskUserQuestion` for
+  foundational/hard-to-reverse choices (edition, a core library, a balance-defining
+  rule).
+- **Rules recalled from memory are marked *(verify)*** in design.md and must be
+  checked against the actual rulebook (web) before implementing.
+- **Proactively flag security-relevant concerns** during design (e.g. hidden hands
+  must never be sent to other clients; hash passwords if accounts arrive), briefly.
+- **Never commit or push** unless asked (global rule). There is no repo yet anyway.
+- **Advisor before and after** on any multi-file feature: consult before writing code
+  (design-level issues) and again once it looks complete (integration-level issues).
+- Sessions are incremental (evenings) — leave `design.md` and this file fully in sync
+  before a session ends, don't just describe changes in chat.
+- The user tests the game in-game and reports back; there is no remote-control/MCP
+  harness for driving the client.

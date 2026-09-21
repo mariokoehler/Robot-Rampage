@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>de.mkoehler.robotrampage</groupId>
+  <artifactId>robotrampage-parent</artifactId>
+  <!-- Hand-maintained for now: this folder is not a git repository yet, so there is no
+       jgitver (as used by the StarWars project). See design.md 3.9 for when that changes. -->
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>RobotRampage</name>
+  <description>Online multiplayer adaptation of the board game RoboRally, built on libGDX.</description>
+
+  <modules>
+    <module>core</module>
+    <module>lwjgl3</module>
+    <module>server</module>
+  </modules>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>25</maven.compiler.release>
+    <appName>RobotRampage</appName>
+    <gdxVersion>1.14.2</gdxVersion>
+    <!-- Forces LWJGL3 to this version, to avoid warnings on Java 25 and up. Applied via the
+         lwjgl-bom import below, which pins every LWJGL artifact and native classifier at once. -->
+    <lwjgl3Version>3.4.3</lwjgl3Version>
+    <!-- Maintained KryoNet fork, see design.md 3.3 -->
+    <kryonetVersion>2.22.9</kryonetVersion>
+    <!-- JUnit 5, see CLAUDE.md "Code style & testing" -->
+    <junitVersion>5.14.4</junitVersion>
+    <!-- JSON handling for config files, boards and saved game state, see design.md 3.7 -->
+    <jacksonVersion>2.22.2</jacksonVersion>
+    <!-- Scene2D UI toolkit for menu-style screens, see design.md 4.2 -->
+    <visUiVersion>1.5.9</visUiVersion>
+  </properties>
+
+  <!-- The KryoNet fork is only published on JitPack, not Maven Central. -->
+  <repositories>
+    <repository>
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+  </repositories>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.lwjgl</groupId>
+        <artifactId>lwjgl-bom</artifactId>
+        <version>${lwjgl3Version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.github.crykn</groupId>
+        <artifactId>kryonet</artifactId>
+        <version>${kryonetVersion}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter</artifactId>
+        <version>${junitVersion}</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+        <version>${jacksonVersion}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.13.0</version>
+        </plugin>
+        <!-- Pin a surefire with JUnit 5 support rather than relying on the default lifecycle binding. -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>3.2.5</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>

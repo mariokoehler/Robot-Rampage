@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>de.mkoehler.robotrampage</groupId>
+    <artifactId>robotrampage-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>robotrampage-core</artifactId>
+  <packaging>jar</packaging>
+  <name>RobotRampage-core</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.badlogicgames.gdx</groupId>
+      <artifactId>gdx</artifactId>
+      <version>${gdxVersion}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.github.crykn</groupId>
+      <artifactId>kryonet</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Built directly on Scene2D (already part of `gdx`), see design.md 4.2. -->
+      <groupId>com.kotcrab.vis</groupId>
+      <artifactId>vis-ui</artifactId>
+      <version>${visUiVersion}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <!-- Filtering substitutes ${project.version} into robotrampage-version.properties,
+             read at runtime by AppVersion. -->
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
+    <!-- Test-scoped only: lwjgl3/server bundle assets/ into their own runtime classpath, so
+         core's packaged jar must not carry a redundant copy, but a core test that needs a data
+         file from assets/ (e.g. a board definition) must be able to load it. -->
+    <testResources>
+      <testResource>
+        <directory>src/test/resources</directory>
+      </testResource>
+      <testResource>
+        <directory>${project.basedir}/../assets</directory>
+      </testResource>
+    </testResources>
+  </build>
+</project>

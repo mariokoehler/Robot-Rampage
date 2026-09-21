@@ -1,0 +1,51 @@
+## Maven:
+target/
+dependency-reduced-pom.xml
+
+## Java:
+*.class
+*.war
+*.ear
+hs_err_pid*
+.attach_pid*
+
+## IntelliJ:
+.idea/
+*.ipr
+*.iws
+*.iml
+
+## Eclipse:
+.classpath
+.project
+.metadata/
+.settings/
+.loadpath
+.externalToolBuilders/
+*.launch
+*.tmp
+*.bak
+*.swp
+
+## OS-Specific:
+.DS_Store
+Thumbs.db
+
+## Miscellaneous:
+*~
+*.*#
+*#*#
+
+## LWJGL's native-library extraction cache, created at runtime when running the client
+## (wherever the working directory happened to be when it was run):
+.lwjgl/
+
+## Runtime-generated local config, written next to wherever the client/server was launched
+## from (the working directory is assets/ when started via the *.cmd helpers). Filled in as
+## these files are introduced, see design.md 3.7:
+connection-config.json
+keybindings.json
+audio-settings.json
+
+## Claude Code's per-machine settings:
+.claude/settings.local.json
