@@ -125,6 +125,7 @@ public final class GameScreenDriver {
                 driveRespawn(this);
                 driveEliminated(this);
                 driveStayPoweredDown(this);
+                driveReconnect(this);
                 System.out.println("GameScreenDriver: all checks passed");
                 Gdx.app.exit();
             }
@@ -146,7 +147,7 @@ public final class GameScreenDriver {
         String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
         List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true),
             new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
-        ConnectedServer connected = new ConnectedServer(link, new HandshakeResponse("Welcome", ME, "token", "test"),
+        ConnectedServer connected = new ConnectedServer(link, new HandshakeResponse("Welcome", ME, "token", "test", 600),
             List.of(), false);
         GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
             new GameStarted(board, players, ME),
@@ -246,7 +247,7 @@ public final class GameScreenDriver {
         List<String> names = List.of("Ann", "Bo", "Cy", "Di");
         SampleTurn.Sample sample = SampleTurn.first(7L, names.size(), names);
         List<RobotState> after = sample.after();
-        ConnectedServer connected = new ConnectedServer(new ScriptedLink(), new HandshakeResponse("Welcome", ME, "token", "test"),
+        ConnectedServer connected = new ConnectedServer(new ScriptedLink(), new HandshakeResponse("Welcome", ME, "token", "test", 600),
             List.of(), false);
 
         GameScreen skipping = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
@@ -294,7 +295,7 @@ public final class GameScreenDriver {
         List<Object> messages = List.of(new StateSnapshot(2, before, false, -1),
             new TurnStarted(3, List.of(), List.of(0, 1, 2), 90), new HandDealt(3, hand, List.of(), true, false));
         ConnectedServer connected = new ConnectedServer(new ScriptedLink(),
-            new HandshakeResponse("Welcome", ME, "token", "test"), List.of(), false);
+            new HandshakeResponse("Welcome", ME, "token", "test", 600), List.of(), false);
         GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
             new GameStarted(board, players, ME), messages);
         game.setScreen(screen);
@@ -340,7 +341,7 @@ public final class GameScreenDriver {
             RobotStatus.ELIMINATED, false, false);
         List<Object> messages = List.of(new TurnResolved(6, List.of()), new StateSnapshot(6, List.of(eliminated), false, -1));
         ConnectedServer connected = new ConnectedServer(new ScriptedLink(),
-            new HandshakeResponse("Welcome", ME, "token", "test"), List.of(), false);
+            new HandshakeResponse("Welcome", ME, "token", "test", 600), List.of(), false);
         GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
             new GameStarted(board, players, ME), messages);
         game.setScreen(screen);
@@ -370,7 +371,7 @@ public final class GameScreenDriver {
         List<Object> messages = List.of(new TurnStarted(2, List.of(), List.of(0, 2), 90),
             new HandDealt(2, List.of(), List.of(), false, true));
         ScriptedLink link = new ScriptedLink();
-        ConnectedServer connected = new ConnectedServer(link, new HandshakeResponse("Welcome", ME, "token", "test"),
+        ConnectedServer connected = new ConnectedServer(link, new HandshakeResponse("Welcome", ME, "token", "test", 600),
             List.of(), false);
         GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
             new GameStarted(board, players, ME), messages);
@@ -394,6 +395,40 @@ public final class GameScreenDriver {
         click(screen, toggleAt[0], toggleAt[1]);
         check(link.sent.get(link.sent.size() - 1) instanceof SubmitProgram sent && !sent.powerDown(),
             "changing one's mind should also be sent at once, with no dialog needed to turn it off");
+    }
+
+    /**
+     * Checks the reconnect flow, the one part of it that needs a real widget: a dropped connection opens the "Connection
+     * lost" dialog by itself, and "Leave game" gives up the attempt and returns to the connect screen. The retry state
+     * machine itself (retries, the grace countdown, a successful or refused retry) has no window to click and is covered by
+     * {@code ReconnectorTest} instead.
+     *
+     * @param game the game
+     */
+    private static void driveReconnect(RobotRampageGame game) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        List<Object> messages = List.of(new TurnStarted(2, List.of(), List.of(0, 1, 2), 90));
+        ConnectedServer connected = new ConnectedServer(new ScriptedLink(),
+            new HandshakeResponse("Welcome", ME, "token-x", "test", 5), List.of(), false);
+        GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(board, players, ME), messages);
+        game.setScreen(screen);
+        screen.resize(WIDTH, HEIGHT);
+        frame(screen);
+
+        int actorsBefore = screen.stage.getActors().size;
+        screen.onDisconnect();
+        frame(screen);
+        check(findLabel(screen.stage.getRoot(), "CONNECTION LOST") != null,
+            "a dropped connection should open the connection-lost dialog by itself");
+        check(screen.stage.getActors().size == actorsBefore + 1, "the dialog should be the only new actor");
+
+        TextButton leave = findButton(screen.stage.getRoot(), "LEAVE GAME");
+        check(leave != null, "the dialog should have a Leave game button");
+        click(screen, centerOf(leave)[0], centerOf(leave)[1]);
+        check(game.getScreen() instanceof ConnectScreen, "Leave game should give up the attempt and go to the connect screen");
     }
 
     /**

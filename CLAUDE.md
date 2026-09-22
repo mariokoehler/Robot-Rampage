@@ -22,9 +22,9 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-7 (client shell, Startup,
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-8 (client shell, Startup,
 Connect, Lobby, static board renderer, programming screen, turn replay, Game Over screen, respawn/power-down/eliminated
-dialogs) done** — 363 unit tests in `core` plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
+dialogs, reconnecting a dropped client) done** — 371 unit tests in `core` plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -92,7 +92,42 @@ adding it to a `ModalDialog.row(...)` — a bare `Group` isn't a `Layout`, so th
 needed a protocol change. `BoardSnapshot.flipped` is now public so `GameScreenDriver` (different package) can save PNGs too;
 run it with an output folder argument to get `dialog-powerdown.png` (the only one of the three that needs a click, so
 `ScreenSnapshot` can't reach it on its own).
-**Next: reconnecting, drag and drop, the "time's up" banner — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
+**Reconnect (slice 8):** `client.connect.Reconnector` (new class, libGDX-free, unit-tested with a fake `ServerLink` in
+`ReconnectorTest`) is the retry state machine: `GameScreen.onDisconnect()` starts one with the player's own display name
+(`model.nameOf(model.mySeat())`), the session token and the grace seconds from `server.welcome()` (kept in memory only —
+a token is only valid for the life of the server process, so disk persistence would just as often hand back a stale
+one) and a `NetworkClient::new` link factory, matching `ConnectionAttempt`'s pattern of taking a `ServerLink` rather
+than opening its own. **The display name is not optional, even though the server ignores it whenever the token still
+names a seat** (advisor caught this before it shipped): grace expiring server-side first, the server process
+restarting, or the session already having moved back to `LOBBY` (which forgets a dropped player, 5.1) all turn the
+retry into an ordinary join the server evaluates by name, and a blank name there is a silent wrong-seat bug, not an
+error. `GameScreen` shows a "Connection lost" dialog (only a "Leave game" button — it retries by itself) while
+`TRYING`, refreshed every frame with `reconnector.attemptNumber()`/`secondsLeft()`, the latter formatted `m:ss` like
+the mockup's "Away 9:12" (`GameScreen.formatCountdown`, the same formula as `GameModel.timeText()` — no shared home for
+it exists yet, so it is duplicated once rather than introducing one for a single extra call site); on `SUCCEEDED` it
+hands the fresh `ConnectedServer` to a **new `LobbyScreen`**, exactly like a first join — `LobbyScreen` already turns a
+`GameStarted` found among the connection's early messages into a fresh `GameScreen` on its own, so no reconnect-specific
+transition code was needed for that part. `GameScreen.dispose()` now cancels a live `Reconnector`, mirroring
+`ConnectScreen`'s own `dispose()` (its worker thread is a daemon, so this is tidiness, not a leak fix).
+`LobbyScreen.onDisconnect` is untouched (a lobby disconnect has no seat to reconnect to). *Reviewed, not changed:* a
+server that stays unreachable for the whole default 10-minute grace period at the 3 s retry delay creates on the order
+of 200 short-lived `NetworkClient`s; each is torn down through the same `client.stop()` that already ends every failed
+`ConnectionAttempt` (`NetworkClient.connect`'s catch block, then `ConnectionAttempt.release()`), so nothing new leaks —
+just more Kryo-registration churn than before this slice, which is an accepted trade-off of retrying automatically
+rather than a fix candidate. **Testing an async retry
+loop against simulated time is easy to get backwards:** a busy-spin helper that drains the background `ConnectionAttempt`
+must call `reconnector.update(0f)` — passing any nonzero delta on every spin iteration silently fast-forwards through the
+whole grace period in a handful of loop iterations, regardless of real elapsed time (`ReconnectorTest.awaitAttempt`);
+crossing the retry delay or the grace period is a separate, single, explicit `update(largeValue)` call. Needing this
+exposed a real ordering bug in `Reconnector.update()` itself: the retry-countdown branch could start a new attempt in
+the same tick the grace period had just expired (checked only afterwards, and skipped because `current` was no longer
+`null`), so a `GAVE_UP` could be silently swallowed by a fresh `TRYING` — fixed by refusing to start the new attempt
+once `remainingSeconds <= 0f`. `Reconnector.isWaitingToRetry()` exists only so the test (and any future UI) can tell
+"a try just failed, the next is queued" apart from "trying right now" without waiting on wall-clock time either way.
+`GameScreenDriver.driveReconnect` covers only what needs a real widget (the dialog opening on disconnect, and "Leave
+game" returning to `ConnectScreen`) — the retry/grace/refusal state machine itself has no window to click and stays in
+`ReconnectorTest`.
+**Next: drag and drop, the "time's up" banner — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
@@ -132,6 +167,13 @@ not hand-verified twice. The design was reviewed by the user (2026-09-21): tags 
   (e.g. `MathUtils.PI`) is inlined and slips through — a real class reference is
   caught (verified by adding one deliberately). The first build after adding ArchUnit
   needed network access.
+- **Window starts at 1920x1080, not maximized** (design.md 4.2): `Lwjgl3Launcher` inherited StarWars' `setMaximized(true)`,
+  which doesn't fit a game whose entire UI is one fixed 1920×1080 `FitViewport` layout — maximizing on a bigger monitor
+  just letterboxes it, it doesn't show more. `Lwjgl3Launcher.windowSize(width, height)` (package-private, unit-tested in
+  `Lwjgl3LauncherTest`, the first real JUnit test in the `lwjgl3` module — the rest of that package is `main()`-driven
+  dev tools, not picked up by surefire) is the pure arithmetic: native size if the monitor is at least that big,
+  otherwise the largest 16:9 window that fits. `Graphics.DisplayMode` (not a nested type of
+  `Lwjgl3ApplicationConfiguration`, despite `getDisplayMode()` living there) is the return type to import.
 - **Screen disposal:** `Game.dispose()` only calls `hide()` on the current screen, not
   `dispose()`. `RobotRampageGame.dispose()` disposes the current screen, and its `setScreen` override disposes the
   screen it leaves via `postRunnable` (screens change from inside their own `render`, so disposing at once would draw a
@@ -229,6 +271,12 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   player is never removed while owing a hand.
 - **Client threading:** `NetworkClient.connect` BLOCKS (up to 10 s) — never call it from the render thread (StarWars'
   socket-stall lesson). `ConnectionAttempt` does it on a worker thread; use it, don't call `connect` from a screen.
+- **Spin-waiting for an async worker thread while a class also tracks simulated time (`ConnectionAttemptTest`,
+  `ReconnectorTest`) must pass `0f`/no time to the spin loop itself** — a busy loop can run far more iterations than
+  real seconds pass, so a nonzero delta on every iteration silently fast-forwards through retry delays and grace
+  periods. Advance simulated time only in a separate, explicit, single call at the exact point the test means to
+  cross a threshold. This is what caught a real ordering bug in `Reconnector.update()` — see "Reconnect (slice 8)"
+  above.
 - **The game seed** is logged by the server at startup (`game seed N`) and can be given as the 2nd launcher argument
   (`ServerLauncher [port] [seed]`); put it in any bug report — random fills and shuffles are reproducible from it.
 - **Modules:** run `mvn install -pl core -am -DskipTests` before `mvn -pl server test` (server resolves core from

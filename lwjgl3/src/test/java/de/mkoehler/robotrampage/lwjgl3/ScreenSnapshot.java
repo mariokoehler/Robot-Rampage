@@ -177,7 +177,7 @@ public final class ScreenSnapshot {
             new Card(CardType.ROTATE_LEFT, 160));
         List<Object> messages = List.of(new StateSnapshot(3, robots, false, -1),
             new TurnStarted(4, List.of(), List.of(0, 1, 2, 3, 4, 5), 90), new HandDealt(4, hand, List.of(), true, false));
-        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test");
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test", 600);
         return new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
             new ServerAddress("localhost", 45725), new GameStarted(board, players, ME), messages);
     }
@@ -202,7 +202,7 @@ public final class ScreenSnapshot {
                 1, new Position(2 + seat, 0), me ? RobotStatus.ELIMINATED : RobotStatus.ACTIVE, false, false));
         }
         List<Object> messages = List.of(new TurnResolved(6, List.of()), new StateSnapshot(6, after, false, -1));
-        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test");
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test", 600);
         return new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
             new ServerAddress("localhost", 45725), new GameStarted(board, players, ME), messages);
     }
@@ -268,7 +268,7 @@ public final class ScreenSnapshot {
         messages.add(new PlayerConfirmed(0));
         messages.add(new PlayerConfirmed(3));
         messages.add(new PlayerConnection(5, false));
-        HandshakeResponse welcome = new HandshakeResponse("Welcome", me, "token", "test");
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", me, "token", "test", 600);
         GameScreen screen = new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
             new ServerAddress("localhost", 45725), new GameStarted(board, players, me), messages);
         if (screen.model().draft() != null) {
@@ -341,7 +341,7 @@ public final class ScreenSnapshot {
             messages.add(new StateSnapshot(11, robots, true, winner));
         }
         messages.add(new GameOver(winner, robots, 12));
-        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test");
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test", 600);
         GameScreen screen = new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
             new ServerAddress("localhost", 45725), new GameStarted(board, infos, ME), messages);
         screen.model().completeResolution();
@@ -356,7 +356,7 @@ public final class ScreenSnapshot {
      */
     private static GameScreen resolution(RobotRampageGame game) {
         SampleTurn.Sample sample = SampleTurn.first(7L, NAMES.size(), NAMES);
-        ConnectedServer connected = new ConnectedServer(new DeadLink(), new HandshakeResponse("Welcome", ME, "token", "test"),
+        ConnectedServer connected = new ConnectedServer(new DeadLink(), new HandshakeResponse("Welcome", ME, "token", "test", 600),
             List.of(), false);
         return new GameScreen(game, connected, new ServerAddress("localhost", 45725),
             new GameStarted(sample.boardJson(), sample.players(), ME), sample.messages());

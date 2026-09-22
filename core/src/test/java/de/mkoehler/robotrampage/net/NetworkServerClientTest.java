@@ -159,7 +159,7 @@ class NetworkServerClientTest {
         HandshakeRequest received = (HandshakeRequest) serverLog.messages.get(0);
         assertEquals("tok", received.getSessionToken());
 
-        server.send(serverLog.connections.get(0), new HandshakeResponse("Hi", 2, "abc", "1.0"));
+        server.send(serverLog.connections.get(0), new HandshakeResponse("Hi", 2, "abc", "1.0", 600));
         assertTrue(waitFor(() -> {
             client.poll(clientLog);
             return !clientLog.messages.isEmpty();

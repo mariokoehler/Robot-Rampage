@@ -542,7 +542,7 @@ derived from the game seed and a fill counter — like the deck, never a live
 
 | Direction | Message | Purpose |
 |---|---|---|
-| C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name (at most 20 characters, `NetworkConstants.MAX_DISPLAY_NAME_LENGTH`), optional session token; the response carries the seat, the token and the **server's version**, on a refusal too, so the client can show both versions. This pair is a compatibility surface: a client of another version may not be able to read the response that says the versions differ, so the client treats an unreadable handshake like an unreachable server. |
+| C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name (at most 20 characters, `NetworkConstants.MAX_DISPLAY_NAME_LENGTH`), optional session token; the response carries the seat, the token, the **server's version** (on a refusal too, so the client can show both versions) and, once accepted, the reconnect grace period in seconds (`GameSession.reconnectGraceSeconds()`), so a dropped client knows how long it may keep trying. This pair is a compatibility surface: a client of another version may not be able to read the response that says the versions differ, so the client treats an unreadable handshake like an unreachable server. |
 | S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name, and the facts the lobby shows: seats, minimum players (so the client can tell whether the host may start), board size, flag count, lives, programming seconds. Sent again to everybody at every change, and once more when a game ends and the session returns to the lobby, so the lobby screen must be buildable from one `LobbyState` alone. |
 | C→S | `SetReady`, `StartGameRequest` | Lobby actions (start: host only). |
 | S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
@@ -807,7 +807,12 @@ drawn with `SpriteBatch`. The screens use plain Scene2D widgets styled from `The
 orange one-per-screen button, sinking press) is not VisUI's. `UiKit` owns the fonts and shapes and builds labels (capitals
 where the design uses capitals), buttons, text fields with a focused and an error look, panels and wells; `ModalDialog` is
 the scrim, panel, title, text and button row that every dialog uses. Screens extend `StageScreen` (a `Stage` on the
-1920×1080 viewport).
+1920×1080 viewport). **The desktop window starts at 1920×1080, not maximized** (`Lwjgl3Launcher.getDefaultConfiguration`)
+— the inherited StarWars template maximized it, which made sense for a real-time shooter that benefits from more visible
+board around the player, but Robot Rampage's whole UI is a fixed 1920×1080 layout (this paragraph), so maximizing just
+adds letterboxing on a larger monitor without showing more. On a monitor smaller than 1920×1080, `Lwjgl3Launcher.windowSize`
+(unit-tested, `Lwjgl3LauncherTest`) picks the largest 16:9 window that still fits it, so the layout is scaled down by the
+viewport rather than clipped or upscaled past native size.
 
 **The connect flow.** Opening the connection blocks, so `ConnectionAttempt` does it on a worker thread that only opens
 and closes the link and queues the outcome; the `ConnectFlow` (a libGDX-free state machine: connecting, handshaking,
@@ -903,9 +908,11 @@ versions, settings, connection lost, menu, leave, power down, choose your facing
 below it.
 
 **What the mockups need beyond the current protocol.** Done: the server's version in `HandshakeResponse`, the 10 s connect
-timeout, the 20-character name limit and the game facts in `LobbyState`. Still to be added with the lobby and programming slices:
-- The connection-lost dialog and the "Away 9:12" chip need the reconnect grace period (seconds) from the server, in the
-  handshake and in `PlayerConnection`.
+timeout, the 20-character name limit, the game facts in `LobbyState`, and the reconnect grace period (seconds) in
+`HandshakeResponse` for the connection-lost dialog (4.3). Still to be added with the lobby and programming slices:
+- The "Away 9:12" chip (showing *other* players how long a dropped player's grace period has left) needs the same
+  seconds added to `PlayerConnection` too; not done — only the reconnecting player's own dialog reads the handshake's
+  grace period today.
 - The "Time's up" banner ("empty registers were filled at random") and the register slots after a random fill need a
   message telling a player which cards were filled in for them (`ProgramFilledIn`).
 - Standings details ("touched flag 3 in turn 11, register 4", "eliminated in turn 9") are derived by the client from the
@@ -949,6 +956,23 @@ draws a dashed one; the lobby has no "leave" confirmation (leaving costs nothing
 no reconnect and no grace period): the player is sent back to the connect screen with a dialog. The "Connection lost"
 dialog with reconnect attempts belongs to running games only. After `GameStarted` the lobby hands the connection, with
 the messages that arrived behind the start message, to the game screen (4.3). The lobby never closes the connection when it is disposed, only when the player leaves.
+
+**Reconnecting a dropped client (implemented, M4).** `Reconnector` (`client.connect`, libGDX-free) is the retry state
+machine: on `GameScreen.onDisconnect()`, if the handshake that started the game carried a session token (it always does
+once accepted), it opens a fresh connection on a background thread every few seconds, presenting that same token and the
+player's own display name, until one is accepted (`Phase.SUCCEEDED`), the server refuses outright (`GAVE_UP`, no more
+retries — a version mismatch or a made-up/expired token), or the grace period the handshake announced
+(`HandshakeResponse.getReconnectGraceSeconds()`) runs out (`GAVE_UP`). The name travels on every try even though the
+server ignores it whenever the token still names a seat — a token the server no longer recognises (its own grace ran out
+first, the process restarted, or the session already returned to `LOBBY` and forgot the seat, above) falls back to an
+ordinary join, which the server evaluates by name. `GameScreen` shows a "Connection lost" dialog while `TRYING`, with
+only a "Leave game" button (it retries by itself, there is nothing to confirm) and a countdown formatted `m:ss` like the
+mockup's "Away 9:12"; a successful retry hands the fresh `ConnectedServer` to a new `LobbyScreen`, exactly like a first
+join, which reads `GameStarted` out of the resync's early messages the same way it already did for a normal join and
+hands straight on to a new `GameScreen` — no separate reconnect-specific transition code was needed for that part.
+`LobbyScreen.onDisconnect()` is untouched: a disconnect from the lobby has no seat left to reconnect to (above). The
+token is kept in memory only, on `GameScreen` and inside the live `Reconnector`, never written to disk — it is only
+valid for the life of the server process, so persisting it client-side would just as often be stale.
 
 ### 5.2 Controls
 
@@ -997,8 +1021,10 @@ no UI and is where the test value is:
   cards and register widgets, players, robot and program panels, the Menu, Leave and Game over dialogs. The Settings button on the startup screen
   is disabled until the Settings dialog exists. Slice 5 is **done**: the replay of a resolved turn (4.1) and the belt corner,
   join, T and X pieces. Slice 6 is **done**: the Game Over screen (4.1). Slice 7 is **done**: the respawn-facing,
-  power-down and eliminated dialogs (4.3). Still to come: drag and drop, the "time's up" banner, reconnecting a dropped
-  client, and the PNG/atlas pipeline for the drawings.
+  power-down and eliminated dialogs (4.3). Slice 8 is **done**: reconnecting a dropped client (4.3/5.1) — the
+  "Connection lost" dialog, the `Reconnector` retry state machine, and the grace period travelling in
+  `HandshakeResponse`. Still to come: drag and drop, the "time's up" banner, and the PNG/atlas pipeline for the
+  drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
   toggle, animations) and a board that uses pushers and crushers. (Multiple

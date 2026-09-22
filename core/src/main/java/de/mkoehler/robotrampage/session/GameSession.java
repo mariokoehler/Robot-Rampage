@@ -144,6 +144,17 @@ public final class GameSession {
     }
 
     /**
+     * Returns how long a disconnected player may take to come back before their robot is removed, for a client to show and
+     * to count its own reconnect attempts against. The same for every player, so it only needs to travel once, at the
+     * handshake.
+     *
+     * @return the reconnect grace period in whole seconds, rounded up
+     */
+    public int reconnectGraceSeconds() {
+        return (int) ((config.reconnectGraceMillis() + 999) / 1000);
+    }
+
+    /**
      * Returns the number of the current turn.
      *
      * @return the turn, or 0 before the game has started

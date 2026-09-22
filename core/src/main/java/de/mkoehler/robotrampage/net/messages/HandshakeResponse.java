@@ -36,6 +36,12 @@ public class HandshakeResponse {
     private String serverVersion;
 
     /**
+     * How long a disconnected player may take to come back before their robot is removed, in whole seconds, or 0 if the
+     * handshake was rejected.
+     */
+    private int reconnectGraceSeconds;
+
+    /**
      * No-arg constructor required by Kryo for deserialization.
      */
     public HandshakeResponse() {
@@ -57,17 +63,20 @@ public class HandshakeResponse {
     /**
      * Creates an accepting handshake response that carries the player's seat and session token.
      *
-     * @param message      a human-readable welcome
-     * @param seat         the seat, which is also the player's robot id
-     * @param sessionToken the token for resuming this seat after a disconnect
-     * @param serverVersion the version of the answering server
+     * @param message               a human-readable welcome
+     * @param seat                  the seat, which is also the player's robot id
+     * @param sessionToken          the token for resuming this seat after a disconnect
+     * @param serverVersion         the version of the answering server
+     * @param reconnectGraceSeconds how long a disconnected player may take to come back before their robot is removed
      */
-    public HandshakeResponse(String message, int seat, String sessionToken, String serverVersion) {
+    public HandshakeResponse(String message, int seat, String sessionToken, String serverVersion,
+                             int reconnectGraceSeconds) {
         this.accepted = true;
         this.message = message;
         this.seat = seat;
         this.sessionToken = sessionToken;
         this.serverVersion = serverVersion;
+        this.reconnectGraceSeconds = reconnectGraceSeconds;
     }
 
     /**
@@ -113,5 +122,14 @@ public class HandshakeResponse {
      */
     public String getServerVersion() {
         return serverVersion;
+    }
+
+    /**
+     * Returns how long a disconnected player may take to come back before their robot is removed.
+     *
+     * @return the reconnect grace period in whole seconds, or 0 if the handshake was rejected
+     */
+    public int getReconnectGraceSeconds() {
+        return reconnectGraceSeconds;
     }
 }

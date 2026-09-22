@@ -101,7 +101,7 @@ class WireProtocolTest {
         assertEquals("token-123", resume.getSessionToken());
         assertNull(roundTrip(new HandshakeRequest("Mario", "1.0")).getSessionToken());
 
-        HandshakeResponse welcome = roundTrip(new HandshakeResponse("Welcome.", 3, "abc", "1.0"));
+        HandshakeResponse welcome = roundTrip(new HandshakeResponse("Welcome.", 3, "abc", "1.0", 600));
         assertTrue(welcome.isAccepted());
         assertEquals(3, welcome.getSeat());
         assertEquals("abc", welcome.getSessionToken());

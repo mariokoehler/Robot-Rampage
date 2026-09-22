@@ -156,7 +156,8 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             network.close(previous);
         }
         seatByConnection.put(connectionId, result.seat());
-        network.send(connectionId, new HandshakeResponse(result.message(), result.seat(), result.sessionToken(), serverVersion));
+        network.send(connectionId, new HandshakeResponse(result.message(), result.seat(), result.sessionToken(),
+            serverVersion, session.reconnectGraceSeconds()));
         session.attach(result.seat());
     }
 

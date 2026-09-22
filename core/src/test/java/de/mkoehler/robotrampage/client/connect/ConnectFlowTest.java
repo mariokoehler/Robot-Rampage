@@ -50,7 +50,7 @@ class ConnectFlowTest {
     @Test
     void anAcceptedPlayerIsAccepted() {
         handshaking();
-        HandshakeResponse welcome = new HandshakeResponse("Welcome", 2, "token", MINE);
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", 2, "token", MINE, 600);
 
         flow.onResponse(welcome);
 
@@ -151,7 +151,7 @@ class ConnectFlowTest {
 
         assertFalse(flow.onConnected());
         flow.onConnectFailed("late failure");
-        flow.onResponse(new HandshakeResponse("Welcome", 0, "t", MINE));
+        flow.onResponse(new HandshakeResponse("Welcome", 0, "t", MINE, 600));
         flow.onDisconnected();
 
         assertEquals(Phase.CANCELLED, flow.phase());
@@ -165,7 +165,7 @@ class ConnectFlowTest {
     @Test
     void cancellingAFinishedAttemptChangesNothing() {
         handshaking();
-        flow.onResponse(new HandshakeResponse("Welcome", 0, "t", MINE));
+        flow.onResponse(new HandshakeResponse("Welcome", 0, "t", MINE, 600));
 
         flow.cancel();
 
@@ -179,7 +179,7 @@ class ConnectFlowTest {
     void anAnswerBeforeTheConnectionIsIgnored() {
         flow.begin();
 
-        flow.onResponse(new HandshakeResponse("Welcome", 0, "t", MINE));
+        flow.onResponse(new HandshakeResponse("Welcome", 0, "t", MINE, 600));
 
         assertEquals(Phase.CONNECTING, flow.phase());
     }

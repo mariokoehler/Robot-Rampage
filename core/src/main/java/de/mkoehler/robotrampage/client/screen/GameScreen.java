@@ -17,6 +17,7 @@ import com.badlogic.gdx.utils.Scaling;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
+import de.mkoehler.robotrampage.client.connect.Reconnector;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.game.CardLook;
 import de.mkoehler.robotrampage.client.game.GameModel;
@@ -31,6 +32,7 @@ import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.ProgressPill;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
+import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
@@ -116,6 +118,9 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private int shownRevision = -1;
     private int respawnDialogTurn = -1;
     private boolean eliminatedDialogShown;
+    private Reconnector reconnector;
+    private Label reconnectDetail;
+    private Label reconnectCountdown;
 
     /**
      * Builds the screen for a game that has just started and takes over the messages that arrived behind the start message.
@@ -323,6 +328,10 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         if (closed) {
             return;
         }
+        if (reconnector != null) {
+            updateReconnect(delta);
+            return;
+        }
         server.link().poll(this);
         if (lobbyState != null && !closed) {
             closed = true;
@@ -389,14 +398,101 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * The server closed the connection: back to the connect screen with a note.
+     * The connection dropped. If the server handed out a session token to take the seat back with, tries to reconnect
+     * instead of leaving at once; otherwise (a refused handshake carries no token) falls back to the connect screen.
      */
     @Override
     public void onDisconnect() {
-        if (!closed) {
+        if (closed || reconnector != null) {
+            return;
+        }
+        String token = server.welcome().getSessionToken();
+        if (token == null) {
             closed = true;
             game.setScreen(new ConnectScreen(game, "The connection to the server was closed."));
+            return;
         }
+        reconnector = new Reconnector(address, model.nameOf(model.mySeat()), token, AppVersion.getVersion(),
+            server.welcome().getReconnectGraceSeconds(), NetworkClient::new);
+        showReconnectDialog();
+    }
+
+    /**
+     * Drives the reconnect attempt instead of the running game while the connection is down, and reacts once it settles.
+     *
+     * @param delta seconds since the previous frame
+     */
+    private void updateReconnect(float delta) {
+        reconnector.update(delta);
+        switch (reconnector.phase()) {
+            case TRYING -> refreshReconnectDialog();
+            case SUCCEEDED -> {
+                ConnectedServer connected = reconnector.connected();
+                reconnector = null;
+                closed = true;
+                game.setScreen(new LobbyScreen(game, connected, address));
+            }
+            case GAVE_UP -> {
+                String reason = reconnector.giveUpReason();
+                reconnector = null;
+                closed = true;
+                game.setScreen(new ConnectScreen(game, reason));
+            }
+        }
+    }
+
+    /**
+     * Opens the dialog that stays up while the seat is being taken back: no buttons to retry, since it retries by itself,
+     * only the choice to give up and leave.
+     */
+    private void showReconnectDialog() {
+        TextButton leave = ui.button("Leave game", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        leave.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                giveUpReconnect();
+            }
+        });
+        reconnectDetail = ui.label("", Theme.TextStyle.BODY_LARGE, Theme.INK);
+        reconnectDetail.setWrap(true);
+        reconnectCountdown = ui.label("", Theme.TextStyle.BODY, Theme.INK_MUTED);
+        open(new ModalDialog(ui, 640f, Theme.DANGER)
+            .title("Connection lost")
+            .row(reconnectDetail)
+            .row(reconnectCountdown)
+            .buttons(240f, leave)
+            .onEscape(this::giveUpReconnect));
+        refreshReconnectDialog();
+    }
+
+    /**
+     * Updates the wording of the open reconnect dialog with how the attempt stands.
+     */
+    private void refreshReconnectDialog() {
+        reconnectDetail.setText(reconnector.isWaitingToRetry() ? "Waiting to try again …"
+            : "Trying to reconnect (attempt " + reconnector.attemptNumber() + ") …");
+        reconnectCountdown.setText("Your seat is held for " + formatCountdown(reconnector.secondsLeft()) + " more.");
+    }
+
+    /**
+     * Formats a number of seconds as minutes and seconds, the way the programming timer's pill does (design.md 4.6: "Away
+     * 9:12").
+     *
+     * @param totalSeconds the seconds
+     * @return for example {@code 9:12}
+     */
+    private static String formatCountdown(int totalSeconds) {
+        return totalSeconds / 60 + ":" + (totalSeconds % 60 < 10 ? "0" : "") + totalSeconds % 60;
+    }
+
+    /**
+     * Gives up on reconnecting because the player chose to leave, and returns to the connect screen.
+     */
+    private void giveUpReconnect() {
+        reconnector.cancel();
+        reconnector = null;
+        closed = true;
+        game.setScreen(new ConnectScreen(game));
     }
 
     // ------------------------------------------------------------------------------------------------------
@@ -1458,5 +1554,18 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         closed = true;
         server.link().disconnect();
         game.setScreen(new ConnectScreen(game));
+    }
+
+    /**
+     * Gives up a reconnect attempt that is still under way, then releases the stage, mirroring {@link ConnectScreen}'s
+     * own {@code dispose()}. The worker thread it cancels is a daemon, so this is only tidiness, not a leak fix.
+     */
+    @Override
+    public void dispose() {
+        if (reconnector != null) {
+            reconnector.cancel();
+            reconnector = null;
+        }
+        super.dispose();
     }
 }

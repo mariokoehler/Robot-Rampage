@@ -139,7 +139,7 @@ class ConnectionAttemptTest {
         assertEquals("old-token", request.getSessionToken());
         assertEquals(Phase.HANDSHAKING, attempt.flow().phase());
 
-        HandshakeResponse welcome = new HandshakeResponse("Welcome", 1, "new-token", MINE);
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", 1, "new-token", MINE, 600);
         LobbyState lobby = new LobbyState(List.of(), "Proving Grounds", 8, 2, 12, 12, 3, 3, 90);
         link.incoming.add(welcome);
         link.incoming.add(lobby);
@@ -164,7 +164,7 @@ class ConnectionAttemptTest {
         assertNull(((HandshakeRequest) link.sent.get(0)).getSessionToken());
 
         link.dropAfterIncoming = true;
-        link.incoming.add(new HandshakeResponse("Welcome", 1, "t", MINE));
+        link.incoming.add(new HandshakeResponse("Welcome", 1, "t", MINE, 600));
         updateUntil(attempt, () -> attempt.flow().phase() == Phase.ACCEPTED);
 
         assertTrue(attempt.connected().closedAlready());
@@ -283,7 +283,7 @@ class ConnectionAttemptTest {
 
         attempt.cancel();
         awaitDisconnect();
-        link.incoming.add(new HandshakeResponse("Welcome", 1, "t", MINE));
+        link.incoming.add(new HandshakeResponse("Welcome", 1, "t", MINE, 600));
         attempt.update();
 
         assertEquals(Phase.CANCELLED, attempt.flow().phase());
@@ -297,7 +297,7 @@ class ConnectionAttemptTest {
     void cancellingAgainIsHarmless() {
         ConnectionAttempt attempt = started(null);
         updateUntil(attempt, () -> !link.sent.isEmpty());
-        link.incoming.add(new HandshakeResponse("Welcome", 1, "t", MINE));
+        link.incoming.add(new HandshakeResponse("Welcome", 1, "t", MINE, 600));
         updateUntil(attempt, () -> attempt.flow().phase() == Phase.ACCEPTED);
 
         attempt.cancel();
