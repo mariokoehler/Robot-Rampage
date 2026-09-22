@@ -5,6 +5,7 @@ import com.badlogic.gdx.files.FileHandle;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
@@ -48,11 +49,11 @@ public final class UiKit implements Disposable {
     private final Texture pixel;
     private final TextField.TextFieldStyle fieldStyle;
     private final TextField.TextFieldStyle fieldErrorStyle;
-    private final Map<String, Texture> images = new HashMap<>();
+    private final TextureAtlas atlas;
     private final Map<String, NinePatchDrawable> shapeCache = new HashMap<>();
 
     /**
-     * Generates the fonts and builds the shared shapes.
+     * Generates the fonts, builds the shared shapes and loads the picture atlas.
      *
      * @param fontDirectory the folder with the font files, for example {@code Gdx.files.internal("fonts")}
      * @param fontScale     the ratio of the real screen height to the layout height, see {@link Theme.Fonts#load}
@@ -66,6 +67,7 @@ public final class UiKit implements Disposable {
         pixmap.dispose();
         this.fieldStyle = fieldStyle(false);
         this.fieldErrorStyle = fieldStyle(true);
+        this.atlas = new TextureAtlas(Gdx.files.internal("textures/game.atlas"));
     }
 
     /**
@@ -266,19 +268,24 @@ public final class UiKit implements Disposable {
     }
 
     /**
-     * Returns a picture from the asset folder, loaded on first use and kept until this kit is disposed. Pictures are
-     * drawn smaller than they are stored, so they are filtered with mipmaps.
+     * Returns a picture from the shared atlas ({@code assets/textures/game.atlas}, built by the {@code AtlasPacker}
+     * dev tool from every PNG under {@code assets/board}, {@code assets/cards}, {@code assets/icons},
+     * {@code assets/robots} and {@code assets/tiles} — one texture bind for every picture the game draws, mipmapped
+     * since pictures are drawn smaller than they are stored).
      *
      * @param path the path relative to the asset folder, for example {@code robots/robot-1-bolt.png}
      * @return the picture as a drawable, which can also be drawn turned
+     * @throws IllegalArgumentException if the atlas has no region for the path (it is missing from {@code assets/}, or
+     *                                   the atlas is stale — rerun {@code AtlasPacker}; {@code AtlasCoverageTest} guards
+     *                                   against this happening unnoticed)
      */
     public TextureRegionDrawable image(String path) {
-        Texture texture = images.computeIfAbsent(path, key -> {
-            Texture loaded = new Texture(Gdx.files.internal(key), true);
-            loaded.setFilter(Texture.TextureFilter.MipMapLinearLinear, Texture.TextureFilter.Linear);
-            return loaded;
-        });
-        return new TextureRegionDrawable(new TextureRegion(texture));
+        String region = path.endsWith(".png") ? path.substring(0, path.length() - ".png".length()) : path;
+        TextureRegion found = atlas.findRegion(region);
+        if (found == null) {
+            throw new IllegalArgumentException("No atlas region for \"" + path + "\" (looked up as \"" + region + "\")");
+        }
+        return new TextureRegionDrawable(found);
     }
 
     /**
@@ -327,15 +334,14 @@ public final class UiKit implements Disposable {
     }
 
     /**
-     * Releases the fonts, the shapes and the shared pixel.
+     * Releases the fonts, the shapes, the shared pixel and the picture atlas.
      */
     @Override
     public void dispose() {
         fonts.dispose();
         shapes.dispose();
         pixel.dispose();
-        images.values().forEach(Texture::dispose);
-        images.clear();
+        atlas.dispose();
         shapeCache.clear();
     }
 }

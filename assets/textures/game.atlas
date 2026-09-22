@@ -1,0 +1,398 @@
+
+game.png
+size: 2048, 512
+format: RGBA8888
+filter: MipMapLinearLinear, Linear
+repeat: none
+board/crusher
+  rotate: false
+  xy: 651, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+board/flag
+  rotate: false
+  xy: 521, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+board/laser-emitter
+  rotate: false
+  xy: 781, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+board/pusher
+  rotate: false
+  xy: 781, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+board/robot-badge
+  rotate: false
+  xy: 1301, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+board/robot-wedge
+  rotate: false
+  xy: 1431, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+board/start-square
+  rotate: false
+  xy: 1301, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+board/wall
+  rotate: false
+  xy: 1431, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+cards/back-up
+  rotate: false
+  xy: 1, 1
+  size: 112, 112
+  orig: 112, 112
+  offset: 0, 0
+  index: -1
+cards/move-1
+  rotate: false
+  xy: 1561, 391
+  size: 112, 112
+  orig: 112, 112
+  offset: 0, 0
+  index: -1
+cards/move-2
+  rotate: false
+  xy: 1431, 131
+  size: 112, 112
+  orig: 112, 112
+  offset: 0, 0
+  index: -1
+cards/move-3
+  rotate: false
+  xy: 115, 1
+  size: 112, 112
+  orig: 112, 112
+  offset: 0, 0
+  index: -1
+cards/rotate-left
+  rotate: false
+  xy: 1561, 277
+  size: 112, 112
+  orig: 112, 112
+  offset: 0, 0
+  index: -1
+cards/rotate-right
+  rotate: false
+  xy: 1675, 391
+  size: 112, 112
+  orig: 112, 112
+  offset: 0, 0
+  index: -1
+cards/u-turn
+  rotate: false
+  xy: 229, 1
+  size: 112, 112
+  orig: 112, 112
+  offset: 0, 0
+  index: -1
+icons/chevron-left
+  rotate: false
+  xy: 1675, 325
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/close
+  rotate: false
+  xy: 1789, 439
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/eye
+  rotate: false
+  xy: 343, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/flag
+  rotate: false
+  xy: 1855, 439
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/host-crown
+  rotate: false
+  xy: 409, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/info
+  rotate: false
+  xy: 1921, 439
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/lock
+  rotate: false
+  xy: 475, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/pause
+  rotate: false
+  xy: 541, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/play
+  rotate: false
+  xy: 607, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/power
+  rotate: false
+  xy: 673, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/settings
+  rotate: false
+  xy: 739, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/tick
+  rotate: false
+  xy: 805, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/warning
+  rotate: false
+  xy: 871, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+icons/wifi
+  rotate: false
+  xy: 937, 49
+  size: 64, 64
+  orig: 64, 64
+  offset: 0, 0
+  index: -1
+robots/robot-1-bolt
+  rotate: false
+  xy: 1041, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+robots/robot-2-twin
+  rotate: false
+  xy: 911, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+robots/robot-3-cog
+  rotate: false
+  xy: 1041, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+robots/robot-4-beacon
+  rotate: false
+  xy: 1171, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+robots/robot-5-ears
+  rotate: false
+  xy: 1041, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+robots/robot-6-spring
+  rotate: false
+  xy: 1171, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+robots/robot-7-fin
+  rotate: false
+  xy: 1301, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+robots/robot-8-stack
+  rotate: false
+  xy: 1171, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt
+  rotate: false
+  xy: 1, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-corner-left
+  rotate: false
+  xy: 1, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-corner-right
+  rotate: false
+  xy: 131, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-express
+  rotate: false
+  xy: 1, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-express-corner-left
+  rotate: false
+  xy: 131, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-express-corner-right
+  rotate: false
+  xy: 261, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-express-join-left
+  rotate: false
+  xy: 131, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-express-join-right
+  rotate: false
+  xy: 261, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-express-t
+  rotate: false
+  xy: 391, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-express-x
+  rotate: false
+  xy: 261, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-join-left
+  rotate: false
+  xy: 391, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-join-right
+  rotate: false
+  xy: 521, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-t
+  rotate: false
+  xy: 391, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/belt-x
+  rotate: false
+  xy: 521, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/floor
+  rotate: false
+  xy: 651, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/gear-clockwise
+  rotate: false
+  xy: 781, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/gear-counterclockwise
+  rotate: false
+  xy: 651, 115
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/pit
+  rotate: false
+  xy: 911, 375
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+tiles/repair-site
+  rotate: false
+  xy: 911, 245
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1

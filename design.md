@@ -916,6 +916,21 @@ drops them (any filename, any format, PSDs welcome) and is committed as backup;
 atlases. Claude integrates: renames, converts, packs atlases, copies into
 `assets/`. The game never loads from `assets-raw/`.
 
+**Implemented (M4): one texture atlas.** `assets/textures/game.atlas` (+ its one page, `game.png`) is built by the
+`AtlasPacker` dev tool (`lwjgl3/src/test`, `gdx-tools` test-scoped so it never reaches the shaded runtime jar) from
+every PNG under `assets/board`, `assets/cards`, `assets/icons`, `assets/robots` and `assets/tiles` — 56 pictures at up
+to 128×128, comfortably one 2048×2048 page, so every picture the game draws sits behind a single texture bind instead
+of 56 separate ones. **Packs from `assets/`, not `assets-raw/`**, unlike StarWars' packer: `assets/tiles`/`assets/robots`
+are themselves generated from the design's SVGs by `tools/design-import/rasterize.js`, and `assets/board` by
+`make-board-sprites.js` (except the hand-repainted `robot-wedge.png`, 4.2) — packing the already-rasterised PNGs keeps
+one generation path and cannot undo that repaint. `UiKit.image(path)` is the single place every picture in the client
+is loaded from (verified: every `ui.image(...)` call site in the whole client), so swapping it from a per-path `Texture`
+cache to atlas region lookups needed no change anywhere else — region names keep their subfolder (`"tiles/floor"`),
+matching the path strings already in use once `.png` is stripped. `AtlasCoverageTest` (`lwjgl3`, a real, fast, GL-free
+test — it parses the `.atlas` file as text rather than loading it as a texture) guards against a stale atlas: a region
+`UiKit.image` cannot find is silently invisible on screen, not a crash, and none of `ScreenSnapshot`, `BoardSnapshot` or
+`GameScreenDriver` would catch that on their own.
+
 ### 4.6 UI design: the mockups
 
 The owner designed every main screen and dialog in Claude Design; the canvas
@@ -1062,8 +1077,11 @@ no UI and is where the test value is:
   "Connection lost" dialog, the `Reconnector` retry state machine, and the grace period travelling in
   `HandshakeResponse`. Slice 9 is **done**: the "Time's up" reveal (4.3) — `ProgramRevealed` shows a player the cards
   the server filled in for them, or that were already locked in when they reconnected, instead of hidden "?" slots.
-  Drag and drop for cards is dropped from the roadmap (owner, 2026-09-22): click-only placement is the permanent design,
-  not a gap. Still to come: the PNG/atlas pipeline for the drawings.
+  Slice 10 is **done**: the one texture atlas (4.5) — `AtlasPacker` builds `assets/textures/game.atlas` from every
+  picture the client draws, `UiKit.image` reads from it, and `AtlasCoverageTest` guards against it going stale.
+  Drag and drop for cards is dropped from the roadmap (owner, 2026-09-22): click-only placement is the permanent
+  design, not a gap. **With that, M4's roadmap has nothing left "still to come"** — the milestone's own remaining
+  bar, the first real playtest, is the owner's to run, not a further slice to build.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
   toggle, animations) and a board that uses pushers and crushers. (Multiple

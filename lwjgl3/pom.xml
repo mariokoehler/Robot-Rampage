@@ -43,9 +43,9 @@
       <version>${gdxVersion}</version>
       <classifier>natives-desktop</classifier>
     </dependency>
-    <!-- Test-scoped so it never ends up in the shaded runtime jar: used only by a future
-         AtlasPacker dev tool under src/test, run on demand to (re)build texture atlases from
-         assets-raw/ (same setup as the StarWars project). -->
+    <!-- Test-scoped so it never ends up in the shaded runtime jar: used by the AtlasPacker dev tool
+         under src/test, run on demand to rebuild assets/textures/game.atlas from the PNGs already in
+         assets/ (deliberately not assets-raw/, unlike the StarWars project — see AtlasPacker's Javadoc). -->
     <dependency>
       <groupId>com.badlogicgames.gdx</groupId>
       <artifactId>gdx-tools</artifactId>

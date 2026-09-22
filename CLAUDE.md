@@ -22,10 +22,12 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-9 (client shell, Startup,
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-10 (client shell, Startup,
 Connect, Lobby, static board renderer, programming screen, turn replay, Game Over screen, respawn/power-down/eliminated
-dialogs, reconnecting a dropped client, the "Time's up" reveal) done** — 381 unit tests in `core`, 3 in `lwjgl3`
-(`Lwjgl3LauncherTest`, pure arithmetic — everything else in that module's test tree is a `main()`-driven dev tool, not
+dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture atlas) done — nothing left "still to
+come" on M4's own roadmap** — 381 unit tests in `core`, 4 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic,
+`AtlasCoverageTest` parses `assets/textures/game.atlas` as text — everything else in that module's test tree is a
+`main()`-driven dev tool, not
 picked up by surefire), plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
@@ -175,8 +177,31 @@ today). `ScreenSnapshot` gained `game-time-up.png` (all free, no damage) and `ga
 revealed free registers side by side — the mixed case worth actually rendering, not just unit-testing) — see
 `ProgramDraftTest`/`GameModelTest`/`GameSessionTest` for the logic itself.
 **Drag and drop for cards is dropped from the roadmap (user, 2026-09-22): click-only placement stays.**
-**Next: the PNG/atlas pipeline for the drawings** — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63`
-(Claude Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
+**One texture atlas (slice 10):** `AtlasPacker` (`lwjgl3/src/test/.../tools`, `gdx-tools` test-scoped) packs every PNG
+under `assets/board`, `assets/cards`, `assets/icons`, `assets/robots` and `assets/tiles` (56 pictures, one 2048×2048
+page) into `assets/textures/game.atlas`. **Packs from `assets/`, not `assets-raw/`**, unlike the StarWars template its
+Javadoc otherwise follows: `assets/tiles`/`assets/robots`/`assets/board` are themselves *generated* (rasterize.js,
+make-board-sprites.js — except the hand-repainted `robot-wedge.png`, which the script already skips), so packing the
+already-rasterised PNGs keeps one generation path instead of re-deriving it inside the packer. **`UiKit.image(path)` was
+the one place every picture in the client loads from** (confirmed with a search — every `ui.image(...)` call site in
+`core`), so switching it from a per-path cached `Texture` to `atlas.findRegion(...)` needed no other file touched:
+region names keep their subfolder prefix (`combineSubdirectories = true`, verified against the generated `.atlas` file
+directly rather than assumed — e.g. `"tiles/floor"`), matching the path strings already in use once `.png` is stripped.
+`AtlasCoverageTest` (new, `lwjgl3`) parses `assets/textures/game.atlas` as **plain text**, not as a real `TextureAtlas`
+(which would load its page as a GPU texture and need a GL context, breaking it as an ordinary surefire test) — it
+diffs the region names against every PNG actually present, both directions, so both a missing region (silently
+invisible — none of `ScreenSnapshot`/`BoardSnapshot`/`GameScreenDriver` would catch that on their own) and a stale
+leftover region are caught. **Regenerate after adding/removing/replacing a picture:**
+```
+mvn -q -pl core -am install -DskipTests
+mvn -pl lwjgl3 dependency:build-classpath -Dmdep.outputFile=target/test-cp.txt -Dmdep.includeScope=test
+cd lwjgl3 && java -cp "target/classes;target/test-classes;$(cat target/test-cp.txt)" de.mkoehler.robotrampage.lwjgl3.tools.AtlasPacker
+```
+**With slice 10, M4's own roadmap has nothing left "still to come".** Verified with the same loop as every other
+client slice: full `mvn clean package`, then `BoardSnapshot`/`ScreenSnapshot`/`GameScreenDriver` (all pictures —
+robots, tiles, cards, icons, dialog icons — visually spot-checked across several generated PNGs, not just one).
+**Next: whatever the user picks** — M5 (pushers/crushers UI), the Settings dialog, or the first real playtest, which is
+the owner's to run, not a further slice to build. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
 not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed
@@ -343,10 +368,12 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   any format, PSDs welcome); committed as backup. `assets/` —
   what the game loads at runtime; Claude integrates: rename properly, convert, pack
   atlases, copy over. **Never load from `assets-raw/`.**
-- Both are currently empty (`.gitkeep`). When atlases are needed, reuse StarWars'
-  `AtlasPacker` approach (libGDX `TexturePacker`, `gdx-tools` test-scoped in `lwjgl3`,
-  the packer class under `lwjgl3/src/test`) — see StarWars `CLAUDE.md` "Asset
-  pipeline" for the numeric-suffix and atlas-vs-`Texture` gotchas.
+- `assets-raw/` is mostly empty (the `.gitkeep`-era placeholder; `assets-raw/design`, extracted from the Claude Design
+  canvas, is the exception). `assets/` holds the real runtime pictures, packed into one atlas by `AtlasPacker` — see
+  "One texture atlas (slice 10)" above for the details and the regeneration command; `AtlasCoverageTest` guards it from
+  going stale. Unlike StarWars' `AtlasPacker`, this one packs from `assets/` (already-rasterised PNGs), not
+  `assets-raw/` — see its Javadoc for why. StarWars `CLAUDE.md` "Asset pipeline" still has the numeric-suffix
+  (animation-frame) gotcha, not needed here since nothing in this game is a frame sequence.
 - The user has Photoshop and will hand-edit image assets on request — just ask.
 - `assets/*.json` config files (connection config etc.) are runtime-generated and
   gitignored; the `*.cmd` helpers and the `exec:exec` config run the client with
