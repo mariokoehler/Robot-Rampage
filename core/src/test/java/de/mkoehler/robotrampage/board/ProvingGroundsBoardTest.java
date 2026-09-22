@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.board;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -57,6 +58,19 @@ class ProvingGroundsBoardTest {
         assertTrue(board.features().containsValue(SquareFeature.REPAIR));
         assertEquals(2, board.lasers().size());
         assertTrue(board.walls().values().stream().anyMatch(sides -> !sides.isEmpty()));
+    }
+
+    /**
+     * It also uses the M5 element set: pushers and crushers, so a playtest can reach them. This
+     * guards against a future edit silently dropping them again (which {@link #survivesAnExportAndReload()}
+     * would not catch, since it only checks that the file round-trips, not what is in it).
+     */
+    @Test
+    void hasPushersAndCrushers() {
+        Board board = BoardLoader.loadResource(RESOURCE).board();
+
+        assertFalse(board.pushers().isEmpty());
+        assertTrue(board.features().containsValue(SquareFeature.CRUSHER));
     }
 
     /**

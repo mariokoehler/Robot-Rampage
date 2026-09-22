@@ -21,10 +21,13 @@ import java.util.Set;
  *   @  start square      1 2 3 ...  flags       L  laser mounted on that square's edge
  *   o  pit               &gt; &lt; ^ v    normal belt    E W N S    express belt
  *   c  clockwise gear    a  counter-clockwise gear     +  repair site      x  crusher
+ *   P  pusher mounted on that square's edge
  * </pre>
  * Later entries in that list win when several things share a square (a laser hides the belt or
  * feature under it), which is fine for the boards so far; the picture is a reading aid, not a
- * lossless encoding.
+ * lossless encoding — a pusher's own wall (implied, not listed separately, design.md 2.9) does not
+ * get a {@code |}/{@code -} of its own either, exactly like a laser's: only the mounted square is
+ * marked, not which side it is mounted on.
  *
  * @author Mario Koehler
  */
@@ -78,6 +81,9 @@ public final class BoardPicture {
         for (BoardDefinition.Edge edge : board.edges()) {
             if (edge.laser() != null) {
                 cells.put(key(edge.x(), edge.y()), 'L');
+            }
+            if (edge.pusher() != null) {
+                cells.put(key(edge.x(), edge.y()), 'P');
             }
             if (!edge.wall()) {
                 continue;

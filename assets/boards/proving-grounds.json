@@ -7,6 +7,7 @@
   "height": 12,
   "squares": [
     {"x": 1, "y": 2, "belt": {"dir": "NORTH", "express": true}},
+    {"x": 3, "y": 2, "feature": "CRUSHER", "registers": [1, 3, 5]},
     {"x": 10, "y": 2, "feature": "REPAIR"},
     {"x": 1, "y": 3, "belt": {"dir": "NORTH", "express": true}},
     {"x": 8, "y": 3, "feature": "GEAR_CLOCKWISE"},
@@ -32,12 +33,15 @@
     {"x": 5, "y": 7, "belt": {"dir": "EAST", "express": false}},
     {"x": 6, "y": 7, "belt": {"dir": "EAST", "express": false}},
     {"x": 7, "y": 7, "belt": {"dir": "SOUTH", "express": false}},
+    {"x": 9, "y": 7, "feature": "CRUSHER", "registers": [2, 4]},
     {"x": 10, "y": 7, "belt": {"dir": "NORTH", "express": false}},
     {"x": 10, "y": 8, "belt": {"dir": "NORTH", "express": false}},
     {"x": 10, "y": 9, "belt": {"dir": "NORTH", "express": false}},
     {"x": 1, "y": 10, "feature": "REPAIR"}
   ],
   "edges": [
+    {"x": 3, "y": 3, "side": "NORTH", "pusher": {"registers": [1, 3, 5]}},
+    {"x": 9, "y": 6, "side": "SOUTH", "pusher": {"registers": [2, 4]}},
     {"x": 11, "y": 6, "side": "EAST", "laser": {"beams": 1}},
     {"x": 2, "y": 8, "side": "EAST", "wall": true},
     {"x": 0, "y": 9, "side": "WEST", "laser": {"beams": 1}},

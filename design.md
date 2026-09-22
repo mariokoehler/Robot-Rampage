@@ -269,9 +269,10 @@ square itself.
 v1 ships with one fixed board: an original 12×12 layout
 (one classic board section) with 3 flags and up to 8 start squares, using the
 v1 feature set (walls, pits, normal/express belts, gears, board lasers, repair
-sites). Pushers, crushers and power-down are part of the rules, the engine and the
-board format (all implemented in M1/M2); this first board just does not use pushers
-or crushers yet. The layout is the JSON file `assets/boards/proving-grounds.json`
+sites) **plus two pushers and two crushers** (M5, 2026 — added once their client-side
+rendering and animation existed to playtest them with, below). Power-down is part of
+the rules, the engine and the board format too (all implemented in M1/M2). The layout
+is the JSON file `assets/boards/proving-grounds.json`
 (3.6) and is *not* a copy of any published board. It was drafted by Claude for the
 project owner to review and adjust.
 
@@ -286,17 +287,17 @@ square below.
                       -
  y9   L . . . .|. . . . . ^ .
  y8   . . 2|. . . . . . . ^ .
- y7   . . . . > > > v . . ^ .
- y6   . N . . ^ o o v . . ^ L
+ y7   . . . . > > > v . x ^ .
+ y6   . N . . ^ o o v . P ^ L
  y5   . N . . ^ o o v . . ^ .
  y4   . N . . ^ < < < . . o .
- y3   . N . . . . . . c 1 . .
- y2   . N . . . . . . . . + .
+ y3   . N . P . . . . c 1 . .
+ y2   . N . x . . . . . . + .
  y1   . . . . . . . . . . . .
  y0   . . @ @ @ @ @ @ @ @ . .
 
 @ start square (8, all facing north)   1 2 3 flags   L laser on the outer edge (fires across the row)
-o pit   > < ^ v normal belt   E W N S express belt   c clockwise gear   + repair site
+o pit   > < ^ v normal belt   E W N S express belt   c clockwise gear   + repair site   x crusher   P pusher
 ```
 
 - Flag 1 is close to the start, next to a gear. Flag 2 sits behind the belt ring in the
@@ -305,6 +306,26 @@ o pit   > < ^ v normal belt   E W N S express belt   c clockwise gear   + repair
   leads towards it, with a pit at its foot.
 - The 12 belts around the 2×2 pit form a closed clockwise ring: robots on it circle
   until they step off, and a robot pushed off its edge into the pit is destroyed.
+- **Pushers and crushers (M5), each pair set up as a deliberate combo**: a pusher shoves a
+  robot standing on its square straight onto a crusher's square, in the *same* registers
+  the crusher is active in, so getting pushed there is genuinely dangerous, not just a
+  detour. Pusher on `(9,6)` mounted on its south side (pushes north onto the crusher at
+  `(9,7)`), both active in registers 2 and 4, near flag 1 and the gear. Pusher on `(3,3)`
+  mounted on its north side (pushes south onto the crusher at `(3,2)`), both active in
+  registers 1, 3 and 5, on the way up the board's north-west side. `BoardPicture`
+  (`core/src/test/.../testsupport`, the tool that generates the picture above) gained a
+  `P` glyph for a pusher's own square — it had none before, since the first board never
+  used one; like a laser's `L`, it marks the mounted square only, not which side the
+  wall sits on (the picture is a reading aid, not a lossless encoding — see its Javadoc).
+  **Checked empirically before shipping, not just reasoned about** (a throwaway
+  instrumented run of 300 random `TurnFuzzTest`-style games, since passing invariants
+  alone say nothing about whether a hazard ever fires): the `(3,3)`/`(3,2)` pair fires
+  often (223 of 300 games), the `(9,6)`/`(9,7)` pair much less so (18 of 300) — the wall a
+  pusher implies on its own mount blocks one approach to `(9,6)`, and it sits off the
+  board's main north-bound traffic. Still clearly a live hazard, not decoration, and
+  every fire of both landed exactly on its paired crusher (0 misses) — left as designed
+  asymmetry (a common one and a rare one) rather than re-tuned for a marginal frequency
+  gain.
 - The board passes validation with **no warnings** (no belt leads into a wall, pit or
   off the edge) and every flag is reachable from every start square; that is checked by
   `ProvingGroundsBoardTest`, and `TurnFuzzTest` plays random games on it.
@@ -1123,10 +1144,25 @@ no UI and is where the test value is:
   only this robot's own cards, `GameModel.ghostPath()` feeds it the draft, and `GameScreen` draws faint copies of the
   robot along the way. **With that, M4's roadmap has nothing left "still to come"** — the milestone's own remaining
   bar, the first real playtest, is the owner's to run, not a further slice to build.
-- **M5 — Second wave in the client and on the boards.** The engine already
-  implements pushers, crushers and power-down (M1); this adds their UI (power-down
-  toggle, animations) and a board that uses pushers and crushers. (Multiple
-  concurrent games per server / real lobbies come after v1, see 7.)
+- **M5 — Second wave in the client and on the boards. Done.** The engine already
+  implemented pushers, crushers and power-down (M1); the power-down toggle shipped with
+  M4 slice 7. What M5 actually added: **a board that uses pushers and crushers**
+  (`proving-grounds.json`, 2.11, two of each) — and finding, while adding it, that their
+  "animations" were **already done**: `TurnReplay`'s event handling is generic by design
+  (any `RobotMoved` smoothly interpolates the robot regardless of `MoveCause`, any
+  `RobotDestroyed` fades it out regardless of `DestructionCause`), and its feed-line
+  wording already had dedicated `PUSHERS`/`CRUSHER` cases from the turn-replay work in
+  M4 slice 5 — so once real pusher/crusher events existed to play back, the UI for them
+  needed no further work. **Considered and skipped:** highlighting the specific
+  pusher/crusher tile during the beat it fires (mirroring how a laser volley lights up
+  its beam). Deriving *which* tile fired needs event-level surgery a laser volley
+  doesn't (a pusher's mounted square only from `RobotMoved.from()`, a crusher's only from
+  the replay's own position tracking *before* applying the destroy event) and still
+  cannot show a hazard that fires with nobody on it, which would need the `Board` itself
+  threaded into `TurnReplay`'s constructor — real scope for a polish nobody asked for.
+  Revisit only if actual playtesting says the existing feedback (the robot moving/fading,
+  the feed line naming the pusher or crusher) isn't enough to tell what happened.
+  (Multiple concurrent games per server / real lobbies come after v1, see 7.)
 - **M6 — More boards & Board Editor.** Board selection, board composition, first procedural
   generator (3.6). Optional Board Editor, for authoring boards in a visual editor instead of JSON text.
   Could be a separate tool in a new dev-tools sub module.
