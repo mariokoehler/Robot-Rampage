@@ -242,12 +242,20 @@ public final class ConnectScreen extends StageScreen {
 
     /**
      * Starts joining a server and shows the dialog that waits for the answer.
+     * <p>
+     * The session token of the last game this client joined, if any, is presented along with the name: if it still
+     * names a seat on this server, the join becomes a reconnect (covering a client that was closed or crashed, not just
+     * a dropped connection, which {@link de.mkoehler.robotrampage.client.connect.Reconnector} already covers while the
+     * app keeps running). A token the server does not recognise is always harmless to send — the session falls back to
+     * an ordinary join by name.
      *
      * @param address the server
      * @param name    the display name, already checked
      */
     private void join(ServerAddress address, String name) {
-        attempt = new ConnectionAttempt(new NetworkClient(), address, name, null, AppVersion.getVersion());
+        String token = game.settings().sessionToken();
+        attempt = new ConnectionAttempt(new NetworkClient(), address, name, token == null || token.isBlank() ? null : token,
+            AppVersion.getVersion());
         reported = ConnectFlow.Phase.IDLE;
         attempt.start();
         showConnectingDialog(address);

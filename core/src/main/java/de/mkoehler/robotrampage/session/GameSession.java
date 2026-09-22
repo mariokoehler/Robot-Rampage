@@ -209,6 +209,9 @@ public final class GameSession {
         if (phase != Phase.LOBBY) {
             return JoinResult.rejected("A game is already in progress.");
         }
+        if (nameTaken(name)) {
+            return JoinResult.rejected("That name is already taken.");
+        }
         int seat = lowestFreeSeat();
         if (seat < 0) {
             return JoinResult.rejected("The game is full.");
@@ -804,6 +807,23 @@ public final class GameSession {
             }
         }
         return -1;
+    }
+
+    /**
+     * Checks whether a name is already in use by a seated player, so two players are never shown under the same name.
+     * Compared case-insensitively (so "Ann" and "ann" also collide), and only against players who have not left for
+     * good, so a departed player's name can be reused.
+     *
+     * @param name the cleaned name a new player wants to join under
+     * @return {@code true} if the name is taken
+     */
+    private boolean nameTaken(String name) {
+        for (SessionPlayer player : players.values()) {
+            if (!player.left && player.name.equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

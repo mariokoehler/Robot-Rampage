@@ -311,6 +311,41 @@ class GameSessionTest {
     }
 
     /**
+     * Two players cannot join under the same name — compared without regard to case, so "Ann" and "ann" also collide —
+     * but the name is free again once the first player has left.
+     */
+    @Test
+    void namesMustBeUniqueAmongSeatedPlayers() {
+        join("Ann");
+
+        JoinResult duplicate = session.join("Ann", null);
+        assertFalse(duplicate.accepted());
+        assertTrue(duplicate.message().contains("already taken"), duplicate.message());
+        JoinResult caseInsensitive = session.join("ann", null);
+        assertFalse(caseInsensitive.accepted());
+
+        session.disconnect(0);
+
+        assertEquals(0, join("Ann"));
+    }
+
+    /**
+     * A stale or missing token during a running game is refused because the game is in progress, not because the
+     * player's own (still-seated, merely disconnected) name looks taken — the phase gate must run before the name
+     * check, or a disconnected player trying to get back in without a working token is told their own name is taken.
+     */
+    @Test
+    void aStaleTokenDuringARunningGameIsRefusedForBeingInProgressNotForTheName() {
+        startWith(2);
+
+        session.disconnect(0);
+        JoinResult result = session.join("Player0", null);
+
+        assertFalse(result.accepted());
+        assertTrue(result.message().contains("in progress"), result.message());
+    }
+
+    /**
      * The lobby is full when every start square has a player, and nobody can join a running game.
      */
     @Test

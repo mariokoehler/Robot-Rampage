@@ -41,7 +41,7 @@ class SettingsStoreTest {
     @Test
     void savedSettingsComeBack() {
         SettingsStore store = new SettingsStore(folder.resolve("nested").resolve("settings.json"));
-        ClientSettings settings = new ClientSettings("robots.example.org:4000", "Łukasz");
+        ClientSettings settings = new ClientSettings("robots.example.org:4000", "Łukasz", "token-abc");
 
         assertTrue(store.save(settings));
 
@@ -54,11 +54,11 @@ class SettingsStoreTest {
     @Test
     void savingAgainReplacesTheFile() {
         SettingsStore store = new SettingsStore(folder.resolve("settings.json"));
-        store.save(new ClientSettings("a:1", "A"));
+        store.save(new ClientSettings("a:1", "A", null));
 
-        store.save(new ClientSettings("b:2", "B"));
+        store.save(new ClientSettings("b:2", "B", null));
 
-        assertEquals(new ClientSettings("b:2", "B"), store.load());
+        assertEquals(new ClientSettings("b:2", "B", null), store.load());
     }
 
     /**
@@ -75,7 +75,8 @@ class SettingsStoreTest {
     }
 
     /**
-     * Properties a future version added are ignored, and missing ones become empty text.
+     * Properties a future version added are ignored, missing text ones become empty text, and a missing session token
+     * stays {@code null}.
      *
      * @throws IOException if the test file cannot be written
      */
@@ -86,7 +87,7 @@ class SettingsStoreTest {
 
         ClientSettings loaded = new SettingsStore(future).load();
 
-        assertEquals(new ClientSettings("h:1", ""), loaded);
+        assertEquals(new ClientSettings("h:1", "", null), loaded);
     }
 
     /**

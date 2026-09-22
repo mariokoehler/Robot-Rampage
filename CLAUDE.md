@@ -94,10 +94,9 @@ run it with an output folder argument to get `dialog-powerdown.png` (the only on
 `ScreenSnapshot` can't reach it on its own).
 **Reconnect (slice 8):** `client.connect.Reconnector` (new class, libGDX-free, unit-tested with a fake `ServerLink` in
 `ReconnectorTest`) is the retry state machine: `GameScreen.onDisconnect()` starts one with the player's own display name
-(`model.nameOf(model.mySeat())`), the session token and the grace seconds from `server.welcome()` (kept in memory only —
-a token is only valid for the life of the server process, so disk persistence would just as often hand back a stale
-one) and a `NetworkClient::new` link factory, matching `ConnectionAttempt`'s pattern of taking a `ServerLink` rather
-than opening its own. **The display name is not optional, even though the server ignores it whenever the token still
+(`model.nameOf(model.mySeat())`), the session token and the grace seconds from `server.welcome()` and a `NetworkClient::new`
+link factory, matching `ConnectionAttempt`'s pattern of taking a `ServerLink` rather than opening its own. **The display
+name is not optional, even though the server ignores it whenever the token still
 names a seat** (advisor caught this before it shipped): grace expiring server-side first, the server process
 restarting, or the session already having moved back to `LOBBY` (which forgets a dropped player, 5.1) all turn the
 retry into an ordinary join the server evaluates by name, and a blank name there is a silent wrong-seat bug, not an
@@ -127,6 +126,33 @@ once `remainingSeconds <= 0f`. `Reconnector.isWaitingToRetry()` exists only so t
 `GameScreenDriver.driveReconnect` covers only what needs a real widget (the dialog opening on disconnect, and "Leave
 game" returning to `ConnectScreen`) — the retry/grace/refusal state machine itself has no window to click and stays in
 `ReconnectorTest`.
+**Reconnect bugfixes (found by the user in-game, 2026-09-22):** two gaps `Reconnector` alone didn't cover.
+(1) **Duplicate display names.** `GameSession.join` now refuses a second player under a name (case-insensitively) already
+held by a seated, not-yet-left player — `"That name is already taken."` **The check must run *after* the
+`phase != LOBBY` gate, not before**: a disconnected player's own seat is still in the `players` map (merely
+`connected == false`, not `left`), so checking the name first told a player trying to get back in with a stale/missing
+token that their own name was taken, instead of the correct "A game is already in progress." (advisor caught this before
+it shipped; `GameSessionTest.aStaleTokenDuringARunningGameIsRefusedForBeingInProgressNotForTheName` guards the ordering).
+(2) **A closed/crashed client couldn't rejoin at all**, because `Reconnector` only exists in memory inside a live
+`GameScreen` — a relaunched client had no token to present and `ConnectScreen` always sent `null`, so the server (rightly)
+refused a nameless new join mid-game with "A game is already in progress." **Fix: `ClientSettings` now persists the
+session token too** (`ClientSettings.sessionToken`, `withSessionToken`), saved in `LobbyScreen`'s constructor — every
+path that reaches the lobby (first join, a successful `Reconnector`, or the game handing the connection back) passes
+through it — and presented again by `ConnectScreen.join` on every future connect attempt, whether or not it turns out to
+be a reconnect. **This reverses the earlier "keep the token in memory only" call** for the *manual* reconnect path (the
+automatic `Reconnector` above still only ever needs the in-memory one): it is safe to persist and always resend, because
+an unrecognised token (wrong server, expired grace, server process restarted) makes `GameSession.join` simply fall
+through to an ordinary join by name — never a wrong-seat bug, at worst a normal refusal. *Reviewed, not changed:* on a
+shared computer under one Windows account, a second person could in principle inherit a still-live token within its
+grace window if they leave the pre-filled name unchanged; low severity (a casual, no-stakes hobby game, `user.home`
+already scopes the file per OS account) and the one guard considered (only resend the token when the typed name still
+matches the name it was saved under) doesn't work as a cheap add-on — `ConnectScreen.tryToConnect` already overwrites
+the saved display name with whatever was just typed *before* `join` reads it, so the comparison is always true by the
+time it would run; doing this properly needs a persisted "name the token belongs to" separate from the free-typed
+`displayName`, which was judged not worth it for the actual risk. **Not verified end-to-end** (no GUI-automation harness
+exists for this project, by design — see "The user tests the game in-game" below): the exact scenario the user hit
+(close the client mid-game, relaunch, reconnect) needs a real in-game check that `~/.robot-rampage/client-settings.json`
+now carries a `sessionToken` after joining, and that relaunching and connecting actually re-seats the same player.
 **Next: drag and drop, the "time's up" banner — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's

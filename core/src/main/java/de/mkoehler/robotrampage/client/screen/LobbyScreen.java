@@ -60,6 +60,8 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
 
     /**
      * Builds the screen and takes over the messages that arrived with the acceptance, among them the first lobby state.
+     * Every path that reaches the lobby (a first join, a reconnect, or the game handing the connection back) passes
+     * through here, so this is also where the session token is remembered to disk for next time (design.md 5.1).
      *
      * @param game    the game showing the screen
      * @param server  the accepted connection
@@ -81,6 +83,10 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         stage.addActor(contentTable());
         stage.addActor(actionTable());
 
+        String token = server.welcome().getSessionToken();
+        if (token != null && !token.equals(game.settings().sessionToken())) {
+            game.saveSettings(game.settings().withSessionToken(token));
+        }
         server.earlyMessages().forEach(this::onMessage);
         if (server.closedAlready()) {
             onDisconnect();

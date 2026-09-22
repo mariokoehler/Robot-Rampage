@@ -531,6 +531,13 @@ in, and the session **resyncs** them: `GameStarted`, a `StateSnapshot`, the
 current turn's status and — if they still owe a program — their `HandDealt` and the
 remaining time. Unknown or absent tokens can only join in the lobby.
 
+**Display names are unique among seated players** (case-insensitively, checked in `GameSession.join`, found missing by
+the user in-game 2026-09-22): a second player cannot take a name already held by someone still seated, refused with
+"That name is already taken." A departed player's name is free again once they have actually left (`left == true`),
+not merely disconnected — a disconnected player is still seated (their grace period, above), so the uniqueness check
+runs *after* the "unknown/absent token → lobby only" gate, or a player trying to get back in with a stale token would
+be told their own name is taken instead of the accurate "a game is already in progress".
+
 **Respawn facing.** A robot re-enters with the direction it had; its player may
 change that in the same `SubmitProgram` (`respawnFacing`), which the session
 applies before execution — equivalent to choosing at respawn, because nothing
@@ -970,9 +977,21 @@ only a "Leave game" button (it retries by itself, there is nothing to confirm) a
 mockup's "Away 9:12"; a successful retry hands the fresh `ConnectedServer` to a new `LobbyScreen`, exactly like a first
 join, which reads `GameStarted` out of the resync's early messages the same way it already did for a normal join and
 hands straight on to a new `GameScreen` — no separate reconnect-specific transition code was needed for that part.
-`LobbyScreen.onDisconnect()` is untouched: a disconnect from the lobby has no seat left to reconnect to (above). The
-token is kept in memory only, on `GameScreen` and inside the live `Reconnector`, never written to disk — it is only
-valid for the life of the server process, so persisting it client-side would just as often be stale.
+`LobbyScreen.onDisconnect()` is untouched: a disconnect from the lobby has no seat left to reconnect to (above).
+
+**The session token is also persisted client-side** (`ClientSettings.sessionToken`, saved in `LobbyScreen`'s
+constructor — every path to the lobby passes through it — and presented again by `ConnectScreen` on every future
+connect). This covers a gap `Reconnector` alone cannot: it only exists in memory inside a live `GameScreen`, so a
+client that was closed or crashed and relaunched had no token to present and could only send a nameless new join,
+which a running game correctly refuses ("A game is already in progress") — found by the user in-game, 2026-09-22, and
+the reason the design changed from an earlier in-memory-only decision. Persisting it and always resending it is safe
+*because* `GameSession.join` falls back to an ordinary join by name whenever a token is not recognised (wrong server,
+grace already expired, the server process restarted) — never a wrong-seat bug, at worst a normal refusal. The one
+accepted trade-off: on a shared computer under one Windows account, a second person could in principle inherit a
+still-live token within its grace window by leaving the pre-filled name unchanged; judged low severity for a casual
+hobby game and not worth a "name the token belongs to" guard (a cheaper guard comparing the typed name against
+`ClientSettings.displayName` does not work, since `ConnectScreen.tryToConnect` already overwrites that field with
+whatever was just typed before the comparison would run).
 
 ### 5.2 Controls
 
