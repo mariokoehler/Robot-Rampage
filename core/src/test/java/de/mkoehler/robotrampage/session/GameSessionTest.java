@@ -11,6 +11,7 @@ import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
+import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
@@ -527,6 +528,29 @@ class GameSessionTest {
     }
 
     /**
+     * When a player's timer runs out while they are still connected, the server tells them, and only them, exactly
+     * which cards ended up in their own five registers, matching what the robot actually holds.
+     */
+    @Test
+    void aLiveRandomFillRevealsTheCardsToThatPlayerOnly() {
+        startWith(3);
+        submitFor(0);
+        submitFor(1);
+
+        // A single advance past the squeeze deadline fills seat 2 in and resolves the turn in the same tick, so the
+        // registers are already reset by the time this returns: the ProgramRevealed sent along the way, captured
+        // before that happened, is the only place left to check the cards.
+        advance(LAST_PLAYER);
+
+        ProgramRevealed revealed = outbox.lastReceivedBy(2, ProgramRevealed.class);
+        assertEquals(1, revealed.turn());
+        assertEquals(Robot.REGISTER_COUNT, revealed.cards().size());
+        assertTrue(revealed.cards().stream().noneMatch(java.util.Objects::isNull));
+        assertTrue(outbox.log.stream().noneMatch(sent -> sent.seat() != 2 && sent.message() instanceof ProgramRevealed),
+            "only the filled-in player should be told their cards");
+    }
+
+    /**
      * If nobody submits, everybody is filled in at random when the hard cap is reached, and the turn is resolved.
      */
     @Test
@@ -818,6 +842,29 @@ class GameSessionTest {
         assertTrue(hand.hand().isEmpty());
         session.submitProgram(2, new SubmitProgram(1, List.of(), false, null));
         assertTrue(outbox.lastReceivedBy(2, RequestRejected.class).reason().contains("locked in"));
+    }
+
+    /**
+     * A reconnecting player whose program is already locked in (self-submitted, or filled in while they were away) is
+     * told what is in it. Resync must not also resend them a {@code PlayerConfirmed} for their own seat: that message
+     * is what a live client reads as "the timer just ran out", so resending it on reconnect would make a player who
+     * had submitted the program themselves see it labelled as a random fill.
+     */
+    @Test
+    void aReconnectingPlayersOwnConfirmationIsRevealedNotResentAsALiveEvent() {
+        startWith(3);
+        session.disconnect(0);
+        int before = outbox.log.size();
+
+        session.join("ignored", tokens.get(0));
+        session.attach(0);
+
+        List<Sent> resentToMe = outbox.log.subList(before, outbox.log.size()).stream()
+            .filter(sent -> sent.seat() == 0).toList();
+        assertTrue(resentToMe.stream().anyMatch(sent -> sent.message() instanceof ProgramRevealed),
+            "the reconnecting player should be told what is in their own registers");
+        assertTrue(resentToMe.stream().noneMatch(sent -> sent.message() instanceof PlayerConfirmed confirmed
+            && confirmed.robotId() == 0), "resync must not resend the player their own confirmation as a live event");
     }
 
     /**

@@ -12,6 +12,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
+import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -598,6 +599,23 @@ public final class GameSession {
         int unlocked = Robot.REGISTER_COUNT - robot.lockedRegisterCount();
         Programming.submit(state, player.seat, player.hand, new ArrayList<>(shuffled.subList(0, unlocked)), false);
         confirm(player);
+        revealProgram(player);
+    }
+
+    /**
+     * Tells a player what is actually in their own five registers, once their program is locked in for a reason that
+     * left them not knowing: filled in at random, or already locked in when they (re)connected. A player who locked
+     * their own program in while connected already knows what they placed and is never sent this.
+     *
+     * @param player the player whose program to reveal to them
+     */
+    private void revealProgram(SessionPlayer player) {
+        Robot robot = state.robot(player.seat);
+        List<Card> cards = new ArrayList<>();
+        for (int index = 0; index < Robot.REGISTER_COUNT; index++) {
+            cards.add(robot.register(index));
+        }
+        outbox.send(player.seat, new ProgramRevealed(turn, cards));
     }
 
     /**
@@ -710,14 +728,24 @@ public final class GameSession {
                 if (timerPaused) {
                     outbox.send(player.seat, new TimerPaused(true, secondsUntil(programmingDeadline)));
                 }
+                // Excludes the reconnecting player themselves: their own confirmation, if any, is conveyed below by
+                // the HandDealt/ProgramRevealed pair instead, which also says WHY it is already locked in. Sending it
+                // here too would make the client wrongly infer a random fill (GameModel.apply's PlayerConfirmed
+                // handling), even for a program the player had locked in themselves before disconnecting.
                 for (SessionPlayer other : players.values()) {
-                    if (other.awaiting && other.confirmed) {
+                    if (other.seat != player.seat && other.awaiting && other.confirmed) {
                         outbox.send(player.seat, new PlayerConfirmed(other.seat));
                     }
                 }
+                // Kept as one pairing: a ProgramRevealed without the HandDealt that came with it would have nothing
+                // to split the registers against (GameModel.revealProgram reads the damage tail from the most recent
+                // HandDealt), so the two are only ever sent together.
                 HandDealt hand = handFor(player);
                 if (hand != null) {
                     outbox.send(player.seat, hand);
+                    if (player.awaiting && player.confirmed) {
+                        revealProgram(player);
+                    }
                 }
             }
             case GAME_OVER -> outbox.send(player.seat, new GameOver(state.winnerId(), robotStates(), secondsUntil(backToLobbyAt)));

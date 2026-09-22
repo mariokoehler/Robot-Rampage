@@ -22,9 +22,11 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-8 (client shell, Startup,
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-9 (client shell, Startup,
 Connect, Lobby, static board renderer, programming screen, turn replay, Game Over screen, respawn/power-down/eliminated
-dialogs, reconnecting a dropped client) done** — 371 unit tests in `core` plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
+dialogs, reconnecting a dropped client, the "Time's up" reveal) done** — 381 unit tests in `core`, 3 in `lwjgl3`
+(`Lwjgl3LauncherTest`, pure arithmetic — everything else in that module's test tree is a `main()`-driven dev tool, not
+picked up by surefire), plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -153,7 +155,26 @@ time it would run; doing this properly needs a persisted "name the token belongs
 exists for this project, by design — see "The user tests the game in-game" below): the exact scenario the user hit
 (close the client mid-game, relaunch, reconnect) needs a real in-game check that `~/.robot-rampage/client-settings.json`
 now carries a `sessionToken` after joining, and that relaunching and connecting actually re-seats the same player.
-**Next: drag and drop, the "time's up" banner — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
+**"Time's up" reveal (slice 9):** `ProgramRevealed` (new message, S→ the affected player only, all five registers in
+order) is `GameSession.revealProgram`'s answer to "your program is locked in, but you never chose these cards": sent
+from `fillRandomly` (a live timeout, or a disconnected player's turn-start fill) and from `resync` (a reconnecting
+player whose program is already confirmed, for any reason). **`ProgramDraft.revealed(lockedCards, freeCards)`** (new
+factory) is why the free registers show in the normal card look, not the grayed locked one, exactly like a program the
+player placed themselves: it writes straight into `placed[]`, bypassing `place`/`placeAt`'s hand-membership check,
+since these cards were never in a hand the player picked from — `place`/`placeAt` stay exactly as they were, this is a
+separate construction path. `GameModel` remembers the turn's real damage-locked tail from the most recent `HandDealt`
+(`lockedCardsThisTurn`) to split `ProgramRevealed`'s flat five cards back into free vs. locked; `programVisible()` now
+also returns `true` once a reveal arrives, not only for `submittedByMe`. **A second, adjacent bug came out of building
+this:** `resync`'s "tell the reconnecting player who else has already confirmed" loop used to include the reconnecting
+player's own seat — which a live client reads as "the timer just ran out" (`GameModel.apply`'s `PlayerConfirmed`
+handling) — wrongly labelling a self-submitted-then-reconnected program as a random fill. Fixed by excluding the
+player's own seat from that loop (their own status is conveyed by `HandDealt`/`ProgramRevealed` instead, which already
+says why correctly); `revealProgram` in `resync` is folded into the `handFor(player) != null` check so the two messages
+are only ever sent as a pair (advisor caught the pairing gap before it shipped, though no reachable path breaks it
+today). `ScreenSnapshot` gained `game-time-up.png` (all free, no damage) and `game-time-up-locked.png` (damage tail +
+revealed free registers side by side — the mixed case worth actually rendering, not just unit-testing) — see
+`ProgramDraftTest`/`GameModelTest`/`GameSessionTest` for the logic itself.
+**Next: drag and drop — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is

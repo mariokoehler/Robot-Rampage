@@ -24,6 +24,7 @@ import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
+import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.TimerPaused;
@@ -48,7 +49,8 @@ import java.util.List;
  * {@code assets} folder as the working directory:
  * <pre>java -cp ... de.mkoehler.robotrampage.lwjgl3.ScreenSnapshot [output folder]</pre>
  * It writes {@code game-programming.png}, {@code game-ready.png}, {@code game-locked.png}, {@code game-confirmed.png},
- * {@code game-powered-down.png}, {@code game-time-up.png}, {@code game-host*.png}/{@code game-guest-paused.png} (the host's
+ * {@code game-powered-down.png}, {@code game-time-up.png}, {@code game-time-up-locked.png} (a random fill together with a
+ * damage-locked tail, to check the two register looks next to each other), {@code game-host*.png}/{@code game-guest-paused.png} (the host's
  * timer pause), {@code gameover-*.png}, {@code resolution-*.png} for a real turn at several moments of its replay, and
  * {@code dialog-respawn.png}/{@code dialog-eliminated.png} for the two dialogs that open by themselves from canned
  * messages, with no click needed. The power-down confirmation only opens from a click on the switch, so it is rendered by
@@ -128,6 +130,7 @@ public final class ScreenSnapshot {
         write(game, folder, "game-confirmed.png", state(game, 0, 5, true, false, false), 23f);
         write(game, folder, "game-powered-down.png", state(game, 0, 0, false, true, false), 23f);
         write(game, folder, "game-time-up.png", state(game, 0, 2, false, false, true), 23f);
+        write(game, folder, "game-time-up-locked.png", state(game, 2, 0, false, false, true), 23f);
         write(game, folder, "game-host.png", state(game, 0, 0, 2, false, false, false), 23f);
         write(game, folder, "gameover-winner.png", gameOver(game, 0, 3, true, false), 0f);
         write(game, folder, "gameover-two.png", gameOver(game, 0, 2, true, false), 0f);
@@ -281,6 +284,13 @@ public final class ScreenSnapshot {
             }
             if (timeUp) {
                 screen.model().apply(new PlayerConfirmed(me));
+                List<Card> free = new ArrayList<>();
+                for (int i = 0; i < 5 - locked; i++) {
+                    free.add(new Card(CardType.MOVE_1, 900 + i));
+                }
+                List<Card> revealed = new ArrayList<>(free);
+                revealed.addAll(lockedCards);
+                screen.model().apply(new ProgramRevealed(4, revealed));
             }
             screen.refresh();
         }

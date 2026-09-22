@@ -555,6 +555,7 @@ derived from the game seed and a fill counter — like the deck, never a live
 | S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
 | S→all | `TurnStarted` | Turn number, the respawn events, who must program, the time limit. |
 | S→each | `HandDealt` | That player's cards only, their locked-register cards, whether they may pick a respawn facing, whether they are powered down. |
+| S→each | `ProgramRevealed` | That player's own five registers, once locked in for a reason that left them not knowing what is in it (a random fill, or a reconnect into an already-locked turn) — never sent for a program the player locked in themselves while connected. |
 | C→S | `SubmitProgram` | Card priorities (one per unlocked register, in order), power-down intent, optional respawn facing. |
 | S→each | `RequestRejected` | Why a request was refused (an invalid program, starting too early, ...); the player may try again. |
 | S→all | `PlayerConfirmed`, `TimerUpdate` | *That* a player locked in (never the cards); the remaining time when the last-player squeeze starts. |
@@ -853,16 +854,30 @@ are always the **highest-numbered** ones, only the free registers are sent, and 
 program. A `HandDealt` with an empty hand, free registers and a robot that is not powered down means "already locked in"
 (a player returning mid-turn). A powered-down player sits out and can only announce staying down.
 **Deviations from the mockups (owner may revise):** cards are placed and taken back by **click only** (no drag and drop
-yet, so the hint text leaves it out); the player in "Away" shows no countdown (needs the grace period in the protocol); the
-Leave dialog does not promise a rejoin (the client cannot rejoin yet). **When time runs out the server fills the registers
-at random and the client is not told which cards** — the screen then shows "Time's up" with the five registers as hidden
-"?" slots and says so, instead of empty slots that would look as if nothing was programmed. The same happens when a player
-comes back to a turn they had already locked in. Showing the actual cards needs a `ProgramFilledIn` message (4.6), which
-is still to be added. `ScreenSnapshot` (`lwjgl3/src/test`, a dev tool run by hand) builds the game screen from canned
-messages in six states (placing, ready, locked registers, locked in, powered down, time's up) and writes PNGs, since most
-of these are hard to reach by playing. `GameScreenDriver` (same folder, in the package of the screens) drives the real
-screen with simulated clicks and canned messages and checks placing, taking back, confirming, a refused request, the menu
-and the way back to the lobby after the game.
+yet, so the hint text leaves it out); the player in "Away" shows no countdown (needs the grace period in the protocol, 4.6);
+the Leave dialog does not promise a rejoin (superseded — reconnecting is implemented, 5.1). `ScreenSnapshot` (`lwjgl3/src/test`,
+a dev tool run by hand) builds the game screen from canned messages in seven states (placing, ready, locked registers,
+locked in, powered down, time's up, time's up with a damage-locked tail too) and writes PNGs, since most of these are hard
+to reach by playing. `GameScreenDriver` (same folder, in the package of the screens) drives the real screen with simulated
+clicks and canned messages and checks placing, taking back, confirming, a refused request, the menu and the way back to
+the lobby after the game.
+
+**Implemented (M4 slice 9): the "Time's up" reveal.** `ProgramRevealed` (S→ the affected player only; carries the turn and
+all five registers, in order) is `GameSession`'s answer to "a program is locked in, but the player never chose these
+cards": `GameSession.revealProgram` reads the robot's own registers and sends it, from `fillRandomly` (a live timeout or a
+disconnected player's turn-start fill) and from `resync` (whenever a reconnecting player finds their own program already
+confirmed, whatever the reason). The registers a player never placed themselves are no longer hidden "?" slots — they show
+in the same normal card look a self-placed register does; only the true damage-locked tail still shows the darker locked
+look. `ProgramDraft.revealed(lockedCards, freeCards)` builds that draft directly (bypassing the normal hand-membership
+check `place`/`placeAt` use, since these cards were never in a hand the player picked from) and is the one place that
+needs both lists to add up to exactly five. `GameModel` remembers the turn's damage-locked tail from the most recent
+`HandDealt` (`lockedCardsThisTurn`) to split `ProgramRevealed`'s flat five cards back into free/locked; `programVisible()`
+now also returns `true` once a reveal has arrived, not only for a program the player submitted themselves.
+**A second, adjacent bug came out of building this:** `resync`'s loop that tells a reconnecting player which *other*
+players have already confirmed used to include the reconnecting player's own seat, which a live client reads as "the
+timer just ran out" — wrongly labelling a player's own self-submitted-then-reconnected program as a random fill ("Time's
+up" instead of "Program locked in"). Fixed by excluding the reconnecting player's own seat from that loop; their own
+status is conveyed by `HandDealt`/`ProgramRevealed` instead, which already says why correctly.
 
 **Implemented (M4 slice 7): the respawn-facing, power-down and eliminated dialogs.** All three are `ModalDialog`s built
 from the design (a teal stripe for the first two, red for the third; `ModalDialog`'s stripe is now any colour, not just a
@@ -915,13 +930,14 @@ versions, settings, connection lost, menu, leave, power down, choose your facing
 below it.
 
 **What the mockups need beyond the current protocol.** Done: the server's version in `HandshakeResponse`, the 10 s connect
-timeout, the 20-character name limit, the game facts in `LobbyState`, and the reconnect grace period (seconds) in
-`HandshakeResponse` for the connection-lost dialog (4.3). Still to be added with the lobby and programming slices:
+timeout, the 20-character name limit, the game facts in `LobbyState`, the reconnect grace period (seconds) in
+`HandshakeResponse` for the connection-lost dialog (4.3), and the register slots after a random fill (or a program
+locked in before a reconnect) showing the actual cards, via `ProgramRevealed` (4.3 below) — the message this section used
+to name `ProgramFilledIn` before it was broadened to also cover a program the player locked in themselves before
+disconnecting, which isn't a "fill" at all. Still to be added with the lobby and programming slices:
 - The "Away 9:12" chip (showing *other* players how long a dropped player's grace period has left) needs the same
   seconds added to `PlayerConnection` too; not done — only the reconnecting player's own dialog reads the handshake's
   grace period today.
-- The "Time's up" banner ("empty registers were filled at random") and the register slots after a random fill need a
-  message telling a player which cards were filled in for them (`ProgramFilledIn`).
 - Standings details ("touched flag 3 in turn 11, register 4", "eliminated in turn 9") are derived by the client from the
   events it has replayed. **Done** (`GameModel` remembers the last flag of every robot and the turn it was eliminated in).
 
@@ -1042,8 +1058,9 @@ no UI and is where the test value is:
   join, T and X pieces. Slice 6 is **done**: the Game Over screen (4.1). Slice 7 is **done**: the respawn-facing,
   power-down and eliminated dialogs (4.3). Slice 8 is **done**: reconnecting a dropped client (4.3/5.1) — the
   "Connection lost" dialog, the `Reconnector` retry state machine, and the grace period travelling in
-  `HandshakeResponse`. Still to come: drag and drop, the "time's up" banner, and the PNG/atlas pipeline for the
-  drawings.
+  `HandshakeResponse`. Slice 9 is **done**: the "Time's up" reveal (4.3) — `ProgramRevealed` shows a player the cards
+  the server filled in for them, or that were already locked in when they reconnected, instead of hidden "?" slots.
+  Still to come: drag and drop and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
   toggle, animations) and a board that uses pushers and crushers. (Multiple

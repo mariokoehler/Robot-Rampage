@@ -190,4 +190,49 @@ class ProgramDraftTest {
 
         assertThrows(IllegalArgumentException.class, () -> new ProgramDraft(List.of(), six));
     }
+
+    /**
+     * A revealed program shows the free registers in the normal (not locked) look, exactly like a program the player
+     * placed themselves, and only the damage-locked tail as locked; the program is complete and has no hand left to
+     * place from.
+     */
+    @Test
+    void aRevealedProgramShowsFreeRegistersAsNormalAndOnlyTheTailAsLocked() {
+        ProgramDraft draft = ProgramDraft.revealed(List.of(LOCKED_A, LOCKED_B), List.of(MOVE_1, MOVE_2, LEFT));
+
+        assertEquals(new RegisterView(1, MOVE_1, false), draft.registers().get(0));
+        assertEquals(new RegisterView(2, MOVE_2, false), draft.registers().get(1));
+        assertEquals(new RegisterView(3, LEFT, false), draft.registers().get(2));
+        assertEquals(new RegisterView(4, LOCKED_A, true), draft.registers().get(3));
+        assertEquals(new RegisterView(5, LOCKED_B, true), draft.registers().get(4));
+        assertTrue(draft.isComplete());
+        assertEquals(List.of(), draft.hand());
+        assertEquals(2, draft.lockedRegisterCount());
+    }
+
+    /**
+     * A revealed program with nothing damage-locked shows all five registers as free, not-locked cards.
+     */
+    @Test
+    void aRevealedProgramWithNoDamageIsAllFree() {
+        List<Card> five = List.of(MOVE_1, MOVE_2, LEFT, RIGHT, U_TURN);
+
+        ProgramDraft draft = ProgramDraft.revealed(List.of(), five);
+
+        assertEquals(0, draft.lockedRegisterCount());
+        assertEquals(0, draft.registers().stream().filter(RegisterView::locked).count());
+        for (int i = 0; i < five.size(); i++) {
+            assertEquals(five.get(i), draft.registers().get(i).card());
+        }
+    }
+
+    /**
+     * The two lists of a revealed program must add up to exactly five cards.
+     */
+    @Test
+    void aRevealedProgramMustAccountForEveryRegister() {
+        assertThrows(IllegalArgumentException.class, () -> ProgramDraft.revealed(List.of(LOCKED_A), List.of(MOVE_1)));
+        assertThrows(IllegalArgumentException.class,
+            () -> ProgramDraft.revealed(List.of(), List.of(MOVE_1, MOVE_2, LEFT, RIGHT, U_TURN, BACK_UP)));
+    }
 }

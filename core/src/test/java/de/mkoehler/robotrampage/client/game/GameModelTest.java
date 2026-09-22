@@ -14,6 +14,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
+import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -618,6 +619,73 @@ class GameModelTest {
         assertFalse(model.programVisible());
         assertTrue(model.lockedInNote().startsWith("Your program was locked in before"));
         assertEquals("Program locked in", model.headline());
+    }
+
+    /**
+     * Once the server reveals what it filled in at random, the registers show the actual cards, in the normal (not
+     * locked) look, and the program stays marked as a random fill.
+     */
+    @Test
+    void aRevealedRandomFillShowsTheActualCards() {
+        GameModel model = programming(0);
+        List<Card> filled = cards(5);
+        model.apply(new PlayerConfirmed(ME));
+
+        model.apply(new ProgramRevealed(1, filled));
+
+        assertTrue(model.programVisible());
+        assertEquals("Time's up", model.headline());
+        for (int i = 0; i < filled.size(); i++) {
+            ProgramDraft.RegisterView view = model.draft().registers().get(i);
+            assertEquals(filled.get(i), view.card());
+            assertFalse(view.locked(), "a randomly filled register is not damage-locked");
+        }
+    }
+
+    /**
+     * A program locked in before the player came back is revealed the same way, with the real damage-locked tail
+     * shown as locked and the rest as the normal look, and the headline stays "Program locked in", not "Time's up" —
+     * reconnecting must not be mistaken for a live random fill.
+     */
+    @Test
+    void aRevealedProgramFromBeforeReconnectingShowsFreeAndLockedRegistersCorrectly() {
+        GameModel model = newGame();
+        List<Card> lockedTail = cards(2);
+        model.apply(turn(3, List.of(0, 1, 2)));
+        model.apply(new HandDealt(3, List.of(), lockedTail, false, false));
+        List<Card> free = List.of(new Card(CardType.MOVE_2, 700), new Card(CardType.ROTATE_LEFT, 701),
+            new Card(CardType.ROTATE_RIGHT, 702));
+
+        List<Card> allFive = new ArrayList<>(free);
+        allFive.addAll(lockedTail);
+        model.apply(new ProgramRevealed(3, allFive));
+
+        assertTrue(model.programVisible());
+        assertEquals("Program locked in", model.headline());
+        List<ProgramDraft.RegisterView> registers = model.draft().registers();
+        for (int i = 0; i < free.size(); i++) {
+            assertEquals(free.get(i), registers.get(i).card());
+            assertFalse(registers.get(i).locked());
+        }
+        for (int i = 0; i < lockedTail.size(); i++) {
+            assertEquals(lockedTail.get(i), registers.get(free.size() + i).card());
+            assertTrue(registers.get(free.size() + i).locked());
+        }
+    }
+
+    /**
+     * A reveal for a turn that has since moved on is ignored, so a message delayed behind a new turn cannot show the
+     * wrong cards.
+     */
+    @Test
+    void aRevealOfAnOldTurnIsIgnored() {
+        GameModel model = programming(0);
+        model.apply(turn(2, List.of(0, 1, 2)));
+        model.apply(new HandDealt(2, cards(9), List.of(), false, false));
+
+        model.apply(new ProgramRevealed(1, cards(5)));
+
+        assertFalse(model.programVisible());
     }
 
     private static PlayerRow row(GameModel model, int seat) {

@@ -13,6 +13,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
+import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetReady;
@@ -131,5 +132,6 @@ public final class MessageRegistry {
         kryo.register(GameOver.class);
         kryo.register(SetTimerPaused.class);
         kryo.register(TimerPaused.class);
+        kryo.register(ProgramRevealed.class);
     }
 }

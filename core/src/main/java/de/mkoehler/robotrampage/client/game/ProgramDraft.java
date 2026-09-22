@@ -55,6 +55,30 @@ public final class ProgramDraft {
     }
 
     /**
+     * Creates a draft for a program that is already final and no longer editable, with every register already
+     * holding its card: the damage-locked ones from before this turn, and the free ones filled in for the turn by the
+     * server or (before the player came back) by the player themselves. There is no hand left to place from, and the
+     * free registers show in the normal look, not the locked one, exactly like a program the player just placed
+     * themselves — only damage still marks a register as locked.
+     *
+     * @param lockedCards the damage-locked registers, in register order, ending with register 5
+     * @param freeCards   the cards in the free registers, register 1 first
+     * @return the draft
+     * @throws IllegalArgumentException if the two lists together are not exactly {@value #REGISTERS} cards
+     */
+    public static ProgramDraft revealed(List<Card> lockedCards, List<Card> freeCards) {
+        if (lockedCards.size() + freeCards.size() != REGISTERS) {
+            throw new IllegalArgumentException("Expected " + REGISTERS + " cards in total, got " + lockedCards.size()
+                + " locked and " + freeCards.size() + " free");
+        }
+        ProgramDraft draft = new ProgramDraft(List.of(), lockedCards);
+        for (int index = 0; index < freeCards.size(); index++) {
+            draft.placed[index] = freeCards.get(index);
+        }
+        return draft;
+    }
+
+    /**
      * Returns the dealt cards in the order they are shown, whether placed or not.
      *
      * @return the hand

@@ -20,6 +20,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
+import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetReady;
@@ -140,7 +141,8 @@ class WireProtocolTest {
             new StateSnapshot(4, List.of(gone, robot), true, 3),
             new PlayerConnection(3, false),
             new PlayerLeft(3, List.of(event)),
-            new GameOver(-1, List.of(gone, robot), 15));
+            new GameOver(-1, List.of(gone, robot), 15),
+            new ProgramRevealed(4, List.of(new Card(CardType.MOVE_2, 300), new Card(CardType.ROTATE_LEFT, 610))));
 
         for (Object message : messages) {
             assertEquals(message, roundTrip(message), message.getClass().getSimpleName());

@@ -11,6 +11,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
+import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -19,6 +20,7 @@ import de.mkoehler.robotrampage.net.messages.TimerPaused;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
+import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.GameEvent;
 import de.mkoehler.robotrampage.rules.LoggedEvent;
 import de.mkoehler.robotrampage.rules.Robot;
@@ -115,6 +117,8 @@ public final class GameModel {
     private boolean submissionPending;
     private boolean submittedByMe;
     private boolean filledAtRandom;
+    private boolean programRevealed;
+    private List<Card> lockedCardsThisTurn = List.of();
     private TurnResolved lastResolved;
     private List<RobotState> robotsBeforeResolution = List.of();
     private boolean resolutionOpen;
@@ -154,6 +158,8 @@ public final class GameModel {
             startTurn(started);
         } else if (message instanceof HandDealt hand) {
             takeHand(hand);
+        } else if (message instanceof ProgramRevealed revealed) {
+            revealProgram(revealed);
         } else if (message instanceof PlayerConfirmed done) {
             confirmed.add(done.robotId());
             if (done.robotId() == mySeat) {
@@ -239,6 +245,8 @@ public final class GameModel {
         submissionPending = false;
         submittedByMe = false;
         filledAtRandom = false;
+        programRevealed = false;
+        lockedCardsThisTurn = List.of();
         for (LoggedEvent logged : started.respawnEvents()) {
             if (logged.event() instanceof GameEvent.RobotRespawned respawned) {
                 RobotState old = robots.get(respawned.robotId());
@@ -278,6 +286,7 @@ public final class GameModel {
             stage = Stage.SITTING_OUT;
             return;
         }
+        lockedCardsThisTurn = hand.lockedCards();
         boolean lockedInAlready = hand.hand().isEmpty() && hand.lockedCards().size() < ProgramDraft.REGISTERS;
         if (lockedInAlready) {
             confirmed.add(mySeat);
@@ -286,6 +295,25 @@ public final class GameModel {
             draft = new ProgramDraft(hand.hand(), hand.lockedCards());
             stage = Stage.PROGRAMMING;
         }
+    }
+
+    /**
+     * Takes in this player's own registers, once the server has told them what is actually in them: filled in at
+     * random, or already locked in before they (re)connected. Never sent for a program the player locked in
+     * themselves while connected, since they already know what they placed. Only the free registers come from this
+     * message; the damage-locked tail is the one the most recent {@link HandDealt} of this turn already gave.
+     *
+     * @param revealed the message
+     */
+    private void revealProgram(ProgramRevealed revealed) {
+        if (revealed.turn() != turn) {
+            return;
+        }
+        List<Card> free = revealed.cards().subList(0, revealed.cards().size() - lockedCardsThisTurn.size());
+        draft = ProgramDraft.revealed(lockedCardsThisTurn, free);
+        confirmed.add(mySeat);
+        programRevealed = true;
+        stage = Stage.SUBMITTED;
     }
 
     /**
@@ -748,14 +776,15 @@ public final class GameModel {
     }
 
     /**
-     * Returns whether the cards in this player's registers are known to the client. They are when the player locked in the
-     * program themselves; they are not when the server filled the registers because time ran out, or when the program was
-     * locked in before the player came back.
+     * Returns whether the cards in this player's registers are known to the client: because the player locked in the
+     * program themselves, or because the server has since told them what is in it ({@link ProgramRevealed}, sent when
+     * the server filled the registers because time ran out, or when the program was locked in before the player came
+     * back).
      *
      * @return {@code true} if the registers can be shown
      */
     public boolean programVisible() {
-        return submittedByMe;
+        return submittedByMe || programRevealed;
     }
 
     /**
@@ -768,9 +797,9 @@ public final class GameModel {
             return "A confirmed program is final. Nobody sees your cards until the turn plays.";
         }
         if (filledAtRandom) {
-            return "Time ran out, so your registers were filled at random. The cards stay hidden until the turn plays.";
+            return "Time ran out, so your registers were filled at random. Nobody else sees your cards until the turn plays.";
         }
-        return "Your program was locked in before you came back. Its cards stay hidden until the turn plays.";
+        return "Your program was locked in before you came back. Nobody else sees your cards until the turn plays.";
     }
 
     /**
