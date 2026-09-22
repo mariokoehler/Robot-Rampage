@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.client.game;
 import de.mkoehler.robotrampage.board.Board;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.Direction;
+import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.board.StartSquare;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
@@ -541,6 +542,44 @@ public final class GameModel {
      */
     public ProgramDraft draft() {
         return draft;
+    }
+
+    /**
+     * Returns a rough local preview of where this player's own robot would go if its program ran alone, register by
+     * register, from whatever cards are placed so far (design.md 3.5, 4.3: a "ghost path", a convenience only, never
+     * authoritative — see {@link MovementPreview} for exactly what it does and does not simulate).
+     * <p>
+     * Stops at the first free register that is still empty, even if a damage-locked register further along already
+     * shows a known card: a path that skipped over an unknown gap would misrepresent what actually happens there.
+     * Starts from the facing chosen for a just-re-entered robot ({@link #respawnFacing()}) when one was chosen, since
+     * that is what will actually be submitted, not the server's last-known facing.
+     *
+     * @return one step per card that would run to completion, in register order; empty while there is nothing placed
+     *         yet, this player is not programming, or their own robot is not on the board
+     */
+    public List<MovementPreview.Step> ghostPath() {
+        RobotState me = myRobot();
+        if (stage != Stage.PROGRAMMING || draft == null || me == null || me.position() == null) {
+            return List.of();
+        }
+        List<Card> cards = new ArrayList<>();
+        for (ProgramDraft.RegisterView view : draft.registers()) {
+            if (view.card() == null) {
+                break;
+            }
+            cards.add(view.card());
+        }
+        if (cards.isEmpty()) {
+            return List.of();
+        }
+        Set<Position> obstacles = new HashSet<>();
+        for (RobotState robot : robots.values()) {
+            if (robot.robotId() != mySeat && robot.status() == RobotStatus.ACTIVE && robot.position() != null) {
+                obstacles.add(robot.position());
+            }
+        }
+        Direction facing = respawnFacing != null ? respawnFacing : me.facing();
+        return MovementPreview.path(board, me.position(), facing, cards, obstacles);
     }
 
     /**

@@ -688,6 +688,137 @@ class GameModelTest {
         assertFalse(model.programVisible());
     }
 
+    // ---------------------------------------------------------------------------------------------- ghost path
+
+    /**
+     * A small open board with no walls or pits, wide enough to walk five squares east from seat 1's start square
+     * without falling off, for ghost-path tests that need to reason about exact squares — {@link #newGame()}'s real
+     * board is the wrong tool for that, since its exact layout is free to change.
+     */
+    private static final String OPEN_BOARD = """
+        {"formatVersion": 1, "id": "g", "name": "Ghost Test Board", "width": 10, "height": 5,
+         "flags": [{"x": 9, "y": 4}],
+         "startSquares": [{"x": 0, "y": 0, "facing": "NORTH"}, {"x": 2, "y": 2, "facing": "EAST"},
+                          {"x": 9, "y": 0, "facing": "NORTH"}]}
+        """;
+
+    /**
+     * Builds a model on {@link #OPEN_BOARD}, dealt a hand for turn 1 with the given number of damage-locked registers.
+     *
+     * @param locked how many registers are locked by damage
+     * @return the model, in the programming stage
+     */
+    private static GameModel programmingOnOpenBoard(int locked) {
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", false, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        GameModel model = new GameModel(new GameStarted(OPEN_BOARD, players, ME));
+        model.apply(turn(1, List.of(0, 1, 2)));
+        int handSize = 9 - (locked == 0 ? 0 : locked + 4);
+        model.apply(new HandDealt(1, cards(handSize), cards(locked), false, false));
+        return model;
+    }
+
+    /**
+     * Before any card is placed there is nothing to preview.
+     */
+    @Test
+    void ghostPathIsEmptyBeforeAnyCardIsPlaced() {
+        GameModel model = programmingOnOpenBoard(0);
+
+        assertTrue(model.ghostPath().isEmpty());
+    }
+
+    /**
+     * The path grows by one step as each card is placed, from the robot's actual start square and facing (seat 1
+     * starts at (2,2) facing east on the test board).
+     */
+    @Test
+    void ghostPathGrowsAsCardsArePlaced() {
+        GameModel model = programmingOnOpenBoard(0);
+
+        model.draft().place(model.draft().hand().get(0));
+        assertEquals(List.of(new MovementPreview.Step(new Position(3, 2), Direction.EAST)), model.ghostPath());
+
+        model.draft().place(model.draft().hand().get(1));
+        assertEquals(List.of(new MovementPreview.Step(new Position(3, 2), Direction.EAST),
+            new MovementPreview.Step(new Position(4, 2), Direction.EAST)), model.ghostPath());
+    }
+
+    /**
+     * A damage-locked register's card is known, but the preview still stops at the first empty free register instead
+     * of skipping over the gap to it: a path that jumped over an unknown register would misrepresent what happens
+     * there.
+     */
+    @Test
+    void ghostPathStopsAtTheFirstEmptyRegisterEvenWithALockedTailKnown() {
+        GameModel model = programmingOnOpenBoard(2);
+
+        assertEquals(3, model.draft().freeRegisterCount());
+        model.draft().place(model.draft().hand().get(0));
+
+        assertEquals(1, model.ghostPath().size(), "two free registers are still empty before the known locked tail");
+    }
+
+    /**
+     * Filling every free register extends the preview into the now-reachable, already-known locked tail.
+     */
+    @Test
+    void ghostPathReachesTheLockedTailOnceEveryFreeRegisterIsFilled() {
+        GameModel model = programmingOnOpenBoard(2);
+
+        model.draft().hand().subList(0, model.draft().freeRegisterCount()).forEach(model.draft()::place);
+
+        assertEquals(5, model.ghostPath().size());
+    }
+
+    /**
+     * The path is empty once the program is confirmed: it is not the programming stage any more.
+     */
+    @Test
+    void ghostPathIsEmptyOnceConfirmed() {
+        GameModel model = programmingOnOpenBoard(0);
+        model.draft().hand().subList(0, 5).forEach(model.draft()::place);
+        model.submit();
+
+        model.apply(new PlayerConfirmed(ME));
+
+        assertTrue(model.ghostPath().isEmpty());
+    }
+
+    /**
+     * Another robot's square blocks the preview exactly like {@link MovementPreviewTest} already verifies for
+     * {@link MovementPreview} alone; this only checks that {@link GameModel} actually passes the other robots through
+     * as obstacles.
+     */
+    @Test
+    void ghostPathTreatsOtherRobotsAsObstacles() {
+        GameModel model = programmingOnOpenBoard(0);
+        model.apply(new StateSnapshot(1, List.of(
+            new RobotState(0, new Position(0, 0), Direction.NORTH, 0, 3, 0, new Position(0, 0), RobotStatus.ACTIVE, false, false),
+            new RobotState(1, new Position(2, 2), Direction.EAST, 0, 3, 0, new Position(2, 2), RobotStatus.ACTIVE, false, false),
+            new RobotState(2, new Position(3, 2), Direction.NORTH, 0, 3, 0, new Position(4, 0), RobotStatus.ACTIVE, false, false)),
+            false, -1));
+
+        model.draft().place(model.draft().hand().get(0));
+
+        assertEquals(List.of(new MovementPreview.Step(new Position(2, 2), Direction.EAST)), model.ghostPath(),
+            "seat 2 sits right where seat 1 would move to: blocked, not moved, one square short of it");
+    }
+
+    /**
+     * A robot that just re-entered previews from the facing chosen in the dialog, not the server's last-known facing,
+     * since that is what will actually be submitted.
+     */
+    @Test
+    void ghostPathUsesAChosenRespawnFacing() {
+        GameModel model = programmingOnOpenBoard(0);
+
+        model.chooseRespawnFacing(Direction.NORTH);
+        model.draft().place(model.draft().hand().get(0));
+
+        assertEquals(List.of(new MovementPreview.Step(new Position(2, 3), Direction.NORTH)), model.ghostPath());
+    }
+
     private static PlayerRow row(GameModel model, int seat) {
         return model.playerRows().stream().filter(row -> row.seat() == seat).findFirst().orElseThrow();
     }

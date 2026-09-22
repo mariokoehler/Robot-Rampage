@@ -22,11 +22,11 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-10 (client shell, Startup,
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-11 (client shell, Startup,
 Connect, Lobby, static board renderer, programming screen, turn replay, Game Over screen, respawn/power-down/eliminated
-dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture atlas) done — nothing left "still to
-come" on M4's own roadmap** — 381 unit tests in `core`, 4 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic,
-`AtlasCoverageTest` parses `assets/textures/game.atlas` as text — everything else in that module's test tree is a
+dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture atlas, the "ghost path" preview) done —
+nothing left "still to come" on M4's own roadmap** — 396 unit tests in `core`, 4 in `lwjgl3` (`Lwjgl3LauncherTest` pure
+arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text — everything else in that module's test tree is a
 `main()`-driven dev tool, not
 picked up by surefire), plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
@@ -197,7 +197,31 @@ mvn -q -pl core -am install -DskipTests
 mvn -pl lwjgl3 dependency:build-classpath -Dmdep.outputFile=target/test-cp.txt -Dmdep.includeScope=test
 cd lwjgl3 && java -cp "target/classes;target/test-classes;$(cat target/test-cp.txt)" de.mkoehler.robotrampage.lwjgl3.tools.AtlasPacker
 ```
-**With slice 10, M4's own roadmap has nothing left "still to come".** Verified with the same loop as every other
+**Ghost path (slice 11):** `client.game.MovementPreview` (new, libGDX-free, `MovementPreviewTest`) plays a robot's own
+cards against a `Board` and returns where each one leaves it — **does not reuse `MovementResolver`** (it's
+package-private, and its push-chain semantics are wrong for a preview that can't see other robots' hidden programs
+anyway): reimplements walk/step directly against `Board.hasWall`/`inBounds`/`featureAt`, all already public. Three
+deliberate simplifications, all documented in the class Javadoc since a future "the preview is wrong" report needs to
+be answerable: no belts/pushers/gears/lasers/crushers (only the player's own cards move the robot); another robot
+**blocks like a wall, never gets pushed** (their program is secret); a pit or the board edge **ends the preview for
+good**, no waypoint drawn for the destroying card. `GameModel.ghostPath()` (`GameModelTest`) feeds it the draft's cards
+— **stopping at the first still-empty free register, even past a known damage-locked tail** (a path that skipped an
+unknown gap would misrepresent what happens there) — the other active robots' squares as obstacles, and
+`respawnFacing()` as the start facing when one was chosen (what will actually be submitted, not the server's
+last-known facing). `GameScreen.refreshBoard` draws the steps as faint copies of the player's own robot, reusing
+`RobotPose`'s existing `alpha` (no new art) and drawn *before* the live robots so one standing on a ghost square
+always shows fully opaque on top. **`RobotPose` gained a `showBadge` flag** (default `true` via the unchanged 4-arg
+constructor; every 6/7-arg call site updated) — several ghosts of the same robot on screen together made the repeated
+seat-number badge pure noise, confirmed by literally comparing a 5-card ghost trail's screenshot before and after;
+`BoardActor.drawRobots` still always draws the wedge, so facing stays visible per step. **`ProgramDraft.place`/`take`
+do not bump `GameModel.revision()`, so `refreshBoard` must run after every draft mutation, not just `refreshProgram`**
+— `place`/`takeBack` call the full `refreshAll` for exactly this reason (advisor caught the narrower pair as a latent
+staleness bug before it shipped: `ProgramDraft.placeAt`, public, has no caller today but would have silently produced
+a stale ghost). **The regular `ScreenSnapshot` states are too crowded with other players' robots to read a ghost
+trail by eye** — verified instead with a from-scratch debug harness on a small open board (see the slice's design.md
+4.3 paragraph for the exact scenario), plus a `GameScreenDriver` check that placing/taking back a card grows/shrinks
+`model.ghostPath()`.
+**With slice 11, M4's own roadmap has nothing left "still to come".** Verified with the same loop as every other
 client slice: full `mvn clean package`, then `BoardSnapshot`/`ScreenSnapshot`/`GameScreenDriver` (all pictures —
 robots, tiles, cards, icons, dialog icons — visually spot-checked across several generated PNGs, not just one).
 **Next: whatever the user picks** — M5 (pushers/crushers UI), the Settings dialog, or the first real playtest, which is

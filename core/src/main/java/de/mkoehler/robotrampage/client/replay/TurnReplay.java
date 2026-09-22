@@ -343,7 +343,7 @@ public final class TurnReplay {
             float alpha = a.alpha + (b.alpha - a.alpha) * eased;
             if (alpha > 0.01f) {
                 poses.add(new RobotPose(entry.getKey(), a.x + (b.x - a.x) * eased, a.y + (b.y - a.y) * eased,
-                    a.rotation + (b.rotation - a.rotation) * eased, alpha, tags.getOrDefault(entry.getKey(), 0)));
+                    a.rotation + (b.rotation - a.rotation) * eased, alpha, tags.getOrDefault(entry.getKey(), 0), true));
             }
         }
         return poses;

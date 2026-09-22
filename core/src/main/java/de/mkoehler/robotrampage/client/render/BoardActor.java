@@ -328,9 +328,11 @@ public final class BoardActor extends Actor {
             float y = getY() + pose.y() * tile;
             batch.setColor(1f, 1f, 1f, getColor().a * pose.alpha());
             wedge.draw(batch, x, y, tile / 2f, tile / 2f, tile, tile, 1f, 1f, pose.rotation());
-            badge.draw(batch, x, y, tile, tile);
-            text(batch, Theme.TextStyle.BUTTON, String.valueOf(pose.seat() + 1),
-                new float[] {x + tile * 108.8f / PICTURE, y + tile * (1f - 110.08f / PICTURE)}, 0.17f, Theme.ROBOT_OUTLINE);
+            if (pose.showBadge()) {
+                badge.draw(batch, x, y, tile, tile);
+                text(batch, Theme.TextStyle.BUTTON, String.valueOf(pose.seat() + 1),
+                    new float[] {x + tile * 108.8f / PICTURE, y + tile * (1f - 110.08f / PICTURE)}, 0.17f, Theme.ROBOT_OUTLINE);
+            }
             if (pose.tag() > 0) {
                 drawTag(batch, x, y, pose.tag());
             }

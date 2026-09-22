@@ -161,9 +161,11 @@ public final class GameScreenDriver {
         click(screen, HAND_LEFT + 2 * CARD_STEP, HAND_Y);
         check(model.draft().registers().get(0).card().equals(hand.get(2)), "a click on the third card should place it in register 1");
         check(!model.canConfirm(), "one card is not a program");
+        check(model.ghostPath().size() == 1, "placing a card should extend the ghost path by one step");
 
         click(screen, HAND_LEFT, REGISTER_Y);
         check(model.draft().registers().get(0).card() == null, "a click on register 1 should take its card back");
+        check(model.ghostPath().isEmpty(), "taking the card back should clear the ghost path");
 
         for (int i = 0; i < 5; i++) {
             click(screen, HAND_LEFT + i * CARD_STEP, HAND_Y);

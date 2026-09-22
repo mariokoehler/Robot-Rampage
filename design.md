@@ -568,9 +568,14 @@ derived from the game seed and a fill counter — like the deck, never a live
 
 **Clients replay the event list; they do not re-simulate.** (The alternative —
 send programs and let every client run the rules — was rejected: a rules bug or a
-version skew would silently desync clients.) The engine still lives in `core`, so
-the client can *also* use it locally for a "preview my program" ghost path in the
-programming UI, which is a pure convenience and never authoritative.
+version skew would silently desync clients.) The engine still lives in `core`, which
+originally suggested the client could reuse it directly for a "preview my program"
+ghost path in the programming UI — implemented in M4 (4.3), it does **not** reuse
+`MovementResolver` after all: that class is package-private, and — more fundamentally
+— its push-chain semantics are the wrong tool for a preview that cannot know other
+robots' hidden programs (see 4.3's "Implemented" paragraph for what it does instead,
+and exactly how it diverges). It is a pure convenience and never authoritative either
+way.
 
 Buffer sizes in `NetworkConstants` are sized from measurement: a test serialises the
 largest turns the fuzz test produces and asserts they fit.
@@ -841,7 +846,9 @@ below); locked registers are visibly
 locked and pre-filled; a countdown timer (2.13) is always visible; a
 **Confirm** button locks the program in; a **Power Down** toggle is available;
 other players show only a "confirmed" tick. The "preview my program" ghost path
-(3.5) is drawn on the board as the program is being built.
+(3.5) is drawn on the board as the program is being built — **implemented**, see the
+"Implemented" paragraph below for exactly what it simulates and what it deliberately
+does not.
 
 **Implemented (M4 slice 4)** — the game screen follows the mockups' four states of one screen (`GameScreen`, layout at
 1920×1080): a header with the turn, the deal and the time left; the players panel (lives, damage, Thinking / Confirmed /
@@ -880,6 +887,38 @@ players have already confirmed used to include the reconnecting player's own sea
 timer just ran out" — wrongly labelling a player's own self-submitted-then-reconnected program as a random fill ("Time's
 up" instead of "Program locked in"). Fixed by excluding the reconnecting player's own seat from that loop; their own
 status is conveyed by `HandDealt`/`ProgramRevealed` instead, which already says why correctly.
+
+**Implemented (M4 slice 11): the "ghost path" preview.** `client.game.MovementPreview` (new, libGDX-free) plays a
+robot's own cards against a `Board`, one at a time, and returns where each one leaves it — a *rough, local,
+never-authoritative* guess, not a reuse of the real rules engine (3.5 above explains why not, and this is the class
+that Javadoc points at): it reimplements walk/step against `Board`'s already-public `hasWall`/`inBounds`/`featureAt`,
+deliberately simplified from the real turn (2.4):
+- Only this robot's own cards move it — belts, pushers, gears, lasers and crushers are not simulated, since they are
+  already visible on the board as static pictures and the preview is only about what the player's own choices do.
+- Other robots block like a wall (the card's movement just stops one square short) but are never pushed, since their
+  own programs are secret; the real turn may push straight through a square this preview shows as blocking, or push
+  this robot somewhere the preview never shows.
+- A pit or the edge of the board ends the preview for good: no waypoint is drawn for the destroying card, and nothing
+  after it runs either, exactly as a destroyed robot plays no more cards in a real turn.
+
+`GameModel.ghostPath()` feeds it the cards placed so far (`ProgramDraft.registers()`, stopping at the first still-empty
+free register even if a damage-locked register further along is already known — a path that skipped over an unknown
+gap would misrepresent what actually happens there), this player's own robot as the start, every other active robot's
+current square as an obstacle, and the facing chosen in the respawn dialog when one was chosen (`respawnFacing()`) since
+that is what will actually be submitted. `GameScreen.refreshBoard` draws the result as faint copies of the player's own
+robot (`RobotPose`, reusing its existing `alpha` field — no new art needed), drawn *before* the live robots so a live
+robot standing where a ghost would be always shows through fully opaque. **`RobotPose` gained a `showBadge` flag**
+(default `true`; every existing call site updated to pass it explicitly or via the unchanged 4-argument convenience
+constructor): several ghosts of the *same* robot can be on screen together, where the repeated seat-number badge a live
+robot uses to stand out from other players' robots is only noise — confirmed by comparing a five-card ghost trail
+before and after (`BoardActor.drawRobots` still always draws the wedge, so the facing at each step stays visible).
+**`refreshBoard` must run after every draft mutation, not just `refreshProgram`**, since `ProgramDraft.place`/`take` do
+not bump `GameModel.revision()`; `place`/`takeBack` call the full `refreshAll` rather than the narrower pair of calls,
+specifically so a future mutation site (`ProgramDraft.placeAt`, public today but with no caller yet) cannot forget the
+board and leave a stale ghost — `refreshBoard`'s own Javadoc says so too. Verified with `MovementPreviewTest` and
+`GameModelTest` (including the blocked-by-another-robot and stops-at-the-first-gap cases), a `GameScreenDriver` check
+that placing/taking back a card grows/shrinks the path, and a from-scratch debug screenshot on an open board (the
+regular `ScreenSnapshot` states are too crowded with other players' robots to read a ghost trail by eye).
 
 **Implemented (M4 slice 7): the respawn-facing, power-down and eliminated dialogs.** All three are `ModalDialog`s built
 from the design (a teal stripe for the first two, red for the third; `ModalDialog`'s stripe is now any colour, not just a
@@ -1080,7 +1119,9 @@ no UI and is where the test value is:
   Slice 10 is **done**: the one texture atlas (4.5) — `AtlasPacker` builds `assets/textures/game.atlas` from every
   picture the client draws, `UiKit.image` reads from it, and `AtlasCoverageTest` guards against it going stale.
   Drag and drop for cards is dropped from the roadmap (owner, 2026-09-22): click-only placement is the permanent
-  design, not a gap. **With that, M4's roadmap has nothing left "still to come"** — the milestone's own remaining
+  design, not a gap. Slice 11 is **done**: the "ghost path" program preview (3.5, 4.3) — `MovementPreview` simulates
+  only this robot's own cards, `GameModel.ghostPath()` feeds it the draft, and `GameScreen` draws faint copies of the
+  robot along the way. **With that, M4's roadmap has nothing left "still to come"** — the milestone's own remaining
   bar, the first real playtest, is the owner's to run, not a further slice to build.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down

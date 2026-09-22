@@ -15,12 +15,14 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Scaling;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.board.BoardGeometry;
 import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.Reconnector;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.game.CardLook;
 import de.mkoehler.robotrampage.client.game.GameModel;
+import de.mkoehler.robotrampage.client.game.MovementPreview;
 import de.mkoehler.robotrampage.client.game.ProgramDraft;
 import de.mkoehler.robotrampage.client.lobby.RobotLook;
 import de.mkoehler.robotrampage.client.render.BoardActor;
@@ -70,6 +72,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private static final float BOARD_LEFT = 660f;
     private static final float MAX_TILE = 50f;
     private static final float KEY_ICON = 40f;
+    private static final float GHOST_ALPHA = 0.4f;
     private static final String HAND_HINT = "Click a card to put it in the next free register. Click a filled register to take "
         + "its card back. If the timer runs out, empty registers are filled at random.";
 
@@ -528,10 +531,22 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Puts the robots on the board.
+     * Puts the robots on the board, together with the "ghost path" (design.md 3.5, 4.3) of faint copies of this
+     * player's own robot showing where their program placed so far would take it — drawn first, so a live robot
+     * standing where a ghost would be always shows through fully opaque.
+     * <p>
+     * {@code model.ghostPath()} depends on the draft's registers, and {@link ProgramDraft} placing/taking a card does
+     * not bump {@link GameModel#revision()} — so a mutation site that only redraws the program panel, not this one,
+     * shows a stale ghost. {@link #place} and {@link #takeBack} call {@link #refreshAll} for exactly this reason;
+     * route any future one (such as a {@code placeAt} for a specific register) through {@link #refreshAll} too,
+     * rather than calling this method alone.
      */
     private void refreshBoard() {
         List<RobotPose> poses = new ArrayList<>();
+        for (MovementPreview.Step step : model.ghostPath()) {
+            poses.add(new RobotPose(model.mySeat(), step.position().x(), step.position().y(),
+                BoardGeometry.rotation(step.facing()), GHOST_ALPHA, 0, false));
+        }
         for (RobotState robot : model.robots()) {
             if (robot.status() == RobotStatus.ACTIVE && robot.position() != null) {
                 poses.add(RobotPose.at(robot.robotId(), robot.position(), robot.facing()));
@@ -933,7 +948,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void place(Card card) {
         if (model.draft() != null && model.draft().place(card)) {
-            refreshProgram();
+            refreshAll();
         }
     }
 
@@ -944,7 +959,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void takeBack(int register) {
         if (model.draft() != null && model.draft().take(register) != null) {
-            refreshProgram();
+            refreshAll();
         }
     }
 
@@ -1390,6 +1405,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             public void changed(ChangeEvent event, Actor actor) {
                 model.chooseRespawnFacing(picker.facing());
                 closeDialog();
+                refreshBoard();
             }
         });
         Table pickerRow = new Table();
