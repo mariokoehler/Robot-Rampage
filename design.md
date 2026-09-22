@@ -836,7 +836,8 @@ message.
 
 The most-used screen in the game, so it deserves care. Layout **(unconfirmed)**:
 the board on top, the player's dealt hand along the bottom, five register slots
-between them. Cards are placed by click or drag; locked registers are visibly
+between them. Cards are placed by click (drag was considered and dropped, owner 2026-09-22 — see 4.3 "Implemented"
+below); locked registers are visibly
 locked and pre-filled; a countdown timer (2.13) is always visible; a
 **Confirm** button locks the program in; a **Power Down** toggle is available;
 other players show only a "confirmed" tick. The "preview my program" ghost path
@@ -853,9 +854,10 @@ the host's client (`PlayerInfo.host` from `GameStarted`) shows a "Pause timer" /
 are always the **highest-numbered** ones, only the free registers are sent, and a robot with nine damage confirms an empty
 program. A `HandDealt` with an empty hand, free registers and a robot that is not powered down means "already locked in"
 (a player returning mid-turn). A powered-down player sits out and can only announce staying down.
-**Deviations from the mockups (owner may revise):** cards are placed and taken back by **click only** (no drag and drop
-yet, so the hint text leaves it out); the player in "Away" shows no countdown (needs the grace period in the protocol, 4.6);
-the Leave dialog does not promise a rejoin (superseded — reconnecting is implemented, 5.1). `ScreenSnapshot` (`lwjgl3/src/test`,
+**Deviations from the mockups:** cards are placed and taken back by **click only, no drag and drop** — settled as a
+permanent decision, not a gap (owner, 2026-09-22: click-only is fine, dropped from the roadmap); the player in "Away"
+shows no countdown (needs the grace period in the protocol, 4.6, still open); the Leave dialog does not promise a
+rejoin (superseded — reconnecting is implemented, 5.1). `ScreenSnapshot` (`lwjgl3/src/test`,
 a dev tool run by hand) builds the game screen from canned messages in seven states (placing, ready, locked registers,
 locked in, powered down, time's up, time's up with a damage-locked tail too) and writes PNGs, since most of these are hard
 to reach by playing. `GameScreenDriver` (same folder, in the package of the screens) drives the real screen with simulated
@@ -1011,7 +1013,7 @@ whatever was just typed before the comparison would run).
 
 ### 5.2 Controls
 
-Mouse-first: click/drag cards, click buttons. Keyboard shortcuts (1–9 to pick a
+Mouse-first: click cards (no drag, 4.3), click buttons. Keyboard shortcuts (1–9 to pick a
 card, Enter to confirm) are a convenience layered on later, and — if they are
 remappable — reuse the StarWars keybind-screen pattern. Since the primary input
 is the mouse, keyboard-layout differences between players barely matter.
@@ -1060,7 +1062,8 @@ no UI and is where the test value is:
   "Connection lost" dialog, the `Reconnector` retry state machine, and the grace period travelling in
   `HandshakeResponse`. Slice 9 is **done**: the "Time's up" reveal (4.3) — `ProgramRevealed` shows a player the cards
   the server filled in for them, or that were already locked in when they reconnected, instead of hidden "?" slots.
-  Still to come: drag and drop and the PNG/atlas pipeline for the drawings.
+  Drag and drop for cards is dropped from the roadmap (owner, 2026-09-22): click-only placement is the permanent design,
+  not a gap. Still to come: the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
   toggle, animations) and a board that uses pushers and crushers. (Multiple

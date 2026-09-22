@@ -174,8 +174,9 @@ are only ever sent as a pair (advisor caught the pairing gap before it shipped, 
 today). `ScreenSnapshot` gained `game-time-up.png` (all free, no damage) and `game-time-up-locked.png` (damage tail +
 revealed free registers side by side — the mixed case worth actually rendering, not just unit-testing) — see
 `ProgramDraftTest`/`GameModelTest`/`GameSessionTest` for the logic itself.
-**Next: drag and drop — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
-Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
+**Drag and drop for cards is dropped from the roadmap (user, 2026-09-22): click-only placement stays.**
+**Next: the PNG/atlas pipeline for the drawings** — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63`
+(Claude Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is
 not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed
@@ -366,7 +367,10 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   checked against the actual rulebook (web) before implementing.
 - **Proactively flag security-relevant concerns** during design (e.g. hidden hands
   must never be sent to other clients; hash passwords if accounts arrive), briefly.
-- **Never commit or push** unless asked (global rule).
+- **Commit and push after each slice, without asking first** (user, 2026-09-22 — overrides the global "never commit or
+  push unless asked" rule for this project specifically). Applies once the slice is implemented, fully tested (unit
+  tests plus a full `mvn clean package` green), documented (`design.md`/`CLAUDE.md` updated the same session), and —
+  for a multi-file feature — reviewed via `advisor`.
 - **Advisor before and after** on any multi-file feature: consult before writing code
   (design-level issues) and again once it looks complete (integration-level issues).
 - Sessions are incremental (evenings) — leave `design.md` and this file fully in sync
