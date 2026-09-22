@@ -48,8 +48,11 @@ import java.util.List;
  * {@code assets} folder as the working directory:
  * <pre>java -cp ... de.mkoehler.robotrampage.lwjgl3.ScreenSnapshot [output folder]</pre>
  * It writes {@code game-programming.png}, {@code game-ready.png}, {@code game-locked.png}, {@code game-confirmed.png},
- * {@code game-powered-down.png} and {@code game-time-up.png}, and
- * {@code resolution-*.png} for a real turn at several moments of its replay.
+ * {@code game-powered-down.png}, {@code game-time-up.png}, {@code game-host*.png}/{@code game-guest-paused.png} (the host's
+ * timer pause), {@code gameover-*.png}, {@code resolution-*.png} for a real turn at several moments of its replay, and
+ * {@code dialog-respawn.png}/{@code dialog-eliminated.png} for the two dialogs that open by themselves from canned
+ * messages, with no click needed. The power-down confirmation only opens from a click on the switch, so it is rendered by
+ * {@code GameScreenDriver} instead.
  *
  * @author Mario Koehler
  */
@@ -144,6 +147,64 @@ public final class ScreenSnapshot {
         for (float seconds : new float[] {1.2f, 5f, 12f, 200f}) {
             write(game, folder, "resolution-" + (int) seconds + "s.png", resolution(game), seconds);
         }
+        write(game, folder, "dialog-respawn.png", respawnDialogState(game), 0f);
+        write(game, folder, "dialog-eliminated.png", eliminatedDialogState(game), 0f);
+    }
+
+    /**
+     * Builds the game screen with the respawn dialog open: a turn in which this player's robot must pick its facing.
+     *
+     * @param game the game
+     * @return the screen; the dialog opens by itself once the hand is applied, before the first frame is drawn
+     */
+    private static GameScreen respawnDialogState(RobotRampageGame game) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = new ArrayList<>();
+        for (int seat = 0; seat < NAMES.size(); seat++) {
+            players.add(new PlayerInfo(seat, NAMES.get(seat), true, true, seat == 0));
+        }
+        List<RobotState> robots = new ArrayList<>();
+        for (int seat = 0; seat < NAMES.size(); seat++) {
+            Position start = new Position(2 + seat, 0);
+            boolean respawned = seat == ME;
+            robots.add(new RobotState(seat, respawned ? new Position(4, 4) : new Position(2 + seat, 1),
+                respawned ? Direction.WEST : Direction.NORTH, 0, respawned ? 2 : 3, 0, start, RobotStatus.ACTIVE, false,
+                false));
+        }
+        List<Card> hand = List.of(new Card(CardType.MOVE_1, 520), new Card(CardType.MOVE_2, 700),
+            new Card(CardType.ROTATE_RIGHT, 220), new Card(CardType.U_TURN, 30), new Card(CardType.MOVE_3, 810),
+            new Card(CardType.ROTATE_LEFT, 150), new Card(CardType.BACK_UP, 450), new Card(CardType.MOVE_1, 530),
+            new Card(CardType.ROTATE_LEFT, 160));
+        List<Object> messages = List.of(new StateSnapshot(3, robots, false, -1),
+            new TurnStarted(4, List.of(), List.of(0, 1, 2, 3, 4, 5), 90), new HandDealt(4, hand, List.of(), true, false));
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test");
+        return new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
+            new ServerAddress("localhost", 45725), new GameStarted(board, players, ME), messages);
+    }
+
+    /**
+     * Builds the game screen right after this player's robot has been seen to lose its last life, with the "You're out"
+     * dialog open.
+     *
+     * @param game the game
+     * @return the screen; the dialog opens on the first frame, once the resolution of the eliminating turn completes
+     */
+    private static GameScreen eliminatedDialogState(RobotRampageGame game) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = new ArrayList<>();
+        for (int seat = 0; seat < NAMES.size(); seat++) {
+            players.add(new PlayerInfo(seat, NAMES.get(seat), true, true, seat == 0));
+        }
+        List<RobotState> after = new ArrayList<>();
+        for (int seat = 0; seat < NAMES.size(); seat++) {
+            boolean me = seat == ME;
+            after.add(new RobotState(seat, me ? null : new Position(2 + seat, 1), Direction.NORTH, me ? 9 : 2, me ? 0 : 3,
+                1, new Position(2 + seat, 0), me ? RobotStatus.ELIMINATED : RobotStatus.ACTIVE, false, false));
+        }
+        List<Object> messages = List.of(new TurnResolved(6, List.of()), new StateSnapshot(6, after, false, -1));
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test");
+        return new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
+            new ServerAddress("localhost", 45725), new GameStarted(board, players, ME), messages);
     }
 
     /**

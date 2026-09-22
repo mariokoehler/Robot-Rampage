@@ -22,8 +22,9 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 
 ## Current status
 
-**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-6 (client shell, Startup,
-Connect, Lobby, static board renderer, programming screen, turn replay, Game Over screen) done** — 359 unit tests in `core` plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
+**M0, M1 (rules engine), M2 (board format) and M3 (server session + protocol) done, M4 slices 1-7 (client shell, Startup,
+Connect, Lobby, static board renderer, programming screen, turn replay, Game Over screen, respawn/power-down/eliminated
+dialogs) done** — 363 unit tests in `core` plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -82,7 +83,16 @@ engine) + the resolution layout inside `GameScreen`. `GameModel` HOLDS the post-
 Sample real turns for tools with `SampleTurn` (`lwjgl3/src/test`); `ScreenSnapshot` writes `resolution-*.png` incl. a laser volley.
 Belts pick corner/join/T/X pieces from their neighbours (`BoardGeometry.beltPiece`); the design draws them leaving NORTH.
 **Game Over (slice 6):** `GameOverView` is a third group inside `GameScreen`; `client.game.Standings` (libGDX-free, tested) ranks and words the results from what `GameModel` saw replayed (last flag per robot, elimination turns). `GameOver` carries `lobbyInSeconds`; the server's game-over countdown starts *after* the final turn's replay pause, otherwise the lobby switch would cut the results off. `Label.setFontScale` REPLACES the baked font scale (fonts are generated oversized): multiply by `font.getScaleX()`. `ScreenSnapshot` writes `gameover-*.png`.
-**Next: the** respawn-facing / power-down / eliminated dialogs, reconnecting, drag and drop — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
+**Dialogs (slice 7):** `ModalDialog`'s stripe is now a `Color` (`null` for none), not a `boolean`; `.buttons(float[], TextButton...)`
+gives each button its own width. Power-down is gated: the toggle click reverts itself and opens an explanation dialog
+(`GameScreen.showPowerDownDialog`/`applyPowerDownChoice`); turning it off is instant. `client.ui.FacingPicker` (new widget,
+libGDX) is the four-way respawn-facing picker, pre-selected to the robot's current facing; wrap it in a plain `Table` before
+adding it to a `ModalDialog.row(...)` — a bare `Group` isn't a `Layout`, so the dialog stretches it instead of centring it.
+`GameModel.myEliminationJustSeen()` (tested, including the resync case) drives the "You're out" dialog. None of the three
+needed a protocol change. `BoardSnapshot.flipped` is now public so `GameScreenDriver` (different package) can save PNGs too;
+run it with an output folder argument to get `dialog-powerdown.png` (the only one of the three that needs a click, so
+`ScreenSnapshot` can't reach it on its own).
+**Next: reconnecting, drag and drop, the "time's up" banner — that is where the design system in `artifact B6rnPgeQteFmVd6PCSMu63` (Claude
 Design; fonts in `assets-raw/ttf`, robot SVGs to be rasterised) and gdx-freetype come in. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is

@@ -12,12 +12,14 @@ import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 
+import java.util.Arrays;
+
 /**
  * A dialog on top of a screen: the screen dims behind a scrim, a panel with a title, some content and a row of buttons
  * sits in the middle, and nothing behind it can be clicked while it is open.
  * <p>
  * Dialogs are built with a fixed width, filled from top to bottom, and then {@linkplain #show shown}. A dialog that
- * reports an error or warning can carry a red bar at the top of its panel.
+ * reports an error, a warning or something else worth a glance can carry a coloured bar at the top of its panel.
  *
  * @author Mario Koehler
  */
@@ -35,11 +37,11 @@ public final class ModalDialog {
     /**
      * Creates an empty dialog.
      *
-     * @param kit     the widget kit
-     * @param width   the width of the panel in layout pixels
-     * @param warning {@code true} to put a red bar at the top of the panel
+     * @param kit    the widget kit
+     * @param width  the width of the panel in layout pixels
+     * @param stripe the colour of the bar at the top of the panel, or {@code null} for none
      */
-    public ModalDialog(UiKit kit, float width, boolean warning) {
+    public ModalDialog(UiKit kit, float width, Color stripe) {
         this.kit = kit;
         this.contentWidth = width - 2 * Theme.SPACE_8;
         root.setFillParent(true);
@@ -61,9 +63,8 @@ public final class ModalDialog {
         });
         panel = kit.panel();
         panel.pad(Theme.SPACE_8).top();
-        if (warning) {
-            panel.add(new Image(kit.solid(Theme.DANGER)))
-                .width(contentWidth).height(STRIPE_HEIGHT).padBottom(ROW_GAP).row();
+        if (stripe != null) {
+            panel.add(new Image(kit.solid(stripe))).width(contentWidth).height(STRIPE_HEIGHT).padBottom(ROW_GAP).row();
         }
         root.add(panel).width(width);
     }
@@ -117,17 +118,30 @@ public final class ModalDialog {
     }
 
     /**
-     * Adds the row of buttons at the bottom, right-aligned and 16 px apart.
+     * Adds the row of buttons at the bottom, right-aligned and 16 px apart, all the same width.
      *
      * @param width   the width of each button
      * @param buttons the buttons, the main action last
      * @return this dialog
      */
     public ModalDialog buttons(float width, TextButton... buttons) {
+        float[] widths = new float[buttons.length];
+        Arrays.fill(widths, width);
+        return buttons(widths, buttons);
+    }
+
+    /**
+     * Adds the row of buttons at the bottom, right-aligned and 16 px apart, each with its own width.
+     *
+     * @param widths  the width of each button, same length and order as {@code buttons}
+     * @param buttons the buttons, the main action last
+     * @return this dialog
+     */
+    public ModalDialog buttons(float[] widths, TextButton... buttons) {
         Table row = new Table();
         row.right();
         for (int i = 0; i < buttons.length; i++) {
-            row.add(buttons[i]).size(width, 52f).padLeft(i == 0 ? 0 : Theme.SPACE_4);
+            row.add(buttons[i]).size(widths[i], 52f).padLeft(i == 0 ? 0 : Theme.SPACE_4);
         }
         panel.add(row).width(contentWidth).right().padTop(Theme.SPACE_2);
         return this;

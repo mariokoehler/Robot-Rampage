@@ -125,7 +125,7 @@ public final class BoardSnapshot {
      * @param source the picture as read
      * @return a new picture with the rows in reverse order, which the caller does not need to dispose
      */
-    static Pixmap flipped(Pixmap source) {
+    public static Pixmap flipped(Pixmap source) {
         Pixmap result = new Pixmap(source.getWidth(), source.getHeight(), source.getFormat());
         result.setBlending(Pixmap.Blending.None);
         for (int y = 0; y < source.getHeight(); y++) {

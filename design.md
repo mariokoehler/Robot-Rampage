@@ -841,9 +841,8 @@ are always the **highest-numbered** ones, only the free registers are sent, and 
 program. A `HandDealt` with an empty hand, free registers and a robot that is not powered down means "already locked in"
 (a player returning mid-turn). A powered-down player sits out and can only announce staying down.
 **Deviations from the mockups (owner may revise):** cards are placed and taken back by **click only** (no drag and drop
-yet, so the hint text leaves it out); the power-down switch simply sets the flag (no dialog); the player in "Away" shows no
-countdown (needs the grace period in the protocol); the Leave dialog does not promise a rejoin (the client cannot rejoin
-yet); the respawn-facing choice and the eliminated dialog are not built. **When time runs out the server fills the registers
+yet, so the hint text leaves it out); the player in "Away" shows no countdown (needs the grace period in the protocol); the
+Leave dialog does not promise a rejoin (the client cannot rejoin yet). **When time runs out the server fills the registers
 at random and the client is not told which cards** — the screen then shows "Time's up" with the five registers as hidden
 "?" slots and says so, instead of empty slots that would look as if nothing was programmed. The same happens when a player
 comes back to a turn they had already locked in. Showing the actual cards needs a `ProgramFilledIn` message (4.6), which
@@ -852,6 +851,28 @@ messages in six states (placing, ready, locked registers, locked in, powered dow
 of these are hard to reach by playing. `GameScreenDriver` (same folder, in the package of the screens) drives the real
 screen with simulated clicks and canned messages and checks placing, taking back, confirming, a refused request, the menu
 and the way back to the lobby after the game.
+
+**Implemented (M4 slice 7): the respawn-facing, power-down and eliminated dialogs.** All three are `ModalDialog`s built
+from the design (a teal stripe for the first two, red for the third; `ModalDialog`'s stripe is now any colour, not just a
+warning flag, and its button row can give each button its own width). **Power down.** Turning the switch on no longer sets
+the flag at once: the click reverts the switch and opens an explanation (the three rows of the mockup, with the design's
+tick/power/eye icons); only "Power down" announces it (`GameScreen.applyPowerDownChoice`), "Not now" leaves it off.
+Turning the switch off needs no confirmation. **Respawn facing.** Offered at most once per turn
+(`GameScreen.maybeShowRespawnDialog`, guarded by the turn number), while the player is programming and
+`GameModel.canChooseRespawnFacing()` is true; the new `client.ui.FacingPicker` widget pre-selects the facing the server
+already gave the robot (so dismissing without pressing "Go" is a no-op) and turns a copy of the robot's own wedge to
+match; "Go" calls `GameModel.chooseRespawnFacing`. **Eliminated.** `GameModel.myEliminationJustSeen()` is set, once, the
+moment this player's own robot is seen (by this client, in a turn it replayed) to lose its last life —
+`GameModel.noteEliminations`'s existing before/after check, extended for the player's own seat; a resync that already shows
+the robot eliminated, before any turn of its own was replayed, does not set it (tested). `GameScreen` shows the dialog once
+`myEliminationJustSeen()` is true and the game has not ended in the same moment (Game Over takes over instead, so nobody
+sees both). All three are unreachable by playing without provoking a destruction, nine damage or waiting out the clock, so
+`ScreenSnapshot` renders the two that open by themselves from canned messages (`dialog-respawn.png`,
+`dialog-eliminated.png`); the power-down dialog only opens from a click, so `GameScreenDriver` clicks it open and, given an
+output folder as its argument, also saves it (`dialog-powerdown.png`). `GameScreenDriver` additionally checks the whole
+power-down round trip (open, cancel leaves it off and sends nothing, confirm turns it on) and the respawn picker (opens
+once, a click on a direction button changes the pick without touching the model, "Go" applies it and closes the dialog,
+and it does not reopen for a turn already offered).
 
 ### 4.4 Audio
 
@@ -975,8 +996,9 @@ no UI and is where the test value is:
   half of the game screen (4.3): `GameModel`/`ProgramDraft` (libGDX-free, tested, and checked against the real server), the
   cards and register widgets, players, robot and program panels, the Menu, Leave and Game over dialogs. The Settings button on the startup screen
   is disabled until the Settings dialog exists. Slice 5 is **done**: the replay of a resolved turn (4.1) and the belt corner,
-  join, T and X pieces. Slice 6 is **done**: the Game Over screen (4.1). Still to come: the respawn-facing, power-down and eliminated dialogs, drag and drop, the
-  "time's up" banner, reconnecting a dropped client,  and the PNG/atlas pipeline for the drawings.
+  join, T and X pieces. Slice 6 is **done**: the Game Over screen (4.1). Slice 7 is **done**: the respawn-facing,
+  power-down and eliminated dialogs (4.3). Still to come: drag and drop, the "time's up" banner, reconnecting a dropped
+  client, and the PNG/atlas pipeline for the drawings.
 - **M5 — Second wave in the client and on the boards.** The engine already
   implements pushers, crushers and power-down (M1); this adds their UI (power-down
   toggle, animations) and a board that uses pushers and crushers. (Multiple

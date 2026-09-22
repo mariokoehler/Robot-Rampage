@@ -4,11 +4,24 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
 import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.PixmapIO;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
+import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Group;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.board.Direction;
+import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.game.GameModel;
+import de.mkoehler.robotrampage.client.ui.FacingPicker;
+import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.ServerLink;
@@ -21,12 +34,17 @@ import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
+import de.mkoehler.robotrampage.net.messages.TurnResolved;
 import de.mkoehler.robotrampage.net.messages.TurnStarted;
 import de.mkoehler.robotrampage.rules.Card;
+import de.mkoehler.robotrampage.lwjgl3.BoardSnapshot;
 import de.mkoehler.robotrampage.lwjgl3.SampleTurn;
 import de.mkoehler.robotrampage.rules.CardType;
+import de.mkoehler.robotrampage.rules.RobotStatus;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -38,7 +56,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * which the unit tests cannot reach because they have no window. It stops with an error at the first thing that is wrong.
  * <p>
  * It lives in the package of the screens to reach what they keep to themselves. Run it with the {@code assets} folder as
- * the working directory.
+ * the working directory. With an output folder as the argument, it also saves a PNG of the states that can only be reached
+ * by clicking, such as the power-down confirmation, which {@code ScreenSnapshot} cannot open on its own.
  *
  * @author Mario Koehler
  */
@@ -90,9 +109,10 @@ public final class GameScreenDriver {
     /**
      * Runs the checks and exits.
      *
-     * @param args not used
+     * @param args the output folder for the power-down dialog's PNG, or none to skip saving it
      */
     public static void main(String[] args) {
+        File folder = args.length > 0 ? new File(args[0]) : null;
         Lwjgl3ApplicationConfiguration configuration = new Lwjgl3ApplicationConfiguration();
         configuration.setInitialVisible(false);
         configuration.setWindowedMode(WIDTH, HEIGHT);
@@ -100,8 +120,11 @@ public final class GameScreenDriver {
             @Override
             public void create() {
                 super.create();
-                drive(this);
+                drive(this, folder);
                 driveResolution(this);
+                driveRespawn(this);
+                driveEliminated(this);
+                driveStayPoweredDown(this);
                 System.out.println("GameScreenDriver: all checks passed");
                 Gdx.app.exit();
             }
@@ -111,9 +134,10 @@ public final class GameScreenDriver {
     /**
      * Plays through a turn and the end of the game on the screen.
      *
-     * @param game the game
+     * @param game   the game
+     * @param folder where to save the power-down dialog's PNG, or {@code null} to skip it
      */
-    private static void drive(RobotRampageGame game) {
+    private static void drive(RobotRampageGame game, File folder) {
         ScriptedLink link = new ScriptedLink();
         List<Card> hand = new ArrayList<>();
         for (int i = 0; i < 9; i++) {
@@ -144,6 +168,36 @@ public final class GameScreenDriver {
             click(screen, HAND_LEFT + i * CARD_STEP, HAND_Y);
         }
         check(model.canConfirm(), "five placed cards should be a program");
+
+        Actor toggle = findActor(screen.stage.getRoot(), PillToggle.class);
+        check(toggle != null, "the power-down switch should be on screen");
+        float[] toggleAt = centerOf(toggle);
+        int actorsBeforeDialog = screen.stage.getActors().size;
+        click(screen, toggleAt[0], toggleAt[1]);
+        check(screen.stage.getActors().size == actorsBeforeDialog + 1, "turning the switch on should open the power-down dialog");
+        check(!((PillToggle) toggle).isChecked(), "the switch should revert until the dialog is confirmed");
+        check(!model.powerDownNext(), "nothing should be announced until confirmed");
+        if (folder != null) {
+            snapshot(screen, folder, "dialog-powerdown.png");
+        }
+
+        TextButton notNow = findButton(screen.stage.getRoot(), "NOT NOW");
+        check(notNow != null, "the dialog should have a Not now button");
+        click(screen, centerOf(notNow)[0], centerOf(notNow)[1]);
+        check(screen.stage.getActors().size == actorsBeforeDialog, "Not now should close the dialog");
+        check(!model.powerDownNext(), "Not now should not announce a power-down");
+
+        click(screen, toggleAt[0], toggleAt[1]);
+        TextButton powerDown = findButton(screen.stage.getRoot(), "POWER DOWN");
+        check(powerDown != null, "the dialog should have a Power down button");
+        click(screen, centerOf(powerDown)[0], centerOf(powerDown)[1]);
+        check(screen.stage.getActors().size == actorsBeforeDialog, "Power down should close the dialog");
+        check(model.powerDownNext(), "Power down should announce it");
+        check(((PillToggle) toggle).isChecked(), "the switch should reflect the announcement");
+
+        click(screen, toggleAt[0], toggleAt[1]);
+        check(screen.stage.getActors().size == actorsBeforeDialog, "turning the switch back off needs no dialog");
+        check(!model.powerDownNext(), "turning it off should cancel the announcement");
 
         click(screen, 1044f, 735f);
         check(link.sent.size() == 1 && link.sent.get(0) instanceof SubmitProgram, "confirming should send the program");
@@ -219,6 +273,225 @@ public final class GameScreenDriver {
         check(!cut.model().isResolutionOpen() && cut.model().robots().equals(after),
             "a new turn should cut the replay short and show the end state");
         check(cut.model().stage() == GameModel.Stage.PROGRAMMING, "the new turn should be in the programming stage");
+    }
+
+    /**
+     * Checks the respawn-facing dialog: it opens by itself once the hand arrives, pre-selects the robot's own facing,
+     * follows a click on one of the direction buttons, and applies the picked facing only once "Go" is pressed.
+     *
+     * @param game the game
+     */
+    private static void driveRespawn(RobotRampageGame game) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        List<Card> hand = new ArrayList<>();
+        for (int i = 0; i < 9; i++) {
+            hand.add(new Card(CardType.MOVE_1, 200 + i));
+        }
+        List<RobotState> before = List.of(new RobotState(ME, new Position(4, 4), Direction.NORTH, 0, 2, 0,
+            new Position(3, 0), RobotStatus.ACTIVE, false, false));
+        List<Object> messages = List.of(new StateSnapshot(2, before, false, -1),
+            new TurnStarted(3, List.of(), List.of(0, 1, 2), 90), new HandDealt(3, hand, List.of(), true, false));
+        ConnectedServer connected = new ConnectedServer(new ScriptedLink(),
+            new HandshakeResponse("Welcome", ME, "token", "test"), List.of(), false);
+        GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(board, players, ME), messages);
+        game.setScreen(screen);
+        screen.resize(WIDTH, HEIGHT);
+        GameModel model = screen.model();
+        frame(screen);
+
+        check(findLabel(screen.stage.getRoot(), "BACK IN THE GAME") != null,
+            "the respawn dialog should open by itself once the hand arrives");
+        int actorsWithDialog = screen.stage.getActors().size;
+        FacingPicker picker = (FacingPicker) findActor(screen.stage.getRoot(), FacingPicker.class);
+        check(picker != null, "the dialog should show the facing picker");
+        check(picker.facing() == Direction.NORTH, "the picker should start on the robot's own facing");
+        check(model.respawnFacing() == null, "no facing is chosen before Go is pressed");
+
+        Vector2 westButton = picker.localToStageCoordinates(new Vector2(30f, 220f));
+        click(screen, westButton.x, HEIGHT - westButton.y);
+        check(picker.facing() == Direction.WEST, "a click on the west button should pick west");
+        check(model.respawnFacing() == null, "picking in the widget alone must not change the model yet");
+
+        TextButton go = findButton(screen.stage.getRoot(), "GO");
+        check(go != null, "the dialog should have a Go button");
+        click(screen, centerOf(go)[0], centerOf(go)[1]);
+        check(model.respawnFacing() == Direction.WEST, "Go should apply the picked facing");
+        check(screen.stage.getActors().size == actorsWithDialog - 1, "Go should close the dialog");
+
+        screen.onMessage(new PlayerConfirmed(0));
+        frame(screen);
+        check(findLabel(screen.stage.getRoot(), "BACK IN THE GAME") == null,
+            "the dialog must not reopen for a turn it was already offered and closed for");
+    }
+
+    /**
+     * Checks that a player is told once their own robot has lost its last life, and that "Keep watching" dismisses it.
+     *
+     * @param game the game
+     */
+    private static void driveEliminated(RobotRampageGame game) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        RobotState eliminated = new RobotState(ME, null, Direction.NORTH, 9, 0, 0, new Position(3, 0),
+            RobotStatus.ELIMINATED, false, false);
+        List<Object> messages = List.of(new TurnResolved(6, List.of()), new StateSnapshot(6, List.of(eliminated), false, -1));
+        ConnectedServer connected = new ConnectedServer(new ScriptedLink(),
+            new HandshakeResponse("Welcome", ME, "token", "test"), List.of(), false);
+        GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(board, players, ME), messages);
+        game.setScreen(screen);
+        screen.resize(WIDTH, HEIGHT);
+        int actorsBefore = screen.stage.getActors().size;
+        frame(screen);
+        check(screen.model().myEliminationJustSeen(), "the model should have seen the elimination");
+        check(findLabel(screen.stage.getRoot(), "YOU'RE OUT") != null, "the eliminated dialog should open by itself");
+        check(screen.stage.getActors().size == actorsBefore + 1, "the dialog should be the only new actor");
+
+        TextButton keepWatching = findButton(screen.stage.getRoot(), "KEEP WATCHING");
+        check(keepWatching != null, "the dialog should have a Keep watching button");
+        click(screen, centerOf(keepWatching)[0], centerOf(keepWatching)[1]);
+        check(screen.stage.getActors().size == actorsBefore, "Keep watching should close the dialog");
+    }
+
+    /**
+     * Checks the power-down switch of a robot that is already powered down: announcing another power-down, and changing
+     * one's mind about it, are each sent to the server at once, since there is no Confirm button left to send them with.
+     *
+     * @param game the game
+     */
+    private static void driveStayPoweredDown(RobotRampageGame game) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        List<Object> messages = List.of(new TurnStarted(2, List.of(), List.of(0, 2), 90),
+            new HandDealt(2, List.of(), List.of(), false, true));
+        ScriptedLink link = new ScriptedLink();
+        ConnectedServer connected = new ConnectedServer(link, new HandshakeResponse("Welcome", ME, "token", "test"),
+            List.of(), false);
+        GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(board, players, ME), messages);
+        game.setScreen(screen);
+        screen.resize(WIDTH, HEIGHT);
+        GameModel model = screen.model();
+        frame(screen);
+        check(model.stage() == GameModel.Stage.SITTING_OUT && model.isPoweredDownThisTurn(),
+            "the robot should already be powered down this turn");
+
+        Actor toggle = findActor(screen.stage.getRoot(), PillToggle.class);
+        check(toggle != null, "the power-down switch should be on screen while sitting out");
+        float[] toggleAt = centerOf(toggle);
+        click(screen, toggleAt[0], toggleAt[1]);
+        TextButton stayDown = findButton(screen.stage.getRoot(), "POWER DOWN");
+        check(stayDown != null, "the dialog should have a Power down button");
+        click(screen, centerOf(stayDown)[0], centerOf(stayDown)[1]);
+        check(!link.sent.isEmpty() && link.sent.get(link.sent.size() - 1) instanceof SubmitProgram sent && sent.powerDown(),
+            "announcing another power-down while already down should be sent at once");
+
+        click(screen, toggleAt[0], toggleAt[1]);
+        check(link.sent.get(link.sent.size() - 1) instanceof SubmitProgram sent && !sent.powerDown(),
+            "changing one's mind should also be sent at once, with no dialog needed to turn it off");
+    }
+
+    /**
+     * Finds the first descendant of a group that is an instance of a type.
+     *
+     * @param group the group to search
+     * @param type  the type
+     * @return the actor, or {@code null} if none is found
+     */
+    private static Actor findActor(Group group, Class<?> type) {
+        for (Actor child : group.getChildren()) {
+            if (type.isInstance(child)) {
+                return child;
+            }
+            if (child instanceof Group nested) {
+                Actor found = findActor(nested, type);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the first button with an exact label, such as the design's capitalised button text.
+     *
+     * @param group the group to search
+     * @param label the label
+     * @return the button, or {@code null} if none is found
+     */
+    private static TextButton findButton(Group group, String label) {
+        for (Actor child : group.getChildren()) {
+            if (child instanceof TextButton button && label.contentEquals(button.getText())) {
+                return button;
+            }
+            if (child instanceof Group nested) {
+                TextButton found = findButton(nested, label);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Finds the first label with an exact text, such as a dialog's title.
+     *
+     * @param group the group to search
+     * @param text  the text
+     * @return the label, or {@code null} if none is found
+     */
+    private static Label findLabel(Group group, String text) {
+        for (Actor child : group.getChildren()) {
+            if (child instanceof Label label && text.contentEquals(label.getText())) {
+                return label;
+            }
+            if (child instanceof Group nested) {
+                Label found = findLabel(nested, text);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the screen position of the centre of an actor, counted from the top left as {@link #click} expects.
+     *
+     * @param actor the actor
+     * @return the position, as x and y
+     */
+    private static float[] centerOf(Actor actor) {
+        Vector2 stage = actor.localToStageCoordinates(new Vector2(actor.getWidth() / 2f, actor.getHeight() / 2f));
+        return new float[] {stage.x, HEIGHT - stage.y};
+    }
+
+    /**
+     * Saves a PNG of the screen as it stands, without disposing it: the driver keeps clicking on the same screen afterward.
+     *
+     * @param screen the screen
+     * @param folder where to write
+     * @param name   the file name
+     */
+    private static void snapshot(GameScreen screen, File folder, String name) {
+        FrameBuffer buffer = new FrameBuffer(Pixmap.Format.RGBA8888, WIDTH, HEIGHT, false);
+        buffer.begin();
+        frame(screen);
+        Gdx.gl.glPixelStorei(GL20.GL_PACK_ALIGNMENT, 1);
+        Pixmap pixmap = Pixmap.createFromFrameBuffer(0, 0, WIDTH, HEIGHT);
+        buffer.end();
+        Pixmap upright = BoardSnapshot.flipped(pixmap);
+        PixmapIO.writePNG(Gdx.files.absolute(new File(folder, name).getAbsolutePath()), upright);
+        upright.dispose();
+        pixmap.dispose();
+        buffer.dispose();
     }
 
     /**

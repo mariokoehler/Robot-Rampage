@@ -25,6 +25,7 @@ import de.mkoehler.robotrampage.client.lobby.RobotLook;
 import de.mkoehler.robotrampage.client.render.BoardActor;
 import de.mkoehler.robotrampage.client.replay.TurnReplay;
 import de.mkoehler.robotrampage.client.ui.CardView;
+import de.mkoehler.robotrampage.client.ui.FacingPicker;
 import de.mkoehler.robotrampage.client.ui.ModalDialog;
 import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.ProgressPill;
@@ -113,6 +114,8 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private boolean overShown;
     private boolean closed;
     private int shownRevision = -1;
+    private int respawnDialogTurn = -1;
+    private boolean eliminatedDialogShown;
 
     /**
      * Builds the screen for a game that has just started and takes over the messages that arrived behind the start message.
@@ -142,9 +145,11 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         powerToggle.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-                model.setPowerDownNext(powerToggle.isChecked());
-                if (model.stage() == GameModel.Stage.SITTING_OUT && model.isPoweredDownThisTurn()) {
-                    server.link().send(model.announceStayingDown());
+                if (powerToggle.isChecked()) {
+                    powerToggle.setChecked(false);
+                    showPowerDownDialog();
+                } else {
+                    applyPowerDownChoice(false);
                 }
             }
         });
@@ -341,6 +346,8 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         }
         if (overShown) {
             gameOverView.setLobbySeconds(model.lobbySecondsLeft());
+        } else {
+            maybeShowEliminatedDialog();
         }
     }
 
@@ -407,6 +414,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         refreshRobot();
         refreshProgram();
         refreshBoard();
+        maybeShowRespawnDialog();
     }
 
     /**
@@ -1008,6 +1016,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             programmingGroup.setVisible(!resolving);
             resolutionGroup.setVisible(resolving);
             if (resolving) {
+                closeDialog();
                 replay = new TurnReplay(model.robotsBeforeResolution(), model.lastResolved().events(), model::nameOf);
                 replayCompleted = false;
                 shownBeat = -1;
@@ -1188,6 +1197,173 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     // ------------------------------------------------------------------------------------------------------
 
     /**
+     * Applies a power-down choice: sets it in the model, shows it on the switch, and, for a robot that is already powered
+     * down, tells the server at once, whichever way the choice went, since there is nothing else left to confirm it with.
+     *
+     * @param announce {@code true} to power down (or stay down), {@code false} to cancel it
+     */
+    private void applyPowerDownChoice(boolean announce) {
+        model.setPowerDownNext(announce);
+        powerToggle.setChecked(announce);
+        if (model.stage() == GameModel.Stage.SITTING_OUT && model.isPoweredDownThisTurn()) {
+            server.link().send(model.announceStayingDown());
+        }
+    }
+
+    /**
+     * Explains what powering down means before it is announced. Turning the switch off needs no explanation and happens at
+     * once; only turning it on opens this.
+     */
+    private void showPowerDownDialog() {
+        TextButton notNow = ui.button("Not now", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        TextButton confirm = ui.button("Power down", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
+        notNow.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                closeDialog();
+            }
+        });
+        confirm.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                closeDialog();
+                applyPowerDownChoice(true);
+            }
+        });
+        open(new ModalDialog(ui, 760f, Theme.ACCENT)
+            .title("Power down next turn?")
+            .row(infoRow(Theme.SUCCESS, "icons/tick.png", "This turn plays as normal",
+                "Your five cards still run and your robot still fires."))
+            .row(infoRow(Theme.ACCENT, "icons/power.png", "Next turn it rests",
+                "Fully repaired, all registers unlocked. No cards, no lasers. It can still be moved and shot."))
+            .row(infoRow(Theme.INK, "icons/eye.png", "Everyone sees the marker", "The cards themselves stay secret."))
+            .text("It powers up again the turn after, unless you announce another power down.", Theme.TextStyle.BODY,
+                Theme.INK_MUTED)
+            .buttons(new float[] {200f, 280f}, notNow, confirm)
+            .onEscape(this::closeDialog));
+    }
+
+    /**
+     * Builds one line of an explanation: a small coloured icon and two lines of text.
+     *
+     * @param color the icon's background
+     * @param icon  the icon's picture, relative to the asset folder
+     * @param title what it is
+     * @param body  what it means
+     * @return the line
+     */
+    private Table infoRow(Color color, String icon, String title, String body) {
+        Table row = new Table();
+        row.top().left();
+        Table mark = new Table();
+        mark.setBackground(ui.rounded(color, color, 0, 10));
+        mark.add(new Image(ui.image(icon))).size(20f);
+        row.add(mark).size(36f, 36f + UiKit.SHAPE_RESERVE).top();
+        Table text = new Table();
+        text.left();
+        text.add(ui.label(title, Theme.TextStyle.BODY_LARGE, Theme.INK)).left().row();
+        Label bodyLabel = ui.label(body, Theme.TextStyle.BODY, Theme.INK_MUTED);
+        bodyLabel.setWrap(true);
+        text.add(bodyLabel).width(600f).left();
+        row.add(text).left().padLeft(14f);
+        return row;
+    }
+
+    /**
+     * Opens the dialog that picks the facing of a robot that just re-entered, once per turn, while the player is
+     * programming. Nothing happens if the choice does not apply, or it was already offered this turn.
+     */
+    private void maybeShowRespawnDialog() {
+        if (model.stage() != GameModel.Stage.PROGRAMMING || !model.canChooseRespawnFacing()
+            || respawnDialogTurn == model.turn()) {
+            return;
+        }
+        respawnDialogTurn = model.turn();
+        showRespawnDialog();
+    }
+
+    /**
+     * Lets the player pick the facing of a robot that just re-entered. Dismissing without pressing "Go" keeps the facing the
+     * server gave it, exactly as if "Go" had been pressed without changing the picker.
+     */
+    private void showRespawnDialog() {
+        FacingPicker picker = new FacingPicker(ui, model.mySeat(), model.myRobot().facing());
+        TextButton go = ui.button("Go", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
+        go.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                model.chooseRespawnFacing(picker.facing());
+                closeDialog();
+            }
+        });
+        Table pickerRow = new Table();
+        pickerRow.add(picker).size(FacingPicker.SIZE);
+        open(new ModalDialog(ui, 1000f, Theme.ACCENT)
+            .title("Back in the game")
+            .row(ui.label("Your robot was destroyed. It returns to its archive marker with no damage.",
+                Theme.TextStyle.BODY_LARGE, Theme.INK))
+            .row(pickerRow)
+            .row(ui.label("Pick the way it faces, then go.", Theme.TextStyle.BODY_LARGE, Theme.INK))
+            .buttons(260f, go)
+            .onEscape(this::closeDialog));
+    }
+
+    /**
+     * Tells the player once that their robot has lost its last life, if this client watched it happen and the game has not
+     * ended in the same moment (the Game Over screen covers that instead).
+     */
+    private void maybeShowEliminatedDialog() {
+        if (eliminatedDialogShown || !model.myEliminationJustSeen()) {
+            return;
+        }
+        eliminatedDialogShown = true;
+        showEliminatedDialog();
+    }
+
+    /**
+     * Tells the player they are out of lives and can only keep watching.
+     */
+    private void showEliminatedDialog() {
+        TextButton leave = ui.button("Leave game", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        TextButton stay = ui.button("Keep watching", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
+        leave.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                leaveGame();
+            }
+        });
+        stay.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                closeDialog();
+            }
+        });
+        Image robot = new Image(ui.image(RobotLook.picture(model.mySeat())));
+        robot.setScaling(Scaling.fit);
+        robot.getColor().a = 0.55f;
+        Table text = new Table();
+        text.left();
+        text.add(ui.label("You have no lives left.", Theme.TextStyle.BODY_LARGE, Theme.INK)).left().row();
+        text.add(ui.label("You can keep watching the rest of the game. Your robot is off the board.", Theme.TextStyle.BODY,
+            Theme.INK_MUTED)).left();
+        Table top = new Table();
+        top.add(robot).size(104f);
+        top.add(text).left().padLeft(24f);
+
+        Table facts = new Table();
+        facts.left();
+        facts.add(ui.pips(0, Robot.STARTING_LIVES, 22f, 5)).padRight(14f);
+        facts.add(ui.chip("Out", UiKit.ChipKind.DANGER)).height(UiKit.CHIP_CELL_HEIGHT);
+
+        open(new ModalDialog(ui, 780f, Theme.DANGER)
+            .title("You're out")
+            .row(top)
+            .row(facts)
+            .buttons(new float[] {240f, 300f}, leave, stay)
+            .onEscape(this::closeDialog));
+    }
+
+    /**
      * Opens the menu: settings (not built yet), leaving the game, and closing the menu.
      */
     private void showMenu() {
@@ -1207,7 +1383,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
                 closeDialog();
             }
         });
-        open(new ModalDialog(ui, 700f, false)
+        open(new ModalDialog(ui, 700f, null)
             .title("Menu")
             .text("The game keeps running while this menu is open.", Theme.TextStyle.BODY_LARGE, Theme.INK_MUTED)
             .buttons(190f, settings, leave, back)
@@ -1232,7 +1408,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
                 leaveGame();
             }
         });
-        open(new ModalDialog(ui, 700f, false)
+        open(new ModalDialog(ui, 700f, null)
             .title("Leave the game?")
             .text("Your robot stays on the board and plays random programs while you are away.", Theme.TextStyle.BODY_LARGE,
                 Theme.INK)

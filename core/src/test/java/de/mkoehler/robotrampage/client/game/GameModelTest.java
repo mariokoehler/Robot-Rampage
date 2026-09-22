@@ -432,6 +432,61 @@ class GameModelTest {
     }
 
     /**
+     * When this player's own robot is seen to lose its last life in a replayed turn, {@link GameModel#myEliminationJustSeen()}
+     * turns true once the resolution completes, not before.
+     */
+    @Test
+    void myEliminationIsSeenWhenReplayed() {
+        GameModel model = programming(0);
+        RobotState me = model.myRobot();
+        RobotState eliminated = new RobotState(ME, null, me.facing(), 9, 0, 0, me.archiveMarker(), RobotStatus.ELIMINATED,
+            false, false);
+        assertFalse(model.myEliminationJustSeen());
+
+        model.apply(new TurnResolved(1, List.of()));
+        model.apply(new StateSnapshot(1, List.of(eliminated), false, -1));
+
+        assertFalse(model.myEliminationJustSeen(), "not before the replay completes");
+        model.completeResolution();
+        assertTrue(model.myEliminationJustSeen());
+    }
+
+    /**
+     * Another player's elimination does not set this player's own flag.
+     */
+    @Test
+    void anotherPlayersEliminationIsNotMine() {
+        GameModel model = programming(0);
+        RobotState other = model.robots().get(0);
+        RobotState eliminated = new RobotState(0, null, other.facing(), 9, 0, 0, other.archiveMarker(),
+            RobotStatus.ELIMINATED, false, false);
+
+        model.apply(new TurnResolved(1, List.of()));
+        model.apply(new StateSnapshot(1, List.of(eliminated), false, -1));
+        model.completeResolution();
+
+        assertFalse(model.myEliminationJustSeen());
+    }
+
+    /**
+     * A snapshot that resyncs this client, before any turn of its own was replayed, never sets the flag even if it already
+     * shows this player's robot as eliminated: the client cannot tell that apart from a robot that was always out. The state
+     * itself is still taken over.
+     */
+    @Test
+    void anEliminationOnlyEverSeenOnResyncIsNotFlagged() {
+        GameModel model = newGame();
+        RobotState me = model.myRobot();
+        RobotState eliminated = new RobotState(ME, null, me.facing(), 9, 0, 0, me.archiveMarker(), RobotStatus.ELIMINATED,
+            false, false);
+
+        model.apply(new StateSnapshot(3, List.of(eliminated), false, -1));
+
+        assertFalse(model.myEliminationJustSeen());
+        assertEquals(RobotStatus.ELIMINATED, model.myRobot().status());
+    }
+
+    /**
      * The end of the game is remembered with the winner and the final states.
      */
     @Test

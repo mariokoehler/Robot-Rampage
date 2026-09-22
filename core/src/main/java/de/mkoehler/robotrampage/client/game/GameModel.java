@@ -123,6 +123,7 @@ public final class GameModel {
     private int winnerRobotId = GameEvent.NO_ROBOT;
     private final Map<Integer, Standings.FlagTouch> lastFlags = new HashMap<>();
     private final Map<Integer, Integer> eliminatedTurns = new HashMap<>();
+    private boolean myEliminationSeen;
     private float lobbyCountdown = -1f;
     private int revision;
 
@@ -303,7 +304,8 @@ public final class GameModel {
 
     /**
      * Remembers the turn in which a robot was eliminated, for the robots that the given states show as eliminated for the first
-     * time. Players who left the game are not counted: they did not lose their lives.
+     * time. Players who left the game are not counted: they did not lose their lives. If this player's own robot is one of
+     * them, {@link #myEliminationJustSeen()} starts returning {@code true}.
      *
      * @param after the states the turn ended with
      * @param turn  the turn
@@ -314,8 +316,23 @@ public final class GameModel {
             if (state.status() == RobotStatus.ELIMINATED && before != null && before.status() != RobotStatus.ELIMINATED
                 && !removed.contains(state.robotId())) {
                 eliminatedTurns.putIfAbsent(state.robotId(), turn);
+                if (state.robotId() == mySeat) {
+                    myEliminationSeen = true;
+                }
             }
         }
+    }
+
+    /**
+     * Returns whether this player's own robot was just seen to lose its last life, so a screen can tell the player once.
+     * Only an elimination this client watched happen counts: a robot that is already eliminated when the game is joined or
+     * resynced, before any turn of it was replayed, does not set this off, since the client cannot tell that apart from one
+     * that was always out.
+     *
+     * @return {@code true} if the robot's status turned to {@link RobotStatus#ELIMINATED} in a turn this client replayed
+     */
+    public boolean myEliminationJustSeen() {
+        return myEliminationSeen;
     }
 
     /**

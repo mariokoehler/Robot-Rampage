@@ -308,7 +308,7 @@ public final class ConnectScreen extends StageScreen {
                 cancelAttempt();
             }
         });
-        ModalDialog connecting = new ModalDialog(ui, 640f, false)
+        ModalDialog connecting = new ModalDialog(ui, 640f, null)
             .title("Connecting")
             .row(bar)
             .text("Contacting " + address + " …", Theme.TextStyle.BODY_LARGE, Theme.INK)
@@ -325,7 +325,7 @@ public final class ConnectScreen extends StageScreen {
      * @param reason  what went wrong
      */
     private void showUnreachableDialog(ServerAddress address, String reason) {
-        ModalDialog unreachable = new ModalDialog(ui, DIALOG_WIDTH, true);
+        ModalDialog unreachable = new ModalDialog(ui, DIALOG_WIDTH, Theme.DANGER);
         Table well = ui.well();
         well.pad(14f);
         Label why = ui.label(reason, Theme.TextStyle.BODY, Theme.INK);
@@ -362,7 +362,7 @@ public final class ConnectScreen extends StageScreen {
      * @param serverVersion the version the server runs
      */
     private void showVersionDialog(String serverVersion) {
-        ModalDialog mismatch = new ModalDialog(ui, DIALOG_WIDTH, true);
+        ModalDialog mismatch = new ModalDialog(ui, DIALOG_WIDTH, Theme.DANGER);
         Table versions = new Table();
         versions.add(versionWell("Your game", AppVersion.getVersion(), Theme.INK)).growX().uniformX();
         versions.add(versionWell("This server", serverVersion, Theme.DANGER)).growX().uniformX()
@@ -401,7 +401,7 @@ public final class ConnectScreen extends StageScreen {
             }
         });
         String text = reason == null || reason.isBlank() ? "The server did not let you in." : reason;
-        ModalDialog refused = new ModalDialog(ui, DIALOG_WIDTH, true)
+        ModalDialog refused = new ModalDialog(ui, DIALOG_WIDTH, Theme.DANGER)
             .title("Couldn't join")
             .text(text, Theme.TextStyle.BODY_LARGE, Theme.INK)
             .buttons(200f, back)
@@ -422,7 +422,7 @@ public final class ConnectScreen extends StageScreen {
                 dismiss();
             }
         });
-        open(new ModalDialog(ui, DIALOG_WIDTH, true)
+        open(new ModalDialog(ui, DIALOG_WIDTH, Theme.DANGER)
             .title("Disconnected")
             .text(notice, Theme.TextStyle.BODY_LARGE, Theme.INK)
             .buttons(200f, ok)

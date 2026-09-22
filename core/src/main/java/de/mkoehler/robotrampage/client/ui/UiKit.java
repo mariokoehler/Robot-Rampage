@@ -207,7 +207,9 @@ public final class UiKit implements Disposable {
         /** Green with white text: something is done or ready. */
         SUCCESS,
         /** Teal with white text: the thing that is happening now. */
-        ACCENT
+        ACCENT,
+        /** Red with white text: something bad, such as being out of the game. */
+        DANGER
     }
 
     /**
@@ -224,6 +226,7 @@ public final class UiKit implements Disposable {
             case PRIMARY -> Theme.PRIMARY;
             case SUCCESS -> Theme.SUCCESS;
             case ACCENT -> Theme.ACCENT;
+            case DANGER -> Theme.DANGER;
         };
         Color border = kind == ChipKind.OUTLINE ? Theme.LINE_STRONG : fill;
         Color textColor = kind == ChipKind.OUTLINE ? Theme.INK_MUTED : Theme.ON_PRIMARY;
