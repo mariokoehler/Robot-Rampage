@@ -6,4 +6,5 @@ target/
 core/target/
 lwjgl3/target/
 server/target/
+dev-tools/target/
 .idea/

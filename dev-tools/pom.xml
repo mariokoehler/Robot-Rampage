@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>de.mkoehler.robotrampage</groupId>
+    <artifactId>robotrampage-parent</artifactId>
+    <version>0</version>
+  </parent>
+
+  <!-- Developer tools that are never shipped: not shaded, not packaged by either release
+       workflow. Currently the board editor (design.md 3.13). -->
+  <artifactId>robotrampage-dev-tools</artifactId>
+  <packaging>jar</packaging>
+  <name>RobotRampage-dev-tools</name>
+
+  <properties>
+    <mainClass>de.mkoehler.robotrampage.devtools.editor.BoardEditorLauncher</mainClass>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>de.mkoehler.robotrampage</groupId>
+      <artifactId>robotrampage-core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.badlogicgames.gdx</groupId>
+      <artifactId>gdx-backend-lwjgl3</artifactId>
+      <version>${gdxVersion}</version>
+    </dependency>
+    <dependency>
+      <!-- Every native-backed libGDX piece needs its own natives (CLAUDE.md "Maven + libGDX
+           gotchas"): core libGDX here, FreeType just below - missing one only fails at runtime. -->
+      <groupId>com.badlogicgames.gdx</groupId>
+      <artifactId>gdx-platform</artifactId>
+      <version>${gdxVersion}</version>
+      <classifier>natives-desktop</classifier>
+    </dependency>
+    <dependency>
+      <groupId>com.badlogicgames.gdx</groupId>
+      <artifactId>gdx-freetype-platform</artifactId>
+      <version>${gdxVersion}</version>
+      <classifier>natives-desktop</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!-- Run with: mvn -pl dev-tools compile exec:exec (core must already be installed
+             locally, see CLAUDE.md "Build system"; no -am on the exec step). The working
+             directory is assets/, so the editor finds fonts/, textures/ and boards/ there. -->
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+        <configuration>
+          <executable>java</executable>
+          <workingDirectory>${project.basedir}/../assets</workingDirectory>
+          <arguments>
+            <argument>--enable-native-access=ALL-UNNAMED</argument>
+            <argument>-classpath</argument>
+            <classpath/>
+            <argument>${mainClass}</argument>
+          </arguments>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

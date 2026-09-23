@@ -25,11 +25,11 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 **M0, M1 (rules engine), M2 (board format), M3 (server session + protocol) and M5 (pushers/crushers in play) done, M4
 slices 1-11 (client shell, Startup, Connect, Lobby, static board renderer, programming screen, turn replay, Game Over
 screen, respawn/power-down/eliminated dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture
-atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 396 unit tests in `core`, 4
+atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 408 unit tests in `core`, 4
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 11 integration tests in `server` (real sockets, threads). A whole turn can be resolved headlessly:
+picked up by surefire), plus 11 integration tests in `server` (real sockets, threads), plus 30 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -318,12 +318,26 @@ gap `ScreenSnapshot`/`GameScreenDriver` would have caught if wired up (an automa
 static render, is needed for this class of bug), reinforcing rather than undercutting the "not verified visually"
 tradeoff noted above.
 
-**Next: whatever the user picks** — M6 (more boards / Board Editor), or the first real playtest,
-which is the owner's to run, not a further slice to build. After M1: M2 board
-format + validator, and **I draft the first original 12x12 board myself** (user's
-decision) — but only after `BoardValidator` exists, so the reachability check is
-not hand-verified twice. The design was reviewed by the user (2026-09-21): tags removed
-= confirmed, `DECISION:` notes in design.md 7. No assets are needed before M4.
+**Board editor (M6, 2026-09-23): done** — design.md 3.13. New Maven module **`dev-tools`** (never shipped; the
+user said "tools module", but `tools/` is already the Node asset-import scripts folder, so the module got the name
+design.md 3.3 had reserved). Run: `start_board_editor.cmd`, or `mvn -pl dev-tools compile exec:exec` after installing
+`core` (working dir `assets/`, reads/writes `assets/boards`). 12x12 only (owner decision). Everything testable is
+libGDX-free: `BoardDraft` (editable board; keeps walls and laser/pusher mounts apart, unlike `Board`, so deleting a
+laser leaves no stray wall — **don't rebuild a draft from `Board.walls()`**, it contains mount-implied walls),
+`BoardEditor` (tools/gestures/undo), `EditHistory`, `BoardFiles`. **`BoardFiles.format` writes the hand-written
+compact layout, not `BoardLoader.toJson`** (Jackson's pretty printer would reformat the whole file on the first save);
+`BoardDraftTest.savingTheRealBoardWritesTheCheckedInFileByteForByte` guards it. Undo/redo keeps the current
+id/name/author (they're typed, not drawn). Look at the window without clicking with `EditorSnapshot`
+(`dev-tools/src/test`; classpath recipe as for `BoardSnapshot`, but `-pl dev-tools`, run from `assets/`). **Verified:**
+unit tests + `EditorSnapshot`, which also sends real stage pointer events (hover, left click adds a wall on the nearest
+side, right click removes it) and throws if the mapping is wrong; **not verified**: drag feel, keyboard shortcuts, the
+close-window prompt — the owner's in-app check. A click anywhere but a text field takes the keyboard away from it (a
+stage capture listener), so R/Ctrl+Z after typing a name never edit the id field. **Gap: boards from the editor can't be played yet** —
+`GameServer.BOARD_RESOURCE` hard-codes `proving-grounds`; making the server load another board is the natural next slice.
+
+**Next: whatever the user picks** — the server loading other boards (above), the rest of M6 (board selection,
+composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
+(2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.
 
 ## Decisions already made (with reasons)
 
@@ -332,8 +346,8 @@ not hand-verified twice. The design was reviewed by the user (2026-09-21): tags 
   boards and *procedurally generated* boards (user requirement — design.md 3.6:
   flat runtime grid, composition/generation as pre-processing, server ships the board
   over the wire).
-- **No Ashley, no Box2D, no gdxAI, no MCP server, no `dev-tools` module** — reasons
-  in design.md 3.7. The user tests in-game themselves; that was faster than MCP in
+- **No Ashley, no Box2D, no gdxAI, no MCP server** — reasons in design.md 3.7. (A `dev-tools`
+  module now exists, for the board editor only — it was deferred until a concrete need appeared.) The user tests in-game themselves; that was faster than MCP in
   StarWars.
 - **Kept:** libGDX, Maven, KryoNet (TCP only), Jackson, JUnit 5, FreeType (fonts). UI is plain Scene2D on `client.ui.Theme` (design.md 4.2).
 - **GitHub:** https://github.com/mariokoehler/Robot-Rampage (public, branch `main`,
@@ -379,7 +393,7 @@ not hand-verified twice. The design was reviewed by the user (2026-09-21): tags 
 
 Maven, multi-module. Modules: `core` (rules, board format, net, client screens),
 `lwjgl3` (desktop client launcher), `server` (`gdx-backend-headless` dedicated
-server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
+server), `dev-tools` (the board editor; never shipped, design.md 3.13). Java 25 (`maven.compiler.release`), Maven 3.9.x.
 
 - `mvn clean package` from the repo root builds everything and runs the tests;
   client jar `lwjgl3/target/RobotRampage-<version>.jar`, server jar

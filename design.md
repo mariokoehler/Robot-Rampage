@@ -471,8 +471,9 @@ netcode gotchas in its `CLAUDE.md` do not carry over.
   headless backend, and `ServerController`, which maps connections to seats and moves
   messages between the network and the session. (Autosave, 3.10, is not implemented
   yet.)
-- No `dev-tools` module until a concrete need appears (a board editor is the
-  likely first one).
+- `dev-tools` — developer tools that never ship (not shaded, not in either release): the board
+  editor (3.13), package `de.mkoehler.robotrampage.devtools.editor`. Depends on `core` and the
+  LWJGL3 backend. (The repo's `tools/` folder is something else: the Node asset-import scripts.)
 
 **Rule:** `rules` and `board` never import from `client`, `net` or libGDX.
 Dependencies point inward: `client`/`server` → `net` → `rules` → `board`. This keeps
@@ -838,6 +839,56 @@ servers can run on the same NAS at once without a port clash.
 **Not yet done:** actually deploying to the real NAS is a manual Container-Station/router-
 port-forwarding step outside this repo, tracked with the owner directly rather than here —
 same as StarWars' equivalent note.
+
+### 3.13 Board editor (developer tool)
+
+A visual editor for 12×12 boards, so new boards are drawn instead of typed as JSON. It is a
+developer tool, not part of the game: it lives in its own Maven module `dev-tools`, is never
+packaged, and players never see it. Run it with `start_board_editor.cmd` or
+`mvn -pl dev-tools compile exec:exec` (working directory `assets/`); it opens and saves boards in
+`assets/boards`, where the game loads them from. **Fixed size:** the editor only makes and opens
+12×12 boards (owner decision); the format itself still allows other sizes (3.6).
+
+- **Same look as the game.** The board is drawn by the game's own `BoardActor` on the game's own
+  `UiKit`/`Theme`, so what you see is what players see. On top, the editor adds a faint robot on
+  each start square (showing its seat and facing), the registers of each crusher, and a highlight
+  of the square or side the pointer would change.
+- **Layout:** tool palette on the left (Floor, Pit, Repair site, Gear CW/CCW, Crusher, Belt,
+  Express belt, Wall, Laser, Pusher, Flag, Start) with the options of the chosen tool below it
+  (direction for belts and starts, 1–3 beams for lasers, registers for crushers and pushers);
+  the board in the middle; the board's id/name/author and the live checks on the right;
+  New/Open/Save on top.
+- **Gestures.** Left click places, right click removes, dragging continues the gesture; one gesture
+  is one undo step (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z; Ctrl+S saves; R/Shift+R turns the chosen
+  direction). Dragging a belt lays it along the drag (each belt points at the next square, so
+  corners come out right). Edge tools act on the side of the square nearest the pointer and keep
+  that side for the whole drag, so a wall can be dragged along a row. **A laser or pusher is
+  mounted on the side of the square it was clicked in** and fires or pushes away from it, so the
+  two sides of one edge are different mounts. Flags and start squares are picked up and dragged
+  to move them, keeping their number; clicking a start square turns it clockwise.
+- **Square rules.** A square has at most one belt and one feature, and only a crusher may share
+  its square with a belt (the renderer draws a pit, gear or repair site *instead of* a belt, so a
+  belt under one would be invisible but still act). Painting one clears the other accordingly.
+  Crushers and pushers always keep at least one register.
+- **Walls and mounts are kept apart** while editing (`BoardDraft`), unlike `Board`, which folds a
+  mount's implied wall into its walls: removing a laser never leaves a stray wall. A plain wall on
+  an edge a laser or pusher already walls off is dropped, as the canonical export (3.6) does anyway.
+- **Checks and saving.** The right panel lists `BoardValidator`'s errors and warnings live (the
+  same checks `BoardLoader` runs). **Save is disabled while there are errors** (warnings are
+  fine): the game refuses to load a board with errors, and so would the editor. The id doubles as
+  the file name and must be lower-case letters/digits joined by hyphens. Saving over a *different*
+  board's file asks first; New, Open and closing the window ask before discarding unsaved changes.
+- **File layout.** Saved files use the compact one-entry-per-line layout of the hand-written
+  `proving-grounds.json`, in the canonical export order (`BoardFiles.format`), not Jackson's
+  pretty printer, which would spread every square over several lines — so saving an unchanged
+  board reproduces its file byte for byte (`BoardDraftTest` checks exactly that on the real board).
+  Note: saving a changed `proving-grounds` makes `DesignDocPictureTest` fail until 2.11's picture is
+  updated from the test's failure message.
+- **Code:** `BoardDraft` (the editable board), `BoardEditor` (tools, options, gestures, undo),
+  `EditHistory` and `BoardFiles` are libGDX-free and unit-tested; `BoardEditorApp`, `BoardArea`
+  and `BoardEditorLauncher` are the window. `EditorSnapshot` (`dev-tools/src/test`) draws the
+  editor on a hidden window into PNGs to check its layout, and sends real pointer events through the
+  stage to check that a click lands on the right square and side.
 
 ## 4. Rendering & presentation
 
@@ -1327,8 +1378,9 @@ no UI and is where the test value is:
   the feed line naming the pusher or crusher) isn't enough to tell what happened.
   (Multiple concurrent games per server / real lobbies come after v1, see 7.)
 - **M6 — More boards & Board Editor.** Board selection, board composition, first procedural
-  generator (3.6). Optional Board Editor, for authoring boards in a visual editor instead of JSON text.
-  Could be a separate tool in a new dev-tools sub module.
+  generator (3.6). **Board Editor: done** (3.13), in the new `dev-tools` module. Still to come: letting
+  the server load a board other than `proving-grounds` (today `GameServer` hard-codes it), so boards
+  made in the editor can actually be played; then board selection, composition and a generator.
 - **M7 — Release pipeline.** jpackage client zip, Docker server image, tag-driven
   GitHub releases (3.9). jgitver is already in place.
 

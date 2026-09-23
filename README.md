@@ -140,6 +140,23 @@ The client and server jars end up in `lwjgl3/target/RobotRampage-<version>.jar`
 and `server/target/RobotRampage-Server-<version>.jar`. Run either with
 `java --enable-native-access=ALL-UNNAMED -jar <jar>`.
 
+## Making boards
+
+A visual board editor lives in the `dev-tools` module. It's a developer tool
+and isn't part of the game or its releases. Start it with
+`start_board_editor.cmd` or:
+
+```
+mvn install -pl core -am -DskipTests
+mvn -pl dev-tools compile exec:exec
+```
+
+It opens and saves 12×12 boards in `assets/boards/`, draws them exactly as the
+game does, and checks them live with the same validator the game uses. Saving
+is only possible once the board has no errors. For now, the server still always
+plays `proving-grounds`. See section 3.13 of [`design.md`](./design.md) for how
+the editor works.
+
 ## How it's built
 
 - **[libGDX](https://libgdx.com/)** with the LWJGL3 desktop backend and plain
@@ -159,6 +176,7 @@ and `server/target/RobotRampage-Server-<version>.jar`. Run either with
 | `core/` | Rules engine, board format, protocol and session logic, client screens |
 | `lwjgl3/` | Desktop client launcher, release packaging, dev tools (in `src/test`) |
 | `server/` | Dedicated headless server and its Dockerfile |
+| `dev-tools/` | Developer tools that are never shipped: the board editor |
 | `assets/` | Everything the game loads at runtime (atlas, fonts, boards, sounds) |
 | `assets-raw/` | Source art, never loaded by the game |
 | `tools/` | Asset-import scripts |
