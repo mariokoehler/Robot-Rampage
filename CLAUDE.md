@@ -331,7 +331,10 @@ id/name/author (they're typed, not drawn). Look at the window without clicking w
 (`dev-tools/src/test`; classpath recipe as for `BoardSnapshot`, but `-pl dev-tools`, run from `assets/`). **Verified:**
 unit tests + `EditorSnapshot`, which also sends real stage pointer events (hover, left click adds a wall on the nearest
 side, right click removes it) and throws if the mapping is wrong; **not verified**: drag feel, keyboard shortcuts, the
-close-window prompt — the owner's in-app check. A click anywhere but a text field takes the keyboard away from it (a
+close-window prompt — the owner's in-app check. **Never create a Scene2D `Table` (or anything that makes a `Cell`) in a field initializer of the
+`ApplicationListener`** — it runs in `main()` before `Lwjgl3Application` sets `Gdx.files`, and `Cell.defaults()` then
+recurses into a `StackOverflowError` (hit on the editor's first real launch; `EditorSnapshot` missed it because it
+constructs the app inside an already-running one). A click anywhere but a text field takes the keyboard away from it (a
 stage capture listener), so R/Ctrl+Z after typing a name never edit the id field. **Gap: boards from the editor can't be played yet** —
 `GameServer.BOARD_RESOURCE` hard-codes `proving-grounds`; making the server load another board is the natural next slice.
 

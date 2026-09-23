@@ -75,9 +75,9 @@ public final class BoardEditorApp extends ApplicationAdapter {
     private boolean closeConfirmed;
     private boolean updatingFields;
     private int shownRevision = -1;
-    private final Table tools = new Table();
-    private final Table options = new Table();
-    private final Table checks = new Table();
+    private Table tools;
+    private Table options;
+    private Table checks;
     private TextField idField;
     private TextField nameField;
     private TextField authorField;
@@ -232,6 +232,11 @@ public final class BoardEditorApp extends ApplicationAdapter {
      * Lays the whole window out.
      */
     private void build() {
+        // Created here, not as field initializers: a Table built before libGDX has started (the app object itself is
+        // made in main(), before Lwjgl3Application) recurses in Cell.defaults() until the stack overflows.
+        tools = new Table();
+        options = new Table();
+        checks = new Table();
         Table root = new Table();
         root.setFillParent(true);
         root.pad(Theme.SPACE_8).top();
