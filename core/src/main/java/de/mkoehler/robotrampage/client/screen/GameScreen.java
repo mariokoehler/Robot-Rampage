@@ -361,7 +361,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             showGameOver();
         }
         if (overShown) {
-            gameOverView.setLobbySeconds(model.lobbySecondsLeft());
+            gameOverView.setCanReturnToLobby(model.canReturnToLobby());
         } else {
             maybeShowEliminatedDialog();
         }
@@ -1557,12 +1557,12 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Swaps to the Game Over layout: the results of the game, until the server takes everybody back to the lobby. It is built
+     * Swaps to the Game Over layout: the results of the game, until the host takes everybody back to the lobby. It is built
      * from the state the game ended with, so it waits for the end of the replay of the last turn.
      */
     private void showGameOver() {
         closeDialog();
-        gameOverView = new GameOverView(ui, model.standings(), this::leaveGame, model.lobbySecondsLeft());
+        gameOverView = new GameOverView(ui, model.standings(), this::leaveGame, this::returnToLobby, model.canReturnToLobby());
         gameOverGroup.clearChildren();
         gameOverGroup.addActor(gameOverView);
         programmingGroup.setVisible(false);
@@ -1598,6 +1598,16 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         closed = true;
         server.link().disconnect();
         game.setScreen(new ConnectScreen(game));
+    }
+
+    /**
+     * Asks the server to take everybody back to the lobby; only ever called while the button is enabled, i.e. while
+     * this player is the host.
+     */
+    private void returnToLobby() {
+        if (model.canReturnToLobby()) {
+            send(model.returnToLobby());
+        }
     }
 
     /**

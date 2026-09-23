@@ -402,6 +402,11 @@ The programming phase must never let one absent or slow player block everyone
   within the grace period resumes control (needs a session token, see 7).
 - **Disconnect during execution** has no gameplay effect: the server resolves the
   turn without any client involvement.
+- **Results have no timer of their own** (changed 2026-09-25 from an earlier automatic pause: the owner wanted everybody
+  able to look at the results for as long as they liked, not be timed out). Once the game ends the session stays in the
+  `GAME_OVER` phase indefinitely; the host explicitly takes everybody back to the lobby with `ReturnToLobby`, refused for
+  anybody else or before the game has ended (`GameSession.returnToLobby`). The Game Over screen's own button reflects this:
+  enabled for the host, disabled ("Waiting for host…") for everybody else (4.1).
 - A game with fewer than two connected/remaining players ends per 2.10.
 
 ## 3. Architecture
@@ -598,7 +603,8 @@ derived from the game seed and a fill counter — like the deck, never a live
 | S→all | `TurnResolved` | The ordered `LoggedEvent` list of the turn. |
 | S→all | `StateSnapshot` | Public state of every robot after the turn (no hands), for resync and as a check. |
 | S→all | `PlayerConnection`, `PlayerLeft` | A player dropped or came back; a player's grace period ended and their robot was removed. |
-| S→all | `GameOver` | Winner and final robot states, and the seconds until the server takes everybody back to the lobby (the client counts them down on the Game Over screen). |
+| S→all | `GameOver` | Winner and final robot states. The session then stays in the results phase indefinitely, with no timer of its own. |
+| C→S | `ReturnToLobby` | The host takes everybody back to the lobby, once they are all done looking at the results (2.13). Refused for anybody else, or before the game has ended. |
 
 **Clients replay the event list; they do not re-simulate.** (The alternative —
 send programs and let every client run the rules — was rejected: a rules bug or a
@@ -830,8 +836,10 @@ podium has fewer places; with **no winner** (everybody eliminated at once) there
 is "No winner"; a winner who did not touch every flag is "Last robot standing". **The lines under the names are derived
 from turns the client replayed** (design 4.6): the flag that won the game (turn and register), the turn of an elimination,
 "Left the game". A player who joined late or came back saw no turns, so those lines are left out or say less ("Eliminated"),
-never guessed. **"Back to lobby" is not a button:** the server moves everybody back at once, so the mockup's button is a
-disabled countdown ("Lobby in 12 s", from `GameOver.lobbyInSeconds`, then "Opening the lobby…"); "Leave server" leaves.
+never guessed. **"Back to lobby" is the host's button** (changed 2026-09-25 from an automatic countdown — the owner wanted
+everybody to be able to take as long as they liked over the results, not be timed out): enabled and reading "Back to lobby"
+for the host, disabled and reading "Waiting for host…" for everybody else (`GameOverView.setCanReturnToLobby`,
+`GameModel.canReturnToLobby` = `amHost() && stage == Stage.OVER`); a click sends `ReturnToLobby`. "Leave server" leaves.
 
 **Animation is event-driven.** During the Execute phase the client receives the
 turn's `GameEvent` list (3.4) and plays it through an *animation queue*: each

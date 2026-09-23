@@ -6,6 +6,7 @@ import de.mkoehler.robotrampage.net.NetworkServer;
 import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
+import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
@@ -86,6 +87,8 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             session.setTimerPaused(seat, pause.paused());
         } else if (message instanceof ChooseRespawnFacing chosen) {
             session.chooseRespawnFacing(seat, chosen.facing());
+        } else if (message instanceof ReturnToLobby) {
+            session.returnToLobby(seat);
         }
     }
 

@@ -87,7 +87,15 @@ engine) + the resolution layout inside `GameScreen`. `GameModel` HOLDS the post-
 **Host pause (design.md 2.13):** `SetTimerPaused` (C→S, host only) / `TimerPaused` (S→all). `GameSession` freezes its clock (`now()`) and shifts the deadline and every `disconnectedAt` on resume; it only works in `PROGRAMMING` and ends by itself when the turn resolves. The host's button is in `GameScreen` next to the time pill; `ScreenSnapshot` writes `game-host*.png`/`game-guest-paused.png` for it.
 Sample real turns for tools with `SampleTurn` (`lwjgl3/src/test`); `ScreenSnapshot` writes `resolution-*.png` incl. a laser volley.
 Belts pick corner/join/T/X pieces from their neighbours (`BoardGeometry.beltPiece`); the design draws them leaving NORTH.
-**Game Over (slice 6):** `GameOverView` is a third group inside `GameScreen`; `client.game.Standings` (libGDX-free, tested) ranks and words the results from what `GameModel` saw replayed (last flag per robot, elimination turns). `GameOver` carries `lobbyInSeconds`; the server's game-over countdown starts *after* the final turn's replay pause, otherwise the lobby switch would cut the results off. `Label.setFontScale` REPLACES the baked font scale (fonts are generated oversized): multiply by `font.getScaleX()`. `ScreenSnapshot` writes `gameover-*.png`.
+**Game Over (slice 6):** `GameOverView` is a third group inside `GameScreen`; `client.game.Standings` (libGDX-free, tested) ranks and words the results from what `GameModel` saw replayed (last flag per robot, elimination turns). `Label.setFontScale` REPLACES the baked font scale (fonts are generated oversized): multiply by `font.getScaleX()`. `ScreenSnapshot` writes `gameover-*.png`.
+**Returning to the lobby (changed 2026-09-25, playtest feedback):** no more server timer — `GameSession` stays in `GAME_OVER`
+indefinitely; the host's `ReturnToLobby` (C→S) is the only way out (`GameSession.returnToLobby`, host + phase-gated, refused
+otherwise). `GameOver` no longer carries a countdown. `GameOverView`'s lobby button is real now: enabled and clickable for
+the host (`GameModel.canReturnToLobby()` = `amHost() && stage == Stage.OVER`), disabled ("Waiting for host…") for everyone
+else; `GameScreen.showGameOver`/the per-frame `update()` call `GameOverView.setCanReturnToLobby`, not the old
+`setLobbySeconds`. `GameScreenDriver.driveGameOverAsHost` is the only driver scenario with a *host* player, since `drive()`'s
+own `ME` is deliberately not the host (to check the disabled/non-host path); it builds its own minimal `GameScreen`/`GameOver`
+rather than reusing `drive()`'s fixture.
 **Dialogs (slice 7):** `ModalDialog`'s stripe is now a `Color` (`null` for none), not a `boolean`; `.buttons(float[], TextButton...)`
 gives each button its own width. Power-down is gated: the toggle click reverts itself and opens an explanation dialog
 (`GameScreen.showPowerDownDialog`/`applyPowerDownChoice`); turning it off is instant. `client.ui.FacingPicker` (new widget,
@@ -331,6 +339,12 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   expects, so the old install silently stops matching (or runs old code).
 - `mvn -o` (offline) works once dependencies are cached. The first build needed
   network access for `org.lwjgl:lwjgl-bom` (not in the StarWars-populated cache).
+- **`mvn test-compile`/`test` can silently skip recompiling a test file whose only change is that a *dependency's* shape
+  changed** (a record losing/gaining a component, a method removed) — the compiler plugin's staleness check didn't
+  notice and exited 0 even though the test file still referenced the old signature. Found removing `SessionConfig`'s
+  `gameOverMillis`/`GameOver`'s `lobbyInSeconds`: `mvn -pl core test-compile` passed clean, `mvn -pl core clean
+  test-compile` immediately failed with the real errors. After changing a record's shape (not just a method body),
+  `clean` before trusting a green `test-compile`/`test`, at least for the modules that depend on it.
 
 ### Maven + libGDX gotchas (carried over from StarWars, still valid)
 

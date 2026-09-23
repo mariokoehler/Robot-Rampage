@@ -10,6 +10,7 @@ import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.board.StartSquare;
+import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
@@ -22,6 +23,8 @@ import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
+import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
@@ -141,8 +144,11 @@ class WireProtocolTest {
             new StateSnapshot(4, List.of(gone, robot), true, 3),
             new PlayerConnection(3, false),
             new PlayerLeft(3, List.of(event)),
-            new GameOver(-1, List.of(gone, robot), 15),
-            new ProgramRevealed(4, List.of(new Card(CardType.MOVE_2, 300), new Card(CardType.ROTATE_LEFT, 610))));
+            new GameOver(-1, List.of(gone, robot)),
+            new ProgramRevealed(4, List.of(new Card(CardType.MOVE_2, 300), new Card(CardType.ROTATE_LEFT, 610))),
+            new ChooseRespawnFacing(Direction.WEST),
+            new RespawnFacingChosen(3, Direction.WEST),
+            new ReturnToLobby());
 
         for (Object message : messages) {
             assertEquals(message, roundTrip(message), message.getClass().getSimpleName());

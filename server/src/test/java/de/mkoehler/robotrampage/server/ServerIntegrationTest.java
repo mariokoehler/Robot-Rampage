@@ -77,7 +77,7 @@ class ServerIntegrationTest {
             port = socket.getLocalPort();
         }
         LoadedBoard board = BoardLoader.loadResource("boards/proving-grounds.json");
-        SessionConfig config = new SessionConfig(60_000, 30_000, 60_000, PAUSE_BETWEEN_TURNS, 0, PAUSE_BETWEEN_TURNS, 60_000, 2);
+        SessionConfig config = new SessionConfig(60_000, 30_000, 60_000, PAUSE_BETWEEN_TURNS, 0, PAUSE_BETWEEN_TURNS, 2);
         network = new NetworkServer();
         network.start(port);
         ServerController controller = new ServerController(network, board, config, 7L, System::currentTimeMillis);

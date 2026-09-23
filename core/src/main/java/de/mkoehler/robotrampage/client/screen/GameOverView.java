@@ -21,11 +21,12 @@ import java.util.Random;
 
 /**
  * The Game Over layout: who won, the podium of the best three, the standings of everybody, and the buttons that leave the
- * server or wait for the lobby. It is laid out on the {@value Theme#VIEW_WIDTH} by {@value Theme#VIEW_HEIGHT} canvas of the
- * design, so a position such as "left 64, top 56" is given exactly as the mockup has it.
+ * server or go back to the lobby. It is laid out on the {@value Theme#VIEW_WIDTH} by {@value Theme#VIEW_HEIGHT} canvas of
+ * the design, so a position such as "left 64, top 56" is given exactly as the mockup has it.
  * <p>
- * The view only shows a {@link Standings}; what the lobby button says is set by {@link #setLobbySeconds(int)}, because the
- * server, not the player, takes everybody back to the lobby.
+ * The lobby button is the host's: it takes everybody back at once, whenever the host is ready, with no timer of its own
+ * (design.md 2.13). {@link #setCanReturnToLobby(boolean)} enables it and swaps its label; every other player sees it
+ * disabled, saying who they are waiting for.
  *
  * @author Mario Koehler
  */
@@ -46,17 +47,18 @@ final class GameOverView extends Group {
 
     private final UiKit ui;
     private final TextButton lobbyButton;
-    private int shownSeconds = -2;
+    private Boolean shownCanReturn;
 
     /**
      * Builds the layout.
      *
-     * @param ui           the widget factory
-     * @param standings    the results to show
-     * @param onLeave      what the button that leaves the server does
-     * @param lobbySeconds the seconds until the server opens the lobby
+     * @param ui              the widget factory
+     * @param standings       the results to show
+     * @param onLeave         what the button that leaves the server does
+     * @param onReturnToLobby what the lobby button does; only ever invoked while it is enabled
+     * @param canReturnToLobby whether this player (the host) may press the lobby button already
      */
-    GameOverView(UiKit ui, Standings standings, Runnable onLeave, int lobbySeconds) {
+    GameOverView(UiKit ui, Standings standings, Runnable onLeave, Runnable onReturnToLobby, boolean canReturnToLobby) {
         this.ui = ui;
         setSize(Theme.VIEW_WIDTH, Theme.VIEW_HEIGHT);
         if (standings.hasWinner()) {
@@ -74,26 +76,32 @@ final class GameOverView extends Group {
             }
         });
         lobbyButton = ui.button("Back to lobby", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
-        lobbyButton.setDisabled(true);
+        lobbyButton.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                onReturnToLobby.run();
+            }
+        });
         float shadow = UiKit.SHAPE_RESERVE;
         float lobbyLeft = Theme.VIEW_WIDTH - 64f - 320f;
         put(lobbyButton, lobbyLeft, BUTTONS_TOP, 320f, 52f + shadow);
         put(leave, lobbyLeft - 20f - 260f, BUTTONS_TOP, 260f, 52f + shadow);
-        setLobbySeconds(lobbySeconds);
+        setCanReturnToLobby(canReturnToLobby);
     }
 
     /**
-     * Says on the lobby button how long it is until the lobby opens. The button cannot be pressed: the server takes everybody
-     * back, all at once, when the results have been shown for long enough.
+     * Enables or disables the lobby button and swaps its label: the host sees "Back to lobby", enabled; everybody else
+     * sees "Waiting for host…", disabled, since only the host may take everybody back at once.
      *
-     * @param seconds the seconds left, 0 once the time is up
+     * @param canReturn whether this player may press the button now
      */
-    void setLobbySeconds(int seconds) {
-        if (seconds == shownSeconds) {
+    void setCanReturnToLobby(boolean canReturn) {
+        if (Boolean.valueOf(canReturn).equals(shownCanReturn)) {
             return;
         }
-        shownSeconds = seconds;
-        lobbyButton.setText((seconds > 0 ? "Lobby in " + seconds + " s" : "Opening the lobby…").toUpperCase(Locale.ROOT));
+        shownCanReturn = canReturn;
+        lobbyButton.setDisabled(!canReturn);
+        lobbyButton.setText((canReturn ? "Back to lobby" : "Waiting for host…").toUpperCase(Locale.ROOT));
     }
 
     /**

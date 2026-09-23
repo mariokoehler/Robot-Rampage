@@ -350,7 +350,7 @@ public final class ScreenSnapshot {
                 SubPhase.CHECKPOINTS, new GameEvent.FlagTouched(winner, 3, new Position(9, 9))))));
             messages.add(new StateSnapshot(11, robots, true, winner));
         }
-        messages.add(new GameOver(winner, robots, 12));
+        messages.add(new GameOver(winner, robots));
         HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test", 600);
         GameScreen screen = new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
             new ServerAddress("localhost", 45725), new GameStarted(board, infos, ME), messages);

@@ -33,6 +33,7 @@ import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
@@ -121,6 +122,7 @@ public final class GameScreenDriver {
             public void create() {
                 super.create();
                 drive(this, folder);
+                driveGameOverAsHost(this);
                 driveResolution(this);
                 driveRespawn(this);
                 driveEliminated(this);
@@ -226,17 +228,46 @@ public final class GameScreenDriver {
         frame(screen);
         check(screen.stage.getActors().size == actors, "Escape should close the menu");
 
-        link.incoming.add(new GameOver(0, model.robots(), 15));
+        link.incoming.add(new GameOver(0, model.robots()));
         frame(screen);
         check(screen.stage.getActors().size == actors, "the end of the game should not open a dialog");
         check(!screen.stage.getActors().get(0).isVisible() && screen.stage.getActors().get(2).isVisible(),
             "the end of the game should show the game over layout in place of the game");
+        check(!model.canReturnToLobby(), "seat " + ME + " is not the host");
+        int sentBefore = link.sent.size();
         click(screen, 1696f, 1006f);
-        check(game.getScreen() == screen, "the lobby button of the game over screen is only a countdown");
+        check(link.sent.size() == sentBefore, "the lobby button is disabled for anybody but the host");
         link.incoming.add(new LobbyState(List.of(new PlayerInfo(ME, "Bo", false, true, true)), "Proving Grounds", 8, 2, 12, 12,
             3, 3, 90));
         frame(screen);
         check(game.getScreen() instanceof LobbyScreen, "the lobby state after the game should hand the connection to the lobby");
+    }
+
+    /**
+     * Checks the lobby button for the host: enabled once the game has ended, and a click sends {@link ReturnToLobby}.
+     *
+     * @param game the game
+     */
+    private static void driveGameOverAsHost(RobotRampageGame game) {
+        ScriptedLink link = new ScriptedLink();
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true),
+            new PlayerInfo(1, "Bo", true, true, false));
+        ConnectedServer connected = new ConnectedServer(link, new HandshakeResponse("Welcome", 0, "token", "test", 600),
+            List.of(), false);
+        GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(board, players, 0), List.of());
+        game.setScreen(screen);
+        screen.resize(WIDTH, HEIGHT);
+        GameModel model = screen.model();
+        link.incoming.add(new GameOver(0, model.robots()));
+        frame(screen);
+        check(model.canReturnToLobby(), "seat 0 is the host");
+
+        click(screen, 1696f, 1006f);
+
+        check(link.sent.size() == 1 && link.sent.get(0) instanceof ReturnToLobby,
+            "the host's lobby button should send ReturnToLobby");
     }
 
     /**

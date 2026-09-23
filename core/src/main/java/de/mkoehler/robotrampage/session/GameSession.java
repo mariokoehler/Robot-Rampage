@@ -115,7 +115,6 @@ public final class GameSession {
     private long pausedAt;
     private boolean squeezeActive;
     private long nextTurnAt;
-    private long backToLobbyAt;
     private int fillCounter;
 
     /**
@@ -447,12 +446,7 @@ public final class GameSession {
                     beginTurn();
                 }
             }
-            case GAME_OVER -> {
-                if (now >= backToLobbyAt) {
-                    returnToLobby();
-                }
-            }
-            case LOBBY -> {
+            case GAME_OVER, LOBBY -> {
             }
         }
     }
@@ -656,7 +650,7 @@ public final class GameSession {
         outbox.broadcast(new TurnResolved(turn, result.events()));
         outbox.broadcast(snapshot());
         if (state.isOver()) {
-            finishGame(config.pauseAfterTurn(result.events().size()));
+            finishGame();
         } else {
             phase = Phase.RESOLVING;
             nextTurnAt = clock.getAsLong() + config.pauseAfterTurn(result.events().size());
@@ -664,23 +658,37 @@ public final class GameSession {
     }
 
     /**
-     * Ends the game and shows the results.
-     *
-     * @param replayMillis the time the clients need to play back the turn that ended the game, which passes before the results
-     *                     are shown; 0 if the game ended without a turn being played
+     * Ends the game and shows the results. The session stays in this phase until the host explicitly asks for the
+     * lobby ({@link #returnToLobby(int)}); there is no timer of its own.
      */
-    private void finishGame(long replayMillis) {
+    private void finishGame() {
         resumeTimer();
         phase = Phase.GAME_OVER;
-        backToLobbyAt = clock.getAsLong() + replayMillis + config.gameOverMillis();
-        outbox.broadcast(new GameOver(state.winnerId(), robotStates(), secondsUntil(backToLobbyAt)));
+        outbox.broadcast(new GameOver(state.winnerId(), robotStates()));
+    }
+
+    /**
+     * Takes everybody back to the lobby on the host's request, once they are done looking at the results.
+     *
+     * @param seat the requesting player's seat
+     */
+    public void returnToLobby(int seat) {
+        if (phase != Phase.GAME_OVER) {
+            reject(seat, "There are no results to leave yet.");
+            return;
+        }
+        if (seat != hostSeat()) {
+            reject(seat, "Only the host can return everyone to the lobby.");
+            return;
+        }
+        resetToLobby();
     }
 
     /**
      * Goes back to the lobby after a game: players who dropped out are forgotten, the rest keep their seats and
      * must get ready again.
      */
-    private void returnToLobby() {
+    private void resetToLobby() {
         players.values().removeIf(player -> !player.connected || player.left);
         for (SessionPlayer player : players.values()) {
             player.ready = false;
@@ -724,7 +732,7 @@ public final class GameSession {
         outbox.broadcast(new PlayerLeft(player.seat, log.entries()));
         if (state.isOver()) {
             if (phase != Phase.GAME_OVER) {
-                finishGame(0);
+                finishGame();
             }
         } else {
             afterConfirmation();
@@ -776,7 +784,7 @@ public final class GameSession {
                     }
                 }
             }
-            case GAME_OVER -> outbox.send(player.seat, new GameOver(state.winnerId(), robotStates(), secondsUntil(backToLobbyAt)));
+            case GAME_OVER -> outbox.send(player.seat, new GameOver(state.winnerId(), robotStates()));
             default -> {
             }
         }

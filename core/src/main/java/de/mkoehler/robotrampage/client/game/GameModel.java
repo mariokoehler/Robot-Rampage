@@ -14,6 +14,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
+import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -130,7 +131,6 @@ public final class GameModel {
     private final Map<Integer, Standings.FlagTouch> lastFlags = new HashMap<>();
     private final Map<Integer, Integer> eliminatedTurns = new HashMap<>();
     private boolean myEliminationSeen;
-    private float lobbyCountdown = -1f;
     private int revision;
 
     /**
@@ -200,7 +200,6 @@ public final class GameModel {
         } else if (message instanceof PlayerLeft left) {
             removed.add(left.robotId());
         } else if (message instanceof GameOver over) {
-            lobbyCountdown = over.lobbyInSeconds();
             if (resolutionOpen) {
                 heldGameOver = over;
             } else {
@@ -221,9 +220,6 @@ public final class GameModel {
     public void tick(float seconds) {
         if (timerRuns() && !timerPaused) {
             remainingSeconds = Math.max(0f, remainingSeconds - seconds);
-        }
-        if (lobbyCountdown > 0f) {
-            lobbyCountdown = Math.max(0f, lobbyCountdown - seconds);
         }
     }
 
@@ -490,13 +486,23 @@ public final class GameModel {
     }
 
     /**
-     * Returns the seconds until the server takes everybody back to the lobby, counted from the moment the end of the game
-     * arrived.
+     * Returns whether this player may take everybody back to the lobby now: the host, once the game has ended
+     * (design.md 2.13). The server has the last word: it refuses the request of anybody else, or before the game has
+     * ended.
      *
-     * @return the seconds, rounded up; 0 when they are up, and 0 as well as long as the game has not ended
+     * @return {@code true} if the button should be enabled for this player
      */
-    public int lobbySecondsLeft() {
-        return (int) Math.ceil(Math.max(0f, lobbyCountdown));
+    public boolean canReturnToLobby() {
+        return amHost() && stage == Stage.OVER;
+    }
+
+    /**
+     * Builds the message with which the host takes everybody back to the lobby.
+     *
+     * @return the message
+     */
+    public ReturnToLobby returnToLobby() {
+        return new ReturnToLobby();
     }
 
     /**
@@ -733,8 +739,8 @@ public final class GameModel {
     }
 
     /**
-     * Returns whether this player is the host of the game, the one who may stop the timer. The server has the last word: it
-     * refuses the request of anybody else.
+     * Returns whether this player is the host of the game, the one who may stop the timer or take everybody back to the
+     * lobby once the game has ended. The server has the last word: it refuses the request of anybody else.
      *
      * @return {@code true} for the host
      */

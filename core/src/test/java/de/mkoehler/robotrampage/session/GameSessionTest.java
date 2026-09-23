@@ -49,7 +49,6 @@ class GameSessionTest {
     private static final long LAST_PLAYER = 30_000;
     private static final long GRACE = 600_000;
     private static final long PAUSE = 2_000;
-    private static final long GAME_OVER_PAUSE = 15_000;
 
     /**
      * A 5x30 board with four start squares on the bottom row and one flag at the far end. It is too long for any robot
@@ -171,7 +170,7 @@ class GameSessionTest {
      */
     private GameSession newSession(long seed, String boardJson) {
         LoadedBoard board = BoardLoader.parse(boardJson);
-        SessionConfig config = new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, GAME_OVER_PAUSE, 2);
+        SessionConfig config = new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, 2);
         return new GameSession(board, config, seed, now::get, outbox);
     }
 
@@ -594,7 +593,7 @@ class GameSessionTest {
         RecordingOutbox otherOutbox = new RecordingOutbox();
         now.set(1_000);
         GameSession other = new GameSession(BoardLoader.parse(BOARD_JSON),
-            new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, GAME_OVER_PAUSE, 2), 42L, now::get, otherOutbox);
+            new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, 2), 42L, now::get, otherOutbox);
         for (int i = 0; i < 3; i++) {
             other.attach(other.join("Player" + i, null).seat());
         }
@@ -899,7 +898,6 @@ class GameSessionTest {
         assertEquals(GameSession.Phase.GAME_OVER, session.phase());
         GameOver over = outbox.lastReceivedBy(0, GameOver.class);
         assertEquals(0, over.winnerRobotId());
-        assertEquals(GAME_OVER_PAUSE / 1000, over.lobbyInSeconds());
         assertFalse(session.join("x", tokens.get(1)).accepted());
     }
 
@@ -932,7 +930,7 @@ class GameSessionTest {
     void aPlayerRemovedWhileProgrammingKeepsEveryCard() {
         outbox = new RecordingOutbox();
         session = new GameSession(BoardLoader.parse(BOARD_JSON),
-            new SessionConfig(CAP, LAST_PLAYER, 60_000, PAUSE, 0, PAUSE, GAME_OVER_PAUSE, 2), 42L, now::get, outbox);
+            new SessionConfig(CAP, LAST_PLAYER, 60_000, PAUSE, 0, PAUSE, 2), 42L, now::get, outbox);
         startWith(3);
         session.disconnect(2);
         submitFor(0);
@@ -951,11 +949,12 @@ class GameSessionTest {
     }
 
     /**
-     * After the game-over pause the session returns to the lobby: players who dropped are forgotten, the rest keep their
-     * seats but must get ready again, and a new game can start.
+     * The session has no timer of its own once the game has ended (design.md 2.13): it stays in {@code GAME_OVER}, however
+     * long time passes, until the host explicitly asks for the lobby. Anybody else's request is refused. Once the host does
+     * ask, players who dropped are forgotten, the rest keep their seats but must get ready again, and a new game can start.
      */
     @Test
-    void afterGameOverTheSessionReturnsToTheLobby() {
+    void staysInGameOverUntilTheHostReturnsToLobby() {
         startWith(3);
         session.disconnect(2);
         advance(GRACE);
@@ -963,8 +962,14 @@ class GameSessionTest {
         advance(GRACE);
         assertEquals(GameSession.Phase.GAME_OVER, session.phase());
 
-        advance(GAME_OVER_PAUSE);
+        advance(GRACE * 10);
+        assertEquals(GameSession.Phase.GAME_OVER, session.phase(), "no timer of its own returns to the lobby");
 
+        session.returnToLobby(1);
+        assertEquals(GameSession.Phase.GAME_OVER, session.phase(), "only the host may return everyone to the lobby");
+        assertTrue(outbox.receivedBy(1, RequestRejected.class).size() > 0);
+
+        session.returnToLobby(0);
         assertEquals(GameSession.Phase.LOBBY, session.phase());
         LobbyState lobby = outbox.lastReceivedBy(0, LobbyState.class);
         assertEquals(1, lobby.players().size());
@@ -973,33 +978,16 @@ class GameSessionTest {
     }
 
     /**
-     * A game that ends because a robot reached the last flag keeps its results up for the pause that lets the clients play the
-     * winning turn back and then for the game-over time: the lobby does not open while the winning move is still being shown.
-     * The board is a two-by-two square with the flag next to a start square, so some seed lets a random program win at once.
+     * A request to return to the lobby before the game has ended is refused; the session stays exactly where it was.
      */
     @Test
-    void theResultsOfAWonGameWaitForTheReplayOfTheWinningTurn() {
-        String tiny = """
-            {"formatVersion": 1, "id": "s", "name": "Small", "width": 2, "height": 2, "flags": [{"x": 0, "y": 1}],
-             "startSquares": [{"x": 0, "y": 0, "facing": "NORTH"}, {"x": 1, "y": 0, "facing": "NORTH"}]}
-            """;
-        boolean won = false;
-        for (long seed = 0; seed < 500 && !won; seed++) {
-            now.set(1_000);
-            outbox = new RecordingOutbox();
-            session = newSession(seed, tiny);
-            startWith(2);
-            submitFor(0);
-            submitFor(1);
-            won = session.phase() == GameSession.Phase.GAME_OVER;
-        }
-        assertTrue(won, "no seed let a robot reach the flag in the first turn");
+    void returnToLobbyIsRefusedBeforeTheGameHasEnded() {
+        startWith(2);
 
-        assertEquals((PAUSE + GAME_OVER_PAUSE) / 1000, outbox.lastReceivedBy(0, GameOver.class).lobbyInSeconds());
-        advance(GAME_OVER_PAUSE);
-        assertEquals(GameSession.Phase.GAME_OVER, session.phase());
-        advance(PAUSE);
-        assertEquals(GameSession.Phase.LOBBY, session.phase());
+        session.returnToLobby(0);
+
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        assertTrue(outbox.receivedBy(0, RequestRejected.class).size() > 0);
     }
 
     // ------------------------------------------------------------------------------------ rules interplay
