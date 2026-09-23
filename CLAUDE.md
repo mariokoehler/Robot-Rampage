@@ -471,9 +471,32 @@ misbehaves in a way this file doesn't already explain.
   `NetworkConstants`/`Dockerfile`/`docker-compose.yml` (not from memory) — StarWars uses TCP 45625 + UDP 45626, this
   project uses TCP 45725 only (`NetworkConstants.TCP_PORT`; no UDP channel exists at all, design.md 3.5 is TCP-only).
   Both servers can run on the same NAS at once without a port clash.
-- **Icon already existed**: `assets-raw/icon.ico` (real Robot Rampage art, not a placeholder) was already present
-  before this migration — nothing to ask the owner for there, unlike the window/taskbar icon
-  (`lwjgl3/src/main/resources/libgdx*.png`, still the placeholder libGDX icons, a separate pre-existing "not done" item).
+- **Icon already existed, but was single-resolution and only wired up in one of two places (fixed 2026-09-23)**:
+  `assets-raw/icon.ico` (real Robot Rampage art, not a placeholder) was already present before this migration, but
+  only had a single 32×32 image inside it — a real Windows .ico needs several sizes (16/32/48/64/128/256) or it looks
+  wrong/blurry depending which UI surface asks for it. Separately, and the actual reason the owner saw no custom icon
+  **on the taskbar** after deploying: the packaged `RobotRampage.exe`'s own baked-in icon (from `icon.ico`, via
+  jpackage) is a *different* icon than the one Windows shows for the taskbar button of the *running* window — that one
+  comes from GLFW's `setWindowIcon`, which `Lwjgl3Launcher` still pointed at the placeholder `libgdx*.png` files, not
+  at any Robot Rampage art at all. **Fix, both at once**: rasterized `assets-raw/design/robots/robot-2-twin.svg` (the
+  owner correctly guessed the hand-drawn `icon.ico` was originally derived from one of the eight robot SVGs, and
+  named the exact file) at 16/32/48/64/128/256 and used it for both — a new multi-res `assets-raw/icon.ico` for
+  jpackage, and `lwjgl3/src/main/resources/robot-icon-{16,32,64,128}.png` (replacing the `libgdx*.png` files
+  entirely) for `Lwjgl3Launcher.setWindowIcon`. **`tools/design-import/rasterize.js` (Node/resvg) was unavailable in
+  this session** (`node`/`npm` not found on PATH, `node_modules` never installed for that tool) — rasterized instead
+  by hand-translating the SVG's own shape list (rects, circles, lines — all it uses) into `System.Drawing.Graphics`
+  (GDI+) draw calls at each target size, verified pixel-correct by eye at 256px and legible at 16px. **PNG-compressed
+  ICONDIRENTRYs above 48px threw from .NET's own `Icon(path, w, h)` constructor** ("requested range exceeds array
+  end") even though the exact same bytes round-tripped fine through Windows' real shell icon extraction
+  (`Icon.ExtractAssociatedIcon` on the built .exe) — switched every size to plain uncompressed 32bpp DIB entries
+  instead (`tools/design-import/build-ico.ps1`, a small reusable packer saved from this session, since regenerating
+  this icon will come up again if the art ever changes), which fixed all six sizes through both APIs. **Verified for
+  real, not just by re-parsing my own output**: rebuilt the packaged client (`-Prelease-client`), extracted the built
+  `RobotRampage.exe`'s icon via `[System.Drawing.Icon]::ExtractAssociatedIcon` (the actual Windows shell API, not the
+  ICO-file parser that had just thrown on this same data) and visually confirmed it, then launched the exe itself to
+  confirm it runs. **`build-ico.ps1`'s one usage gotcha**: pass PNG paths as one comma-separated *string*, not a
+  PowerShell array — an array does not survive being passed as a parameter to a *separately spawned* `powershell -File`
+  process, it silently mis-binds (hit this once while testing the script itself, before adding the workaround).
 - **Window does NOT start maximized here**, unlike StarWars (`Lwjgl3Launcher.setMaximized(true)`) — this project's
   own `Lwjgl3Launcher.windowSize` (CLAUDE.md "Decisions already made") predates this migration and was deliberately
   left as-is; the DPI-unaware manifest fix was still applied since it addresses a different problem (Windows' own

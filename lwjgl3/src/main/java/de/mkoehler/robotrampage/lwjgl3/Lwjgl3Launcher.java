@@ -56,8 +56,12 @@ public class Lwjgl3Launcher {
         configuration.setForegroundFPS(display.refreshRate + 1);
         int[] size = windowSize(display.width, display.height);
         configuration.setWindowedMode(size[0], size[1]);
-        // Placeholder libGDX icons from lwjgl3/src/main/resources/, until we have a real logo.
-        configuration.setWindowIcon("libgdx128.png", "libgdx64.png", "libgdx32.png", "libgdx16.png");
+        // GLFW's window icon (title bar, Alt-Tab, and the taskbar button of the RUNNING window - separate from the
+        // packaged .exe's own icon, which jpackage bakes in from assets-raw/icon.ico, see lwjgl3/pom.xml's
+        // release-client profile). Rasterized from assets-raw/design/robots/robot-2-twin.svg, the same source the
+        // packaged .exe icon was built from (2026-09-23), replacing the placeholder libGDX icons this used to point
+        // at, which never actually showed the game's own art anywhere at runtime.
+        configuration.setWindowIcon("robot-icon-128.png", "robot-icon-64.png", "robot-icon-32.png", "robot-icon-16.png");
         return configuration;
     }
 

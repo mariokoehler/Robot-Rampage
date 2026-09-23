@@ -1168,9 +1168,22 @@ Settings, the leave confirmation, the board key, the ranking rules in the standi
 **taken as decisions for now**, so the client is built to the mockups as drawn. They can still be revised once played.
 
 **Assets.** The board tiles, objects, card icons, UI icons and the eight robots are vector drawings in the mockups and
-have been extracted into `assets-raw/design/` (README there) with `tools/design-import`. What still has to be produced
-by the owner: sound effects and music (none exist) and the window/application icon. **There is no logo (owner, 2026-09-21):** the
-name is set in Bungee, and the startup screen shows the tagline "Plan carefully. Crash spectacularly." in smaller type below it.
+have been extracted into `assets-raw/design/` (README there) with `tools/design-import`. Sound effects exist (4.4); no
+music track exists yet. **There is no logo (owner, 2026-09-21):** the name is set in Bungee, and the startup screen
+shows the tagline "Plan carefully. Crash spectacularly." in smaller type below it.
+
+**Window/application icon (2026-09-23).** Two separate places need one, and both are now the same art (rasterized from
+`assets-raw/design/robots/robot-2-twin.svg`, the owner's own robot-face icon — not a fresh design, a rasterization of
+existing source art): `assets-raw/icon.ico` (multi-resolution, 16/32/48/64/128/256) is baked into the packaged
+`RobotRampage.exe` by jpackage (3.11) — shows in Explorer, shortcuts, Alt-Tab for the *packaged* build; and
+`lwjgl3/src/main/resources/robot-icon-{16,32,64,128}.png`, set via `Lwjgl3Launcher`'s `Lwjgl3ApplicationConfiguration.setWindowIcon`
+— GLFW sets this as the actual window's icon at runtime (title bar, and the **taskbar button of the running window**,
+which Windows takes from the app-set window icon rather than the exe's own resource). The second one is the one a
+player actually notices day to day, and was still pointing at the placeholder libGDX icons until this fix — the exe's
+own icon being correct did nothing for that. `.ico` built with a hand-rolled packer (`tools/design-import/build-ico.ps1`,
+CLAUDE.md) since Node/`rasterize.js` (the project's usual SVG→PNG tool) was unavailable when this was done; PNG-compressed
+ICO entries above 48px threw from .NET's own icon loader, so the packer uses plain uncompressed 32bpp DIB entries for
+every size instead, which is what this project's icon actually ships as now.
 The eight robots and the ground tiles are rasterized to 128 px PNGs in `assets/robots` and `assets/tiles` (with
 `tools/design-import/rasterize.js`) and loaded as single textures with mipmaps; packing an atlas is still to do.
 
