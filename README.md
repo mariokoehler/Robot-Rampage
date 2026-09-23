@@ -181,6 +181,19 @@ same tag-derived version. Details are in sections 3.9, 3.11 and 3.12 of
   development process: build gotchas, testing conventions and decisions made
   along the way. Useful to anyone, human or AI, picking up work on the code.
 
+## License
+
+Robot Rampage is licensed under the
+[PolyForm Noncommercial License 1.0.0](./LICENSE.md). You may use, copy, modify
+and share it for any **non-commercial** purpose, as long as you keep the
+copyright notice and the license with it. Selling it or using it commercially is
+not allowed.
+
+Some parts are third-party work under their own licenses and are not covered by
+the above. The fonts in `assets/fonts` (Barlow and Bungee) are under the SIL Open
+Font License, whose texts sit next to them. Libraries such as libGDX, KryoNet
+and Jackson are downloaded by Maven under their own licenses.
+
 ## Fan project note
 
 RoboRally is a board game by Richard Garfield, published by Wizards of the
