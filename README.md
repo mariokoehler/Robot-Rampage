@@ -191,7 +191,10 @@ not allowed.
 
 Some parts are third-party work under their own licenses and are not covered by
 the above. The fonts in `assets/fonts` (Barlow and Bungee) are under the SIL Open
-Font License, whose texts sit next to them. Libraries such as libGDX, KryoNet
+Font License, whose texts sit next to them. The sound effects in `assets/sfx`
+come from [Pixabay](https://pixabay.com/), [freesound](https://freesound.org/) and
+[myinstants](https://www.myinstants.com/). Their copyright stays with their
+creators, and they are used under each site's own terms. Libraries such as libGDX, KryoNet
 and Jackson are downloaded by Maven under their own licenses.
 
 ## Fan project note

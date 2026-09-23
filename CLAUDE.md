@@ -342,7 +342,8 @@ not hand-verified twice. The design was reviewed by the user (2026-09-21): tags 
   under the hero screenshot replaced it. The owner's own server address is deliberately **not** in the README (private
   server, owner decision) — don't add it. **License: PolyForm Noncommercial 1.0.0** (`LICENSE.md`, 2026-09-23; owner's
   intent: anyone may do anything with it except sell it). The official text is unmodified; the only addition is the
-  `Required Notice:` copyright line at the top. Third-party parts (OFL fonts, Maven dependencies) are listed as
+  `Required Notice:` copyright line at the top. Third-party parts (OFL fonts, Maven dependencies, the sound effects — from Pixabay, freesound and myinstants per the owner, which
+  file from which site not recorded) are listed as
   excluded in the README's License section — add any new third-party asset there too. Commits are GPG-signed with the user's usual identity (same as StarWars; if
   `git commit` fails with a `gpg-agent` error, start Kleopatra and retry, never
   `--no-gpg-sign`) and contain no AI/Claude references (global rule).
