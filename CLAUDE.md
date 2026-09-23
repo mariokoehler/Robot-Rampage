@@ -351,7 +351,7 @@ real `~/.robot-rampage/client-settings.json` — harmless (an unknown token fall
 overwrite a real one. **Verified:** unit tests, full build, the server jar starting and offering both boards, the
 driver's clicks, and `ServerIntegrationTest.theHostChoosesTheBoardOverRealSockets` (real sockets: host's choice reaches
 everyone, a guest's is refused, the game starts on the chosen board; that test class now serves the real
-`BoardCatalog`); **not verified:** a real two-client game on `loading-dock` (owner's check).
+`BoardCatalog`); and a real game on `loading-dock`, playtested by the owner (2026-09-23).
 
 **Next: whatever the user picks** — the rest of M6 (board composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
 (2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.
