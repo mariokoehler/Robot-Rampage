@@ -10,12 +10,17 @@ the source of truth for how and why everything works. `CLAUDE.md` holds working
 notes for the AI-assisted development process.
 
 > [!WARNING]
-> **This project is a work in progress and is not playable yet.** So far the
-> repository contains the game design document, a complete headless rules engine,
-> the board format with a first board, the network protocol and a dedicated
-> server that can host a game. There is **no playable client yet** (the client
-> window only shows a title), no release and no stable API. Everything,
-> including the design, may change without notice.
+> **This project is a work in progress.** It is playable end-to-end (2–8 players,
+> a dedicated server, the full client) and has had several real playtests, but it
+> is pre-1.0: no accounts, no autosave/reconnect-after-restart, one board, and no
+> stable API. Everything, including the design, may change without notice.
+
+## Playing
+
+Grab the latest client from [Releases](https://github.com/mariokoehler/Robot-Rampage/releases) —
+`RobotRampage-Client.zip` is self-contained (bundles its own Java runtime, nothing to
+install) — unzip it and run `RobotRampage.exe`. You'll need a running server to connect to;
+ask whoever is hosting for its address.
 
 ## Building from source
 
@@ -33,6 +38,25 @@ start_server.cmd    # one terminal
 start_client.cmd    # one per player
 ```
 
+Both scripts reinstall `core` before running — necessary because this project's version is
+computed from git tags (`jgitver`), so a stale local install of `core` can silently fall out
+of date the moment a new commit lands.
+
+Not on Windows, or want the plain Maven commands:
+
+```
+mvn install -pl core -am -DskipTests
+mvn -pl server compile exec:java      # one terminal
+mvn -pl lwjgl3 compile exec:exec      # one per player
+```
+
+To run a packaged jar directly instead:
+
+```
+java --enable-native-access=ALL-UNNAMED -jar server/target/RobotRampage-Server-<version>.jar
+java --enable-native-access=ALL-UNNAMED -jar lwjgl3/target/RobotRampage-<version>.jar
+```
+
 ## Repository layout
 
 | Path | Contents |
@@ -42,6 +66,24 @@ start_client.cmd    # one per player
 | `server/` | Dedicated headless server |
 | `assets/` | Game assets loaded at runtime |
 | `assets-raw/` | Raw source assets, not loaded by the game |
+
+## Releasing
+
+Pushing a `vX.Y.Z` tag triggers two independent GitHub Actions workflows:
+`release-client.yml` builds a self-contained Windows `RobotRampage-Client.zip`
+(via `jpackage`) and publishes it as a GitHub Release asset; `release-server.yml`
+builds and pushes a Docker image to `ghcr.io/mariokoehler/robotrampage-server`.
+Both embed the same tag-derived version, which the client/server handshake
+checks exactly — see design.md 3.9/3.11/3.12 for the full mechanism, and
+`deploy/docker-compose.yml` for how the server actually gets deployed.
+
+## Documentation
+
+- **[`design.md`](./design.md)** — game design and system architecture:
+  read this first for anything about how or why a feature works.
+- **[`CLAUDE.md`](./CLAUDE.md)** — process notes, build gotchas, and
+  session-by-session history for anyone (human or AI) picking up work
+  on this codebase.
 
 ## Fan project note
 

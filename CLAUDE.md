@@ -438,6 +438,59 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   harmless and identical to StarWars'; `--enable-native-access=ALL-UNNAMED` silences
   the last one.
 
+### Releasing (client zip + server Docker image, migrated from StarWars 2026-09-23)
+
+**Everything here — `lwjgl3/pom.xml`'s `release-client` profile, `lwjgl3/src/main/dist/update.cmd`,
+`lwjgl3/src/main/assembly/client-zip.xml`, `lwjgl3/src/main/jpackage-resources/RobotRampage.manifest`,
+`server/Dockerfile`, `.dockerignore`, `deploy/docker-compose.yml`, `.github/workflows/release-client.yml`,
+`.github/workflows/release-server.yml`, design.md 3.11/3.12 — was copied verbatim from the StarWars project
+and renamed** (`StarWars` → `RobotRampage`, `starwars-server` → `robotrampage-server`, port `45625/tcp`+`45626/udp`
+→ `45725/tcp` only). It was NOT re-derived from scratch, so every gotcha StarWars' own CLAUDE.md documents for
+this machinery applies here unchanged unless noted otherwise below — check there first if something in this area
+misbehaves in a way this file doesn't already explain.
+- **Local build of the client zip:** `mvn -pl lwjgl3 -am -Prelease-client verify` (needs a real JDK's `jpackage`,
+  confirmed present at `$JAVA_HOME/bin/jpackage` for the JDK 25 install this project already builds with — no
+  extra install). Produces `lwjgl3/target/RobotRampage-Client.zip`; unzip and run `RobotRampage/RobotRampage.exe`
+  to try a packaged build without cutting a real release. Not run by an ordinary `mvn clean package` — opt-in only.
+- **Cutting a release:** `git tag vX.Y.Z && git push --tags` (or `git push origin vX.Y.Z`) — jgitver (design.md 3.9)
+  already computes everything else. Two tag-triggered GitHub Actions workflows do the rest: `release-client.yml`
+  (Windows runner, `jpackage`, publishes a GitHub Release) and `release-server.yml` (Linux runner, `docker build`,
+  pushes to GHCR). Both pass the tag's version to Maven/Docker explicitly (`-Djgitver.use-version`/`APP_VERSION`)
+  rather than trusting jgitver's own CI auto-detection — see the workflow files' own comments for why (a
+  StarWars-confirmed jgitver+GitHub-Actions ref-ambiguity bug, not fully root-caused).
+- **This repo is already public** (unlike StarWars', still private as of this migration) — no visibility caveat to
+  revisit later for `update.cmd`'s anonymous download or the client release asset. **A GHCR package's own
+  visibility is still a separate setting from the repo's**, though: the first `release-server.yml` run creates the
+  `robotrampage-server` package, and GHCR packages can default to private even under a public repo — check/flip it
+  to public under the package's own Settings on GitHub before assuming Container Station on the NAS can pull it
+  without a PAT.
+- **No data volume in `deploy/docker-compose.yml`**, unlike StarWars' account-data bind mount: this server has no
+  persistence yet (design.md 3.10 — autosave is designed, not implemented). Add a bind mount there once that lands,
+  matching StarWars' pattern (`/share/Container/<app>/data:/app/data`).
+- **Port confirmed non-colliding with StarWars, on request**: checked directly against the StarWars repo's own
+  `NetworkConstants`/`Dockerfile`/`docker-compose.yml` (not from memory) — StarWars uses TCP 45625 + UDP 45626, this
+  project uses TCP 45725 only (`NetworkConstants.TCP_PORT`; no UDP channel exists at all, design.md 3.5 is TCP-only).
+  Both servers can run on the same NAS at once without a port clash.
+- **Icon already existed**: `assets-raw/icon.ico` (real Robot Rampage art, not a placeholder) was already present
+  before this migration — nothing to ask the owner for there, unlike the window/taskbar icon
+  (`lwjgl3/src/main/resources/libgdx*.png`, still the placeholder libGDX icons, a separate pre-existing "not done" item).
+- **Window does NOT start maximized here**, unlike StarWars (`Lwjgl3Launcher.setMaximized(true)`) — this project's
+  own `Lwjgl3Launcher.windowSize` (CLAUDE.md "Decisions already made") predates this migration and was deliberately
+  left as-is; the DPI-unaware manifest fix was still applied since it addresses a different problem (Windows' own
+  per-monitor DPI scaling of a fixed-size `FitViewport` layout) that applies regardless of window state.
+- **Verified locally, twice**: once as a plain `mvn -pl lwjgl3 -am -Prelease-client verify` (SNAPSHOT version) —
+  the unpacked `RobotRampage.exe` was actually launched (two processes, ~458 MB resident — a real libGDX window up,
+  not a crash-on-start) and killed once confirmed — and again with `-Djgitver.use-version=0.0.1`, the exact override
+  `release-client.yml` passes, to prove the CI path specifically (produced `RobotRampage-0.0.1.jar` and
+  `RobotRampage-Client.zip` correctly under a real, non-SNAPSHOT version, not just under `0.0.0-SNAPSHOT`).
+  **`jpackage` refuses to run if its destination app folder (`lwjgl3/target/jpackage/RobotRampage`) already
+  exists** — confirmed by hitting it directly re-running `verify` a second time without `clean` first; `mvn ...
+  clean ... verify` is the right way to re-run this locally, though `clean` can itself fail if Explorer/AV still has
+  the just-launched `RobotRampage.exe` open (delete `lwjgl3/target` by hand if so). **Not verified**:
+  `server/Dockerfile` — no `docker` binary in this dev environment, so the Docker build was never run locally. First
+  real verification of it is `release-server.yml` itself, on the `v0.0.1` tag push. If it fails, the StarWars
+  Dockerfile (verified working there) is the reference to diff against.
+
 ## Testing conventions
 
 - **JUnit 5, used selectively** (design.md 3.8): the rules engine, board format,

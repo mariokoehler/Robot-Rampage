@@ -1,0 +1,23 @@
+# Robot Rampage dedicated server - QNAP Container Station "Application"
+# (design.md 3.12). Deploy: Container Station > Applications > Create
+# Application, paste this file's contents (or Import it), review, Create.
+# Migrated from the StarWars project's identical compose file; no data
+# volume here since this server has no persistence yet (design.md 3.10:
+# autosave is not implemented) - add one if/when that changes.
+#
+# The image tag below is pinned deliberately, not "latest" - the version
+# check (design.md 3.9) is an exact-string match between client and server,
+# so which tag is actually running here has to be a conscious choice, not
+# whatever "latest" happened to resolve to at pull time. To update: edit the
+# tag below to the new release, then Update/Recreate the application in
+# Container Station. See the repo's README/design.md for the matching
+# client release to pair it with.
+services:
+  robotrampage-server:
+    image: ghcr.io/mariokoehler/robotrampage-server:v0.0.1
+    container_name: robotrampage-server
+    restart: unless-stopped
+    ports:
+      # Deliberately different from the StarWars server's 45625/45626
+      # (NetworkConstants.TCP_PORT), so both can run on the same NAS at once.
+      - "45725:45725/tcp"

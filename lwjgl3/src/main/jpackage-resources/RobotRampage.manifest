@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Overrides jpackage's default embedded Windows application manifest for the
+  packaged client (design.md 3.11) - picked up automatically by jpackage's
+  resource-dir override mechanism, matched by launcher name (RobotRampage.exe
+  -> RobotRampage.manifest). Migrated verbatim from the StarWars project's
+  identical manifest, whose fix applies here too: this client also renders
+  its whole UI as one fixed-size FitViewport layout (Theme.VIEW_WIDTH/HEIGHT,
+  design.md 4.2), so the same DPI-unaware behavior is wanted.
+
+  Explicitly declares the app DPI-UNAWARE. Without this, jpackage's default
+  manifest declares (some level of) DPI awareness, which leaves this app
+  responsible for scaling its own UI to the monitor's actual DPI - on at
+  least one real high-DPI (4K, 17") laptop panel (found on the StarWars
+  project), that scaling silently never kicked in, rendering the whole UI at
+  a small fixed pixel size regardless of the monitor's real pixel density.
+  Declaring the app unaware here bakes in that same fix for every player:
+  Windows takes over and bitmap-scales the whole rendered window to the
+  correct physical size instead, a little softer/blurrier than a true
+  per-monitor-aware render would be, but correctly and reliably sized on any
+  display.
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">false</dpiAware>
+    </windowsSettings>
+  </application>
+</assembly>

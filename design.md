@@ -761,8 +761,7 @@ version `0`, and a build gets the real one — a release tag `vX.Y.Z` builds as
 `0.0.0-SNAPSHOT`. `.mvn/jgitver.config.xml` drops the branch qualifier for `main`
 (jgitver only does that for `master` by default). The computed version is what
 `AppVersion` reports and what the handshake compares. The tag-driven release
-pipeline (client zip via jpackage, server Docker image) is deferred until there is
-something to release — see StarWars `design.md` 3.10–3.12 for the pattern.
+pipeline (client zip via jpackage, server Docker image) is implemented — 3.11, 3.12.
 
 ### 3.10 Persistence and config
 
@@ -777,6 +776,64 @@ StarWars conventions:
   running games. Also the natural basis for replays.
 - **Boards:** `assets/boards/*.json`, read by the server (3.6).
 - **Accounts:** not designed (7).
+
+### 3.11 Client packaging: a self-contained zip via jpackage
+
+Migrated from the StarWars project (2026-09-23), same mechanism verbatim, renamed for this
+app. `jpackage --type app-image` (built into the JDK) produces a native
+`RobotRampage.exe` + a jlinked trimmed runtime, built fresh at package time — nothing
+committed to git for this. Layout: `RobotRampage.exe`, `app/` (the jar), `runtime/`
+(jlinked JRE), `update.cmd` (self-updates in place, never touches
+`connection-config.json`, stages the swap with an `.old`-suffix rename so a failed
+download/extract rolls back rather than leaving a half-replaced install; hits GitHub's
+fixed `releases/latest/download/RobotRampage-Client.zip` URL, resolving only against the
+newest non-prerelease). Built via `lwjgl3/pom.xml`'s opt-in `release-client` Maven profile;
+a tag-triggered GitHub Actions workflow (`release-client.yml`) publishes it to a GitHub
+Release automatically. **This repo is public**, unlike StarWars' (still private as of the
+migration) — anonymous downloads, including `update.cmd`'s own, work for anyone from the
+start.
+
+**Release sequencing matters:** the version check (3.9) is an exact-string match, so
+redeploy the server (3.12) from a new tag *before or alongside* publishing the matching
+client zip, never after.
+
+**High-DPI displays:** the packaged `RobotRampage.exe` is deliberately DPI-*unaware* —
+`lwjgl3/src/main/jpackage-resources/RobotRampage.manifest` overrides jpackage's default
+embedded Windows manifest (wired in via `jpackage-maven-plugin`'s `resourceDir`, matched to
+`RobotRampage.exe` by launcher name). The StarWars project found this necessary on a real
+4K/17" laptop panel, where its whole UI/HUD/text rendered at a fixed small pixel size
+regardless of the monitor's actual density; applied here pre-emptively since this client's
+UI is the same kind of one fixed-size `FitViewport` layout (design.md 4.2/`Theme`) that bug
+affects. Unlike StarWars, this client's window does **not** start maximized
+(`Lwjgl3Launcher.windowSize`, CLAUDE.md "Decisions already made") — that decision predates
+and is unrelated to this migration, kept as-is.
+
+### 3.12 Dedicated server deployment: Docker via QNAP Container Station
+
+Migrated from the StarWars project (2026-09-23), same mechanism verbatim, renamed for this
+app. Runs on the owner's QNAP NAS via Container Station (a GUI over real Docker). GitHub
+Actions builds and pushes a Docker image to GHCR on every `v*` tag push (`release-server.yml`,
+separate from the client workflow); Container Station pulls it directly as a single-service
+Compose "Application" (`deploy/docker-compose.yml`, pinned to an exact version tag, never
+`latest` — the version check is exact-string). `server/Dockerfile` is multi-stage:
+`maven:3.9-eclipse-temurin-25` build stage (build context is the whole repo root — Maven
+needs to parse every module the root `pom.xml` declares to build its reactor graph, even
+with `-pl`/`-am` restricting what actually builds), `eclipse-temurin:25-jre` runtime stage
+(not `-alpine` — libGDX natives are glibc-built).
+
+**No data volume**, unlike StarWars' account-data bind mount: this server has no persistence
+yet (3.10 — autosave is designed but not implemented). Add a bind mount to
+`deploy/docker-compose.yml` once that lands.
+
+**Port, deliberately different from StarWars':** `45725/tcp` only (this project is TCP-only,
+3.5 — no UDP channel to publish), vs. StarWars' `45625/tcp` + `45626/udp`
+(`NetworkConstants.TCP_PORT` in both repos) — checked directly against the StarWars
+repo's own `NetworkConstants`/Dockerfile/docker-compose.yml before picking this, so both
+servers can run on the same NAS at once without a port clash.
+
+**Not yet done:** actually deploying to the real NAS is a manual Container-Station/router-
+port-forwarding step outside this repo, tracked with the owner directly rather than here —
+same as StarWars' equivalent note.
 
 ## 4. Rendering & presentation
 
