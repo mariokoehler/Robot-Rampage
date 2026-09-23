@@ -406,7 +406,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
             }
         });
         row.add(minus).size(36f, 36f);
-        row.add(value).width(70f).center();
+        row.add(value).width(70f).center().padLeft(Theme.SPACE_2).padRight(Theme.SPACE_2);
         row.add(plus).size(36f, 36f);
         return row;
     }

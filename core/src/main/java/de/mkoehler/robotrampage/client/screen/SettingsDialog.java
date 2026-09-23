@@ -299,6 +299,7 @@ final class SettingsDialog {
                     model.windowWidth = size[0];
                     model.windowHeight = size[1];
                     model.apply(game);
+                    model.refreshWindowSize.run();
                 })).height(44f + UiKit.SHAPE_RESERVE);
             }
         };
@@ -330,6 +331,7 @@ final class SettingsDialog {
                 row.add(segment(ui, (int) speedValue + "×", selected, () -> {
                     model.resolutionSpeed = speedValue;
                     model.apply(game);
+                    model.refreshSpeed.run();
                 })).height(44f + UiKit.SHAPE_RESERVE);
             }
         };

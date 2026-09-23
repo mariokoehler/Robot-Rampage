@@ -301,6 +301,25 @@ dialog and the Lobby stepper were compiled and unit-tested but not pixel-checked
 so wiring it in is real plumbing, not a quick addition (design decision, not an oversight — see design.md 4.6). The
 owner's own playtest is the verification path for this one, per this file's testing conventions.
 
+**Two bugs the owner's playtest found the same evening, both fixed (2026-09-23):** the Lobby's programming-time value
+label had no padding from the surrounding "−"/"+" buttons (`programmingTimeStepper`; fixed with
+`.padLeft(Theme.SPACE_2).padRight(Theme.SPACE_2)` on the label cell). **More notably, `SettingsDialog`'s "Window size"
+and "Resolution playback speed" segmented controls never updated their highlight after a click** — `segment(...)`'s
+`onPick` callback changed `model.windowWidth`/`windowHeight`/`resolutionSpeed` and applied them, but never re-ran the
+row's own `refresh` closure, so the selected-pill highlight stayed on whatever was selected when the dialog opened
+(always 1920x1080/1x, the defaults) no matter what was actually picked. **The working reference for this exact pattern
+was already in the codebase**: `GameScreen.refreshSpeed()`'s own segmented control calls `refreshSpeed()` again from
+inside its own `onPick` — `SettingsDialog` was written to *look* like it, down to sharing the `segment(...)` helper's
+signature, but dropped the "call refresh again" half. Fixed by having each `onPick` call
+`model.refreshWindowSize.run()`/`model.refreshSpeed.run()` (the `Model` fields, not a captured local — the closure
+inside `refresh` cannot reference `refresh` itself before its own assignment finishes, but by the time a click can
+happen the field is already set, since `model.refreshWindowSize = refresh; refresh.run();` both run synchronously
+during dialog construction). **Takeaway for any future segmented control**: `refresh` must be invoked from both the
+place that first builds the row *and* every `onPick` that can change what should be selected — this is exactly the
+gap `ScreenSnapshot`/`GameScreenDriver` would have caught if wired up (an automated click-and-compare, not just a
+static render, is needed for this class of bug), reinforcing rather than undercutting the "not verified visually"
+tradeoff noted above.
+
 **Next: whatever the user picks** — M6 (more boards / Board Editor), or the first real playtest,
 which is the owner's to run, not a further slice to build. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
