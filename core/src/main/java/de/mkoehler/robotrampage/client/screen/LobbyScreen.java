@@ -9,6 +9,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Scaling;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.audio.AudioKit;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.lobby.LobbyView;
@@ -19,12 +20,15 @@ import de.mkoehler.robotrampage.client.ui.UiKit;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
+import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * The waiting room: who has joined, who is ready, the facts of the game, and the buttons to get ready, leave or, for the
@@ -55,6 +59,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
     private final TextButton startButton;
     private final Label startLabel;
     private GameStarted started;
+    private LobbyState lastLobby;
     private final List<Object> afterStart = new ArrayList<>();
     private boolean closed;
 
@@ -207,11 +212,36 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         if (started != null) {
             afterStart.add(message);
         } else if (message instanceof LobbyState lobby) {
+            playRosterChangeSounds(lobby);
+            lastLobby = lobby;
             show(new LobbyView(lobby, mySeat));
         } else if (message instanceof RequestRejected rejected) {
             toast(rejected.reason());
         } else if (message instanceof GameStarted gameStarted) {
             started = gameStarted;
+        }
+    }
+
+    /**
+     * Plays a sound for every seat a new lobby state gained or lost compared to the one before it (a join, a leave, or
+     * both at once if several players changed between updates). A disconnect in the lobby has no grace period, unlike
+     * one during a game (2.13): {@code GameSession.disconnect} frees the seat immediately, so it always shows up here as
+     * a plain leave. Nothing plays for the very first lobby state this screen ever sees: there is nothing to compare it
+     * against, and everybody already seated is not "joining".
+     *
+     * @param lobby the newly arrived lobby state
+     */
+    private void playRosterChangeSounds(LobbyState lobby) {
+        if (lastLobby == null) {
+            return;
+        }
+        Set<Integer> before = lastLobby.players().stream().map(PlayerInfo::seat).collect(Collectors.toSet());
+        Set<Integer> after = lobby.players().stream().map(PlayerInfo::seat).collect(Collectors.toSet());
+        if (!before.containsAll(after)) {
+            game.audio().play(AudioKit.Clip.PLAYER_JOINS_LOBBY);
+        }
+        if (!after.containsAll(before)) {
+            game.audio().play(AudioKit.Clip.PLAYER_LEFT_LOBBY);
         }
     }
 

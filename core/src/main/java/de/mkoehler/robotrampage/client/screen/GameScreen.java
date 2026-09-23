@@ -16,6 +16,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Scaling;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.audio.AudioKit;
 import de.mkoehler.robotrampage.client.board.BoardGeometry;
 import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
@@ -45,6 +46,7 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.rules.Card;
+import de.mkoehler.robotrampage.rules.GameEvent;
 import de.mkoehler.robotrampage.rules.Robot;
 import de.mkoehler.robotrampage.rules.SubPhase;
 import de.mkoehler.robotrampage.rules.RobotStatus;
@@ -352,6 +354,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         model.tick(delta);
         timeLabel.setText(model.timeText());
         timeBar.setFraction(model.timeFraction());
+        game.audio().updateCountdownWarning(model.timerCountingDown(), model.secondsLeft());
         updateResolution(delta);
         if (model.revision() != shownRevision) {
             refreshAll();
@@ -844,7 +847,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         Table column = new Table();
         column.top().left();
         TextButton confirm = ui.button(lockedIn ? "Locked in" : "Confirm program",
-            Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON_LARGE);
+            Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON_LARGE, true);
         confirm.setDisabled(!model.canConfirm());
         confirm.addListener(new ChangeListener() {
             @Override
@@ -974,6 +977,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void place(Card card) {
         if (model.draft() != null && model.draft().place(card)) {
+            game.audio().play(AudioKit.Clip.PLACE_CARD);
             refreshAll();
         }
     }
@@ -985,6 +989,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void takeBack(int register) {
         if (model.draft() != null && model.draft().take(register) != null) {
+            game.audio().play(AudioKit.Clip.RETURN_CARD);
             refreshAll();
         }
     }
@@ -995,6 +1000,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private void confirm() {
         if (model.canConfirm()) {
             TurnLog.log("PROGRAM turn=" + model.turn() + " seat=" + model.mySeat() + " registers=" + model.draft().registers());
+            game.audio().play(AudioKit.Clip.PROGRAM_LOCKED_IN);
             send(model.submit());
             refreshProgram();
         }
@@ -1178,9 +1184,34 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         resolutionBoard.setRobots(frame.poses());
         resolutionBoard.setBeams(frame.beams());
         if (shownBeat != replay.beatIndex() || shownDone != replay.isDone()) {
+            boolean newBeat = shownBeat != replay.beatIndex();
             shownBeat = replay.beatIndex();
             shownDone = replay.isDone();
+            if (newBeat) {
+                playBeatSounds(replay.currentBeat());
+            }
             refreshResolution();
+        }
+    }
+
+    /**
+     * Plays the sound effect for whatever a newly shown beat of the replay did, once per beat regardless of how many
+     * matching events it holds.
+     *
+     * @param beat the beat that just started showing, or {@code null} for a turn without events
+     */
+    private void playBeatSounds(TurnReplay.Beat beat) {
+        if (beat == null) {
+            return;
+        }
+        if (beat.phase() == SubPhase.LASERS) {
+            game.audio().play(AudioKit.Clip.LASER);
+        }
+        for (GameEvent event : beat.events()) {
+            if (event instanceof GameEvent.RobotDestroyed) {
+                game.audio().play(AudioKit.Clip.ROBOT_DIES);
+                return;
+            }
         }
     }
 
@@ -1335,14 +1366,18 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     // ------------------------------------------------------------------------------------------------------
 
     /**
-     * Applies a power-down choice: sets it in the model, shows it on the switch, and, for a robot that is already powered
-     * down, tells the server at once, whichever way the choice went, since there is nothing else left to confirm it with.
+     * Applies a power-down choice: sets it in the model, shows it on the switch, plays a sound for choosing to power down
+     * (not for cancelling it), and, for a robot that is already powered down, tells the server at once, whichever way the
+     * choice went, since there is nothing else left to confirm it with.
      *
      * @param announce {@code true} to power down (or stay down), {@code false} to cancel it
      */
     private void applyPowerDownChoice(boolean announce) {
         model.setPowerDownNext(announce);
         powerToggle.setChecked(announce);
+        if (announce) {
+            game.audio().play(AudioKit.Clip.POWER_DOWN_NEXT_TURN);
+        }
         if (model.stage() == GameModel.Stage.SITTING_OUT && model.isPoweredDownThisTurn()) {
             send(model.announceStayingDown());
         }
@@ -1354,7 +1389,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void showPowerDownDialog() {
         TextButton notNow = ui.button("Not now", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
-        TextButton confirm = ui.button("Power down", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
+        TextButton confirm = ui.button("Power down", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON, true);
         notNow.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
@@ -1611,8 +1646,10 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Gives up a reconnect attempt that is still under way, then releases the stage, mirroring {@link ConnectScreen}'s
-     * own {@code dispose()}. The worker thread it cancels is a daemon, so this is only tidiness, not a leak fix.
+     * Gives up a reconnect attempt that is still under way, stops the countdown warning loop if it is playing (this screen
+     * is the only thing that starts it, so it must also be the thing that stops it once nobody is calling
+     * {@code update()} for it any more), then releases the stage, mirroring {@link ConnectScreen}'s own {@code dispose()}.
+     * The worker thread the reconnect attempt cancels is a daemon, so that part is only tidiness, not a leak fix.
      */
     @Override
     public void dispose() {
@@ -1620,6 +1657,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             reconnector.cancel();
             reconnector = null;
         }
+        game.audio().stopCountdownWarning();
         super.dispose();
     }
 }

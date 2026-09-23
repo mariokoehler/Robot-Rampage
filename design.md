@@ -807,7 +807,10 @@ be checked without playing. `lwjgl3/src/test/resources/renderer-probe.json` is a
 beat by beat, so it ends exactly where the server ended (a test compares it with the rules engine over many random turns).
 Beats: the reveal of a register; one beat per robot's card, with the pushes it causes; one beat each for express belts, all
 belts, pushers, gears, crushers, checkpoints and clean-up (everything in them happens at once); one beat for a whole laser
-volley. Damage is **merged per robot per volley** ("Kenji takes 2 damage — Board laser, then Sophie · damage 5 of 9").
+volley that hits at least one robot — **a volley that hits nobody produces no beat at all** (added 2026-09-25, playtest
+request): the lasers still fire on the server every register regardless (2.4 item 7), but with nobody standing in the line
+of fire there is nothing worth spending replay time animating, or playing `AudioKit.Clip#LASER` for (4.4). Damage is
+**merged per robot per volley** ("Kenji takes 2 damage — Board laser, then Sophie · damage 5 of 9").
 The game screen swaps to the resolution layout (cards played in priority order, the board at 64 px squares, "What happened"
 newest first with the current moment marked, the registers and the nine steps below, pause, speed and "Skip to end of turn")
 while a turn is being played, inside the same `GameScreen`, so the connection never changes hands.
@@ -999,8 +1002,27 @@ and it does not reopen for a turn already offered).
 
 ### 4.4 Audio
 
-Later. `Sound` for short effects, `Music` for streamed tracks; same guidance as in
-the StarWars project's `CLAUDE.md`.
+**Implemented (2026-09-25, extended the same day).** `client.audio.AudioKit` (owned by `RobotRampageGame`, loaded and
+disposed the same way as `UiKit`) loads every clip eagerly as a `Sound` from `assets/sfx/` — under twenty short effects,
+small enough that an `AssetManager` would be pure overhead. No `Music` (streamed) track exists yet; add one the same way
+if a music bed is ever wanted.
+
+| Clip | Plays when |
+|---|---|
+| `CONNECTING` | The "Connecting" dialog opens on the Connect screen — the original attempt and every "Try again" retry (`ConnectScreen.showConnectingDialog`). |
+| `PLACE_CARD` | A card from the hand is placed into a register (`GameScreen.place`). |
+| `RETURN_CARD` | A card is taken back out of a register (`GameScreen.takeBack`). |
+| `PROGRAM_LOCKED_IN` | The program is confirmed and sent (`GameScreen.confirm`). |
+| `ROBOT_DIES` | A replayed beat contains a `GameEvent.RobotDestroyed`, whether or not that also eliminates the robot — once per beat, not once per event (`GameScreen.playBeatSounds`, called from the same beat-transition check `refreshResolution` already uses). |
+| `LASER` | A replayed beat is a laser volley — which, since the skip-if-no-hit change just above, only ever exists when somebody was actually hit (`GameScreen.playBeatSounds`, checking `beat.phase() == SubPhase.LASERS`). |
+| `PROBLEM_OR_ERROR` | `StageScreen.toast(...)` (every use today is a `RequestRejected` reason, in both `GameScreen` and `LobbyScreen`), and the four `Theme.DANGER`-striped dialogs on the Connect screen: can't-reach, version-mismatch, couldn't-join, disconnected. Deliberately *not* played for the eliminated-player dialog, which already gets `ROBOT_DIES`, or for anything else that isn't a real problem. |
+| `WARNING_30` / `WARNING_10` | Looped while the programming timer counts down: `WARNING_30` from 30 seconds, swapped for `WARNING_10` at 10, stopped at 0 — never both at once. Driven by `GameModel.timerCountingDown()` (true while the timer is actually decreasing: programming/submitted/sitting-out, not paused) and `secondsLeft()`, read every frame in `GameScreen.render` next to the existing `timeLabel`/`timeBar` update, and stopped explicitly in `GameScreen.dispose()` — the only place that starts the loop is also the only place still ticking it, so it must also be the one that stops it. |
+| `PLAYER_JOINS_LOBBY` / `PLAYER_LEFT_LOBBY` | A seat appears or disappears between one `LobbyState` and the next this player's own `LobbyScreen` receives (`LobbyScreen.playRosterChangeSounds`, diffing seat sets — there is no dedicated join/leave message for the lobby phase, unlike mid-game). Silent for the very first `LobbyState` a screen ever sees (nothing to diff against) and for this player's own join. |
+| `POWER_DOWN_NEXT_TURN` | The player confirms powering down from the explanation dialog (`GameScreen.applyPowerDownChoice`, only when `announce` is `true` — cancelling plays nothing). |
+| `BUTTON_CLICK` | The default for every `TextButton` `UiKit.button(...)` makes, added inside the one factory method every button in the client goes through (confirmed by grepping for `new TextButton` — there is exactly one call site, in `UiKit` itself). Suppressed for a disabled button (a second, independently-added `ClickListener` still receives the touch even though the button's own internal one no-ops — `Button.setDisabled` never touches `Touchable`) and for the handful of buttons whose own action already plays a more specific clip: Confirm Program (`PROGRAM_LOCKED_IN`), the power-down dialog's confirm button (`POWER_DOWN_NEXT_TURN`), and Connect (`CONNECTING`, only on a successful attempt, but silence on a validation failure was already the pre-existing behaviour). Those three use the new `UiKit.button(text, kind, style, silent)` overload. |
+| `BEEP_1`–`BEEP_4` | Loaded, not wired to anything yet — generic "whimsy" beeps the owner hadn't decided a use for at drop-in time. |
+
+**Not done:** any volume control (no Settings screen exists yet to hold it — see 4.2's "Next" note); the beeps above.
 
 ### 4.5 Asset pipeline
 

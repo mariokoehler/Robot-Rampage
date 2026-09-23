@@ -730,6 +730,16 @@ public final class GameModel {
     }
 
     /**
+     * Returns whether the programming timer is actually counting down right now, for cues such as a ticking sound: while
+     * players are programming (whether or not this player is one of them) and the host has not paused it.
+     *
+     * @return {@code true} while {@link #secondsLeft()} is decreasing
+     */
+    public boolean timerCountingDown() {
+        return timerRuns() && !timerPaused;
+    }
+
+    /**
      * Returns whether the host has stopped the programming timer.
      *
      * @return {@code true} while it is stopped

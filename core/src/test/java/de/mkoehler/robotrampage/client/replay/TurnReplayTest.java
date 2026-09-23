@@ -141,16 +141,19 @@ class TurnReplayTest {
     }
 
     /**
-     * A volley that hits nobody says so, and a robot that is lost in it is named.
+     * A volley that hits nobody produces no beat at all — nothing worth animating or a sound for happened — and a robot
+     * that is lost in a volley that does hit somebody is named.
      */
     @Test
-    void aVolleyWithoutHitsAndALostRobot() {
+    void aVolleyWithoutHitsIsSkippedAndALostRobotIsNamed() {
         TurnReplay none = replay(List.of(robot(0, 1, 1, Direction.NORTH)),
             at(2, SubPhase.LASERS, new GameEvent.LaserFired(LaserSource.BOARD, GameEvent.NO_ROBOT, new Position(0, 0),
                 Direction.EAST, new Position(3, 0), GameEvent.NO_ROBOT, 1)));
-        assertEquals("Laser volley: no hits", none.beats().get(0).lines().get(0).title());
+        assertTrue(none.beats().isEmpty(), "a laser volley that hits nobody is skipped entirely");
 
         TurnReplay lost = replay(List.of(robot(0, 1, 1, Direction.NORTH)),
+            at(2, SubPhase.LASERS, new GameEvent.LaserFired(LaserSource.BOARD, GameEvent.NO_ROBOT, new Position(0, 0),
+                Direction.EAST, new Position(3, 0), 0, 1)),
             at(2, SubPhase.LASERS, new GameEvent.RobotDamaged(0, 1, 10, LaserSource.BOARD)),
             at(2, SubPhase.LASERS, new GameEvent.RobotDestroyed(0, DestructionCause.DAMAGE)));
         assertTrue(lost.beats().get(0).lines().contains(new Line(LineKind.DESTROYED, "Sophie is destroyed", "Too much damage")));

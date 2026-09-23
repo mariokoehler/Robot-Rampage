@@ -9,6 +9,7 @@ import com.badlogic.gdx.scenes.scene2d.actions.Actions;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.audio.AudioKit;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
 
@@ -55,11 +56,13 @@ abstract class StageScreen extends ScreenAdapter {
 
     /**
      * Shows a short message at the bottom of the screen that fades away by itself, for example why the server refused a
-     * request. A new message replaces the one still showing.
+     * request, and plays {@link AudioKit.Clip#PROBLEM_OR_ERROR} — every use of this method today is exactly that kind of
+     * message. A new message replaces the one still showing.
      *
      * @param message the message
      */
     protected void toast(String message) {
+        game.audio().play(AudioKit.Clip.PROBLEM_OR_ERROR);
         Actor showing = stage.getRoot().findActor(TOAST_NAME);
         if (showing != null) {
             showing.remove();

@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.client;
 import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Screen;
+import de.mkoehler.robotrampage.client.audio.AudioKit;
 import de.mkoehler.robotrampage.client.screen.StartupScreen;
 import de.mkoehler.robotrampage.client.settings.ClientSettings;
 import de.mkoehler.robotrampage.client.settings.SettingsStore;
@@ -11,8 +12,8 @@ import de.mkoehler.robotrampage.client.ui.UiKit;
 
 /**
  * The client's {@link com.badlogic.gdx.ApplicationListener}. It owns what every screen shares (the widget kit with the
- * fonts and shapes, and the remembered settings) and shows one {@link Screen} at a time, starting with the
- * {@link StartupScreen}.
+ * fonts and shapes, the sound effects, and the remembered settings) and shows one {@link Screen} at a time, starting with
+ * the {@link StartupScreen}.
  *
  * @author Mario Koehler
  */
@@ -21,6 +22,7 @@ public class RobotRampageGame extends Game {
     private static final float MAX_FONT_SCALE = 2f;
 
     private UiKit ui;
+    private AudioKit audio;
     private SettingsStore settingsStore;
     private ClientSettings settings;
 
@@ -30,6 +32,8 @@ public class RobotRampageGame extends Game {
     @Override
     public void create() {
         ui = new UiKit(Gdx.files.internal("fonts"), fontScale());
+        audio = new AudioKit();
+        ui.setAudio(audio);
         settingsStore = SettingsStore.inHomeDirectory();
         settings = settingsStore.load();
         setScreen(new StartupScreen(this));
@@ -42,6 +46,15 @@ public class RobotRampageGame extends Game {
      */
     public UiKit ui() {
         return ui;
+    }
+
+    /**
+     * Returns the sound effects every screen plays from.
+     *
+     * @return the kit, valid from {@link #create()} until {@link #dispose()}
+     */
+    public AudioKit audio() {
+        return audio;
     }
 
     /**
@@ -92,6 +105,9 @@ public class RobotRampageGame extends Game {
         }
         if (ui != null) {
             ui.dispose();
+        }
+        if (audio != null) {
+            audio.dispose();
         }
     }
 

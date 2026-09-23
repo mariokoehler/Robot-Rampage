@@ -454,6 +454,12 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
 - `assets/*.json` config files (connection config etc.) are runtime-generated and
   gitignored; the `*.cmd` helpers and the `exec:exec` config run the client with
   `assets/` as its working directory.
+- **Sound effects (added 2026-09-25):** `assets-raw/sfx/*.mp3` → `assets/sfx/*.mp3`, a verbatim copy — mp3s need no
+  conversion, libGDX's LWJGL3 backend decodes them natively and needs no extra native dependency beyond the
+  already-present `gdx-platform` natives (checked against StarWars: it has no separate audio native artifact either).
+  `client.audio.AudioKit` (own package, owned by `RobotRampageGame` like `UiKit`, loaded/disposed the same way) loads
+  every clip eagerly as a `Sound` — there are only a dozen, an `AssetManager` would be overkill. See design.md 4.7 for
+  what plays where.
 
 ## Conventions / preferences
 

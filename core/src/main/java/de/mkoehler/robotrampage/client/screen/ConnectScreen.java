@@ -12,6 +12,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.audio.AudioKit;
 import de.mkoehler.robotrampage.client.connect.ConnectFlow;
 import de.mkoehler.robotrampage.client.connect.ConnectionAttempt;
 import de.mkoehler.robotrampage.client.connect.DisplayNames;
@@ -113,7 +114,7 @@ public final class ConnectScreen extends StageScreen {
      */
     private Table serverPanel() {
         TextButton back = ui.button("Back", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
-        TextButton connect = ui.button("Connect", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
+        TextButton connect = ui.button("Connect", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON, true);
         back.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
@@ -297,6 +298,7 @@ public final class ConnectScreen extends StageScreen {
      * @param address the server being contacted
      */
     private void showConnectingDialog(ServerAddress address) {
+        game.audio().play(AudioKit.Clip.CONNECTING);
         Group bar = new Group();
         Image track = new Image(ui.solid(Theme.LINE));
         track.setBounds(0f, 10f, 512f, 4f);
@@ -333,6 +335,7 @@ public final class ConnectScreen extends StageScreen {
      * @param reason  what went wrong
      */
     private void showUnreachableDialog(ServerAddress address, String reason) {
+        game.audio().play(AudioKit.Clip.PROBLEM_OR_ERROR);
         ModalDialog unreachable = new ModalDialog(ui, DIALOG_WIDTH, Theme.DANGER);
         Table well = ui.well();
         well.pad(14f);
@@ -370,6 +373,7 @@ public final class ConnectScreen extends StageScreen {
      * @param serverVersion the version the server runs
      */
     private void showVersionDialog(String serverVersion) {
+        game.audio().play(AudioKit.Clip.PROBLEM_OR_ERROR);
         ModalDialog mismatch = new ModalDialog(ui, DIALOG_WIDTH, Theme.DANGER);
         Table versions = new Table();
         versions.add(versionWell("Your game", AppVersion.getVersion(), Theme.INK)).growX().uniformX();
@@ -401,6 +405,7 @@ public final class ConnectScreen extends StageScreen {
      * @param reason the server's message
      */
     private void showRefusedDialog(String reason) {
+        game.audio().play(AudioKit.Clip.PROBLEM_OR_ERROR);
         TextButton back = ui.button("Back", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
         back.addListener(new ChangeListener() {
             @Override
@@ -423,6 +428,7 @@ public final class ConnectScreen extends StageScreen {
      * @param notice what to say
      */
     private void showNoticeDialog(String notice) {
+        game.audio().play(AudioKit.Clip.PROBLEM_OR_ERROR);
         TextButton ok = ui.button("Back", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
         ok.addListener(new ChangeListener() {
             @Override

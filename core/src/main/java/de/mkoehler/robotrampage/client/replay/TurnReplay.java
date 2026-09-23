@@ -530,7 +530,9 @@ public final class TurnReplay {
 
     /**
      * Makes the beat of a laser volley: every laser fires at once, damage is merged per robot, and robots that are lost are
-     * listed.
+     * listed. A volley that hits nobody produces no beat at all — the lasers fire on the server every register regardless
+     * (design.md 2.4 item 7), but with nobody standing in the line of fire there is nothing worth spending replay time
+     * animating or playing a sound for.
      *
      * @param register the register
      * @param step     the events of the step
@@ -558,10 +560,12 @@ public final class TurnReplay {
                 destroyed.add(destroyedLine(lost));
             }
         }
+        if (hit.isEmpty()) {
+            return;
+        }
         List<Line> lines = new ArrayList<>();
-        String volley = hit.isEmpty() ? "Laser volley: no hits" : "Laser volley: " + hit.size()
-            + (hit.size() == 1 ? " robot hit" : " robots hit");
-        lines.add(new Line(LineKind.LASER, volley, "Board lasers and robot lasers fire together"));
+        lines.add(new Line(LineKind.LASER, "Laser volley: " + hit.size() + (hit.size() == 1 ? " robot hit" : " robots hit"),
+            "Board lasers and robot lasers fire together"));
         for (Map.Entry<Integer, Integer> entry : amounts.entrySet()) {
             int robot = entry.getKey();
             String by = String.join(", then ", sources.getOrDefault(robot, List.of("Laser")));

@@ -7,15 +7,18 @@ import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.ui.TextField;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import com.badlogic.gdx.scenes.scene2d.utils.NinePatchDrawable;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.Disposable;
+import de.mkoehler.robotrampage.client.audio.AudioKit;
 
 import java.util.HashMap;
 import java.util.Locale;
@@ -51,6 +54,7 @@ public final class UiKit implements Disposable {
     private final TextField.TextFieldStyle fieldErrorStyle;
     private final TextureAtlas atlas;
     private final Map<String, NinePatchDrawable> shapeCache = new HashMap<>();
+    private AudioKit audio;
 
     /**
      * Generates the fonts, builds the shared shapes and loads the picture atlas.
@@ -68,6 +72,16 @@ public final class UiKit implements Disposable {
         this.fieldStyle = fieldStyle(false);
         this.fieldErrorStyle = fieldStyle(true);
         this.atlas = new TextureAtlas(Gdx.files.internal("textures/game.atlas"));
+    }
+
+    /**
+     * Gives the kit the sound effects its buttons play on click. Optional: a tool that only needs the widgets (such as
+     * {@code BoardSnapshot}) can leave this unset, and buttons simply stay silent.
+     *
+     * @param audio the sound effects
+     */
+    public void setAudio(AudioKit audio) {
+        this.audio = audio;
     }
 
     /**
@@ -124,7 +138,9 @@ public final class UiKit implements Disposable {
     }
 
     /**
-     * Creates a button in one of the design's three kinds.
+     * Creates a button in one of the design's three kinds, that plays {@link AudioKit.Clip#BUTTON_CLICK} when clicked —
+     * the default "haptic" feedback every button gets unless it already has a more specific sound of its own, in which
+     * case the caller uses {@link #button(String, Theme.ButtonKind, Theme.TextStyle, boolean)} instead.
      *
      * @param text  the label, turned into capitals
      * @param kind  the kind of button
@@ -132,7 +148,35 @@ public final class UiKit implements Disposable {
      * @return the button; give it a size with the layout
      */
     public TextButton button(String text, Theme.ButtonKind kind, Theme.TextStyle style) {
-        return new TextButton(text.toUpperCase(Locale.ROOT), shapes.button(kind, fonts.get(style)));
+        return button(text, kind, style, false);
+    }
+
+    /**
+     * Creates a button as {@link #button(String, Theme.ButtonKind, Theme.TextStyle)} does, but without the default click
+     * sound, for the few buttons whose own action already plays a more specific one (so the two are never heard together).
+     *
+     * @param text   the label, turned into capitals
+     * @param kind   the kind of button
+     * @param style  the type style of the label, normally {@link Theme.TextStyle#BUTTON}
+     * @param silent {@code true} to skip the default click sound
+     * @return the button; give it a size with the layout
+     */
+    public TextButton button(String text, Theme.ButtonKind kind, Theme.TextStyle style, boolean silent) {
+        TextButton button = new TextButton(text.toUpperCase(Locale.ROOT), shapes.button(kind, fonts.get(style)));
+        if (!silent) {
+            button.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    // A disabled button still receives touch events on a listener added this way (only the button's own
+                    // internal listener checks isDisabled() before firing its ChangeEvent), so this one must check too,
+                    // or a click that visibly does nothing would still play a sound.
+                    if (audio != null && !button.isDisabled()) {
+                        audio.play(AudioKit.Clip.BUTTON_CLICK);
+                    }
+                }
+            });
+        }
+        return button;
     }
 
     /**
