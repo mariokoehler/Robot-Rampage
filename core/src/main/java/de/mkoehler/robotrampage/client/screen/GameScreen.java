@@ -30,6 +30,7 @@ import de.mkoehler.robotrampage.client.game.ProgramDraft;
 import de.mkoehler.robotrampage.client.lobby.RobotLook;
 import de.mkoehler.robotrampage.client.render.BoardActor;
 import de.mkoehler.robotrampage.client.replay.TurnReplay;
+import de.mkoehler.robotrampage.client.settings.ClientSettings;
 import de.mkoehler.robotrampage.client.ui.CardView;
 import de.mkoehler.robotrampage.client.ui.FacingPicker;
 import de.mkoehler.robotrampage.client.ui.ModalDialog;
@@ -116,7 +117,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private boolean showingResolution;
     private boolean replayCompleted;
     private boolean paused;
-    private float speed = 1f;
+    private float speed = game.settings().resolutionSpeed();
     private int shownBeat = -1;
     private boolean shownDone;
     private final List<Object> returnToLobby = new ArrayList<>();
@@ -354,7 +355,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         model.tick(delta);
         timeLabel.setText(model.timeText());
         timeBar.setFraction(model.timeFraction());
-        game.audio().updateCountdownWarning(model.timerCountingDown(), model.secondsLeft());
+        game.audio().updateCountdownWarning(model.timerCountingDown(), model.secondsLeft(), model.programmingSeconds());
         updateResolution(delta);
         if (model.revision() != shownRevision) {
             refreshAll();
@@ -565,12 +566,18 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      * last-known facing, for the same reason {@link GameModel#ghostPath()} does: that is what will actually be
      * submitted, and showing the stale facing until the turn resolves misleads the player about which way "forward"
      * currently is.
+     * <p>
+     * The ghost path itself is only drawn while {@link ClientSettings#showGhostPath()} is on (the Settings dialog's
+     * "Show my program on the board" switch); everything else in this method still runs, so a robot standing where a
+     * ghost would have been is unaffected either way.
      */
     private void refreshBoard() {
         List<RobotPose> poses = new ArrayList<>();
-        for (MovementPreview.Step step : model.ghostPath()) {
-            poses.add(new RobotPose(model.mySeat(), step.position().x(), step.position().y(),
-                BoardGeometry.rotation(step.facing()), GHOST_ALPHA, 0, false));
+        if (game.settings().showGhostPath()) {
+            for (MovementPreview.Step step : model.ghostPath()) {
+                poses.add(new RobotPose(model.mySeat(), step.position().x(), step.position().y(),
+                    BoardGeometry.rotation(step.facing()), GHOST_ALPHA, 0, false));
+            }
         }
         for (RobotState robot : model.robots()) {
             if (robot.status() == RobotStatus.ACTIVE && robot.position() != null) {
@@ -1539,13 +1546,18 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Opens the menu: settings (not built yet), leaving the game, and closing the menu.
+     * Opens the menu: settings, leaving the game, and closing the menu.
      */
     private void showMenu() {
         TextButton settings = ui.button("Settings", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
-        settings.setDisabled(true);
         TextButton leave = ui.button("Leave game", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
         TextButton back = ui.button("Resume", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
+        settings.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                open(SettingsDialog.build(game, ui, GameScreen.this::closeDialog));
+            }
+        });
         leave.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
@@ -1593,10 +1605,13 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
 
     /**
      * Swaps to the Game Over layout: the results of the game, until the host takes everybody back to the lobby. It is built
-     * from the state the game ended with, so it waits for the end of the replay of the last turn.
+     * from the state the game ended with, so it waits for the end of the replay of the last turn, and plays
+     * {@link AudioKit.Clip#GAME_WON} the moment it appears, win or not — it marks reaching the results screen, not the
+     * outcome shown on it.
      */
     private void showGameOver() {
         closeDialog();
+        game.audio().play(AudioKit.Clip.GAME_WON);
         gameOverView = new GameOverView(ui, model.standings(), this::leaveGame, this::returnToLobby, model.canReturnToLobby());
         gameOverGroup.clearChildren();
         gameOverGroup.addActor(gameOverView);

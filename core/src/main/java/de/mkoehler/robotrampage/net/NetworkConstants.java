@@ -45,6 +45,22 @@ public final class NetworkConstants {
     public static final int MAX_DISPLAY_NAME_LENGTH = 20;
 
     /**
+     * The least the host may set the programming time to, in seconds (design.md 2.13). Shared with the client so the
+     * Lobby screen's stepper can clamp without depending on the server-only {@code session} package.
+     */
+    public static final int MIN_PROGRAMMING_SECONDS = 30;
+
+    /**
+     * The most the host may set the programming time to, in seconds (design.md 2.13).
+     */
+    public static final int MAX_PROGRAMMING_SECONDS = 300;
+
+    /**
+     * The size of one step of the Lobby screen's programming-time stepper, in seconds.
+     */
+    public static final int PROGRAMMING_SECONDS_STEP = 15;
+
+    /**
      * Not instantiable; this class only holds constants.
      */
     private NetworkConstants() {

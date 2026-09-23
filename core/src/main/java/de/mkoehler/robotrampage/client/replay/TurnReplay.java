@@ -532,7 +532,8 @@ public final class TurnReplay {
      * Makes the beat of a laser volley: every laser fires at once, damage is merged per robot, and robots that are lost are
      * listed. A volley that hits nobody produces no beat at all — the lasers fire on the server every register regardless
      * (design.md 2.4 item 7), but with nobody standing in the line of fire there is nothing worth spending replay time
-     * animating or playing a sound for.
+     * animating or playing a sound for. Within a volley that does hit somebody, only the beams that actually hit a robot are
+     * drawn — a beam that missed is exactly as uninteresting as an empty volley, just not alone this register.
      *
      * @param register the register
      * @param step     the events of the step
@@ -546,9 +547,9 @@ public final class TurnReplay {
         Set<Integer> hit = new LinkedHashSet<>();
         for (GameEvent event : step) {
             if (event instanceof GameEvent.LaserFired fired) {
-                beams.add(new Beam(fired.from(), fired.direction(), fired.to(), fired.source() == LaserSource.BOARD,
-                    fired.beams()));
                 if (fired.hitRobotId() != GameEvent.NO_ROBOT) {
+                    beams.add(new Beam(fired.from(), fired.direction(), fired.to(), fired.source() == LaserSource.BOARD,
+                        fired.beams()));
                     hit.add(fired.hitRobotId());
                     sources.computeIfAbsent(fired.hitRobotId(), id -> new ArrayList<>()).add(
                         fired.source() == LaserSource.BOARD ? "Board laser" : name(fired.sourceRobotId()) + "'s laser");

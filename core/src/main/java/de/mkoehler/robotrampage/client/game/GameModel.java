@@ -787,6 +787,18 @@ public final class GameModel {
     }
 
     /**
+     * Returns this turn's total programming time, as dealt with the hand. Used to tell a genuinely short turn (the host
+     * may set the timer as low as
+     * {@link de.mkoehler.robotrampage.net.NetworkConstants#MIN_PROGRAMMING_SECONDS}) apart from a turn that has merely
+     * run low on time, so the countdown warning sounds only fire for the latter.
+     *
+     * @return the seconds this turn started with
+     */
+    public int programmingSeconds() {
+        return programmingSeconds;
+    }
+
+    /**
      * Returns the time left as minutes and seconds.
      *
      * @return for example {@code 1:07}

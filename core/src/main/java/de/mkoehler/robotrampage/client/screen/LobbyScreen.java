@@ -18,10 +18,12 @@ import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
 import de.mkoehler.robotrampage.net.NetworkClient;
+import de.mkoehler.robotrampage.net.NetworkConstants;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
 
@@ -335,7 +337,8 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
     }
 
     /**
-     * Rebuilds the list of facts about the game.
+     * Rebuilds the list of facts about the game. The host sees a stepper instead of the plain "Programming time" fact,
+     * since only the host may change it, and only in the lobby (design.md 2.13).
      *
      * @param view what to show
      */
@@ -345,20 +348,79 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         fact("Board", view.boardText());
         fact("Flags", view.flagsText());
         fact("Lives", view.livesText());
-        fact("Programming time", view.programmingTimeText());
+        if (view.iAmHost()) {
+            factRow("Programming time", programmingTimeStepper());
+        } else {
+            fact("Programming time", view.programmingTimeText());
+        }
         fact("Rules", "Classic 2005");
     }
 
     /**
-     * Adds one line to the list of facts.
+     * Adds one line to the list of facts, as plain text.
      *
      * @param caption what the fact is about
      * @param value   the fact
      */
     private void fact(String caption, String value) {
+        factRow(caption, ui.label(value, Theme.TextStyle.FIELD, Theme.INK));
+    }
+
+    /**
+     * Adds one line to the list of facts, as any widget.
+     *
+     * @param caption what the fact is about
+     * @param value   the widget showing it
+     */
+    private void factRow(String caption, Actor value) {
         boardFacts.add(ui.label(caption, Theme.TextStyle.CHIP, Theme.INK_MUTED)).width(FACT_LABEL_WIDTH).left()
             .padBottom(Theme.SPACE_2);
-        boardFacts.add(ui.label(value, Theme.TextStyle.FIELD, Theme.INK)).left().padBottom(Theme.SPACE_2).row();
+        boardFacts.add(value).left().padBottom(Theme.SPACE_2).row();
+    }
+
+    /**
+     * Builds the host's "−"/value/"+" stepper for the programming time, in
+     * {@value NetworkConstants#PROGRAMMING_SECONDS_STEP}-second steps clamped to
+     * {@link NetworkConstants#MIN_PROGRAMMING_SECONDS}..{@link NetworkConstants#MAX_PROGRAMMING_SECONDS}. Reads the
+     * current value from {@link #lastLobby} rather than from a field of its own, so it is always exactly what the
+     * server last said, including a change another client session of the same host made.
+     *
+     * @return the stepper
+     */
+    private Table programmingTimeStepper() {
+        Table row = new Table();
+        row.left();
+        TextButton minus = ui.button("−", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        TextButton plus = ui.button("+", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        Label value = ui.label(lastLobby.programmingSeconds() + " s", Theme.TextStyle.FIELD, Theme.INK);
+        minus.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                step(-NetworkConstants.PROGRAMMING_SECONDS_STEP);
+            }
+        });
+        plus.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                step(NetworkConstants.PROGRAMMING_SECONDS_STEP);
+            }
+        });
+        row.add(minus).size(36f, 36f);
+        row.add(value).width(70f).center();
+        row.add(plus).size(36f, 36f);
+        return row;
+    }
+
+    /**
+     * Sends a request to change the programming time by a step, clamped to the allowed range; the server has the last
+     * word, and the stepper shows whatever {@link LobbyState} comes back.
+     *
+     * @param delta the change, in seconds, positive or negative
+     */
+    private void step(int delta) {
+        int next = lastLobby.programmingSeconds() + delta;
+        next = Math.max(NetworkConstants.MIN_PROGRAMMING_SECONDS, Math.min(NetworkConstants.MAX_PROGRAMMING_SECONDS, next));
+        server.link().send(new SetProgrammingSeconds(next));
     }
 
     /**

@@ -111,11 +111,12 @@ class TurnReplayTest {
     }
 
     /**
-     * A laser volley is a single moment: damage of one robot from several lasers is merged and says where it came from, the
-     * beams are shown, and the damage tags are those of the volley.
+     * A laser volley is a single moment: damage of one robot from several lasers is merged and says where it came from, only
+     * the beams that actually hit somebody are shown (a third laser in this volley misses and is dropped), and the damage
+     * tags are those of the volley.
      */
     @Test
-    void aLaserVolleyIsOneMomentWithMergedDamage() {
+    void aLaserVolleyIsOneMomentWithMergedDamageAndOnlyHittingBeamsShown() {
         Position a = new Position(0, 3);
         TurnReplay replay = replay(List.of(robot(0, 1, 1, Direction.NORTH), robot(2, 4, 3, Direction.WEST)),
             at(3, SubPhase.LASERS, new GameEvent.LaserFired(LaserSource.BOARD, GameEvent.NO_ROBOT, a, Direction.EAST,
@@ -133,7 +134,7 @@ class TurnReplayTest {
             beat.lines().get(0));
         assertEquals(new Line(LineKind.LASER, "Kenji takes 2 damage", "Board laser, then Sophie's laser · damage 5 of 9"),
             beat.lines().get(1));
-        assertEquals(3, beat.beams().size());
+        assertEquals(2, beat.beams().size(), "the middle laser missed and is not drawn");
         assertTrue(beat.beams().get(0).board());
         assertEquals(Map.of(2, 2), beat.tags());
         assertEquals(2, replay.frame().poses().stream().filter(pose -> pose.tag() == 2 || pose.tag() == 0).count());

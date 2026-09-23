@@ -1,7 +1,9 @@
 package de.mkoehler.robotrampage.client.settings;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -41,20 +43,41 @@ public final class SettingsStore {
     }
 
     /**
-     * Loads the settings.
+     * Loads the settings, merged onto {@link ClientSettings#defaults()}: only the properties the file actually has
+     * override a default, so a file saved by an older version (before, say, {@code volume} existed) still gets the
+     * real default for what it is missing, not {@code 0}/{@code false} from an empty JSON value. {@code ClientSettings}
+     * is a record, so this cannot be done by updating an existing instance in place; it is done by merging JSON trees
+     * instead.
      *
-     * @return the saved settings, or {@link ClientSettings#defaults()} if there is no readable file
+     * @return the saved settings, merged onto the defaults, or the defaults alone if there is no readable file
      */
     public ClientSettings load() {
         if (!Files.isRegularFile(file)) {
             return ClientSettings.defaults();
         }
         try {
-            ClientSettings loaded = mapper.readValue(file.toFile(), ClientSettings.class);
-            return loaded == null ? ClientSettings.defaults() : loaded;
+            JsonNode loaded = mapper.readTree(file.toFile());
+            if (!(loaded instanceof ObjectNode loadedObject)) {
+                return ClientSettings.defaults();
+            }
+            ObjectNode merged = mapper.valueToTree(ClientSettings.defaults());
+            merged.setAll(loadedObject);
+            return mapper.treeToValue(merged, ClientSettings.class);
         } catch (IOException | RuntimeException e) {
             return ClientSettings.defaults();
         }
+    }
+
+    /**
+     * Reports whether a settings file has ever been saved. {@link #load()} cannot distinguish "no file yet" from "a file
+     * that happens to hold exactly the defaults", but the caller needs that distinction once: on a genuinely first run,
+     * {@link ClientSettings#defaults()}'s hardcoded 1920x1080 window size must not override the window size the launcher
+     * already picked for a smaller monitor.
+     *
+     * @return {@code true} if the settings file exists
+     */
+    public boolean exists() {
+        return Files.isRegularFile(file);
     }
 
     /**

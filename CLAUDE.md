@@ -262,7 +262,46 @@ Real scope for a polish nobody asked for yet: the pusher's tile is only derivabl
 crusher's only from the replay's own position tracking *before* the destroy event applies, and neither covers a
 hazard that fires with nobody on it (would need `Board` itself threaded into `TurnReplay`'s constructor). Revisit only
 if real playtesting says the existing feedback isn't enough.
-**Next: whatever the user picks** — the Settings dialog, M6 (more boards / Board Editor), or the first real playtest,
+
+**Settings dialog + host-settable programming timer (2026-09-23): done.** `client.screen.SettingsDialog` (design.md
+4.6) opens from both Startup and the in-game Menu; every control applies and saves live via
+`RobotRampageGame.saveAndApplyPreferences`, no Cancel button (matches the mockup). New `client.ui.Slider` (own hand-rolled
+`Actor`, `PillToggle`'s `DragListener` pattern) is the only genuinely new widget; its `touchDown` override on the inner
+`DragListener` must return `boolean` (it overrides `InputListener.touchDown`, not `void`) — call `super.touchDown(...)`
+first and only call `setFromTouch` if it returned `true`. **`ClientSettings` grew to 10 fields; `SettingsStore.load()`
+merges the loaded JSON tree onto `ClientSettings.defaults()` (`ObjectNode.setAll`) rather than deserializing directly**
+— a record's canonical constructor has no notion of "field absent, keep the default", so a settings file saved before a
+field existed would otherwise silently zero/false it out instead of getting the real default; this merge is why
+`SettingsStoreTest.unknownAndMissingPropertiesAreTolerated` exists and must keep passing after any new `ClientSettings`
+field. **The turn-timer control is on the Lobby screen, not in Settings** (owner's explicit split, 2026-09-23): it is a
+game rule the host sets for everyone, not a personal client preference. Its bounds
+(`NetworkConstants.MIN_PROGRAMMING_SECONDS`/`MAX_PROGRAMMING_SECONDS`/`PROGRAMMING_SECONDS_STEP`) live in `net`, not
+`session`, purely so `LobbyScreen` can clamp client-side without importing the server-only `session` package (the
+client/server package boundary, above) — `GameSession.setProgrammingSeconds` re-checks the same bounds authoritatively.
+**A short turn and the countdown warning sirens interact — found via `advisor`, not by playing it out.**
+`AudioKit.updateCountdownWarning` started `WARNING_30` as soon as `secondsLeft <= 30` with no regard for how long the
+turn actually was, so the host's new minimum (30 s) would start the siren on the turn's very first frame and run it the
+whole way. First fix attempt was raising `MIN_PROGRAMMING_SECONDS` to 45 — rejected on a second `advisor` pass as
+papering over it (a 45 s turn still spends its last 30 s, two-thirds of it, sirening). **Real fix: each warning band
+only starts if the turn's total programming time is longer than that band's own threshold** — `GameModel.programmingSeconds()`
+(new getter) is passed into `updateCountdownWarning` alongside `secondsLeft`, so `WARNING_30` needs `totalSeconds > 30`
+and `WARNING_10` needs `totalSeconds > 10`. `MIN_PROGRAMMING_SECONDS` stayed at 30. **First-run window
+size gotcha**: `ClientSettings.defaults()` hardcodes 1920x1080, but `Lwjgl3Launcher` sizes the window down to fit a
+smaller monitor; applying preferences unconditionally on every launch would fight that and snap a small monitor's window
+back up to 1920x1080. Fixed by only seeding the settings' window size from `Gdx.graphics.getWidth/Height()` on a
+genuine first run (`SettingsStore.exists()` was false), before `RobotRampageGame.create()` calls `applyPreferences` —
+once a real settings file exists, its window size is respected as-is, same as any other saved preference. **Also this
+session:** the ready toggle in the Lobby now plays `BUTTON_CLICK` (it is a `PillToggle`, not a `TextButton`, so it needed
+its own `ClickListener` rather than going through `UiKit.button`'s factory); `TurnReplay`'s laser rendering now skips
+individual missed beams within a volley that has some hits, not just whole no-hit volleys; `GAME_WON` plays once on
+reaching Game Over and `WELCOME_JINGLE` once per real app launch (`RobotRampageGame.create()`, deliberately not
+`StartupScreen`'s constructor, which re-runs on every "Back" from Connect). **Not verified visually**: the Settings
+dialog and the Lobby stepper were compiled and unit-tested but not pixel-checked via `ScreenSnapshot`/`GameScreenDriver`
+— `ScreenSnapshot` lives in a different package than the package-private `SettingsDialog` and only drives `GameScreen`,
+so wiring it in is real plumbing, not a quick addition (design decision, not an oversight — see design.md 4.6). The
+owner's own playtest is the verification path for this one, per this file's testing conventions.
+
+**Next: whatever the user picks** — M6 (more boards / Board Editor), or the first real playtest,
 which is the owner's to run, not a further slice to build. After M1: M2 board
 format + validator, and **I draft the first original 12x12 board myself** (user's
 decision) — but only after `BoardValidator` exists, so the reachability check is

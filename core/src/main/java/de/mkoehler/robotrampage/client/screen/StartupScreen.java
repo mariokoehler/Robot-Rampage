@@ -10,12 +10,13 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.utils.Align;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.lobby.RobotLook;
+import de.mkoehler.robotrampage.client.ui.ModalDialog;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.AppVersion;
 
 /**
- * The first screen: the game's name and tagline, the way in (Play), to the settings and out (Quit), and the eight robots
- * standing on a conveyor belt. The settings screen does not exist yet, so its button is shown disabled.
+ * The first screen: the game's name and tagline, the way in (Play), to the Settings dialog and out (Quit), and the eight
+ * robots standing on a conveyor belt.
  *
  * @author Mario Koehler
  */
@@ -30,6 +31,8 @@ public final class StartupScreen extends StageScreen {
     private static final float ROBOT_STAGGER = 10f;
     private static final String CREDIT = "A fan project. RoboRally is a board game by Richard Garfield, published by "
         + "Wizards of the Coast / Avalon Hill and Renegade Game Studios.";
+
+    private ModalDialog dialog;
 
     /**
      * Builds the screen.
@@ -53,11 +56,16 @@ public final class StartupScreen extends StageScreen {
         TextButton play = ui.button("Play", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON_LARGE);
         TextButton settings = ui.button("Settings", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON_MEDIUM);
         TextButton quit = ui.button("Quit", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON_MEDIUM);
-        settings.setDisabled(true);
         play.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
                 game.setScreen(new ConnectScreen(game));
+            }
+        });
+        settings.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                open(SettingsDialog.build(game, ui, StartupScreen.this::closeDialog));
             }
         });
         quit.addListener(new ChangeListener() {
@@ -126,5 +134,26 @@ public final class StartupScreen extends StageScreen {
         band.add(new Image(ui.solid(Theme.LINE))).growX().height(Theme.BORDER_HAIRLINE).row();
         band.add(strip).growX().height(BAND_HEIGHT - Theme.BORDER_HAIRLINE);
         return band;
+    }
+
+    /**
+     * Shows a dialog in place of the one that is open.
+     *
+     * @param next the dialog to show
+     */
+    private void open(ModalDialog next) {
+        closeDialog();
+        dialog = next;
+        dialog.show(stage);
+    }
+
+    /**
+     * Closes the open dialog.
+     */
+    private void closeDialog() {
+        if (dialog != null) {
+            dialog.hide();
+            dialog = null;
+        }
     }
 }

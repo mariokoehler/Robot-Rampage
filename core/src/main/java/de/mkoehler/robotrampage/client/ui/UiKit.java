@@ -303,12 +303,33 @@ public final class UiKit implements Disposable {
     }
 
     /**
-     * Creates the on/off switch of the design: a pill with a round knob.
+     * Creates the on/off switch of the design: a pill with a round knob. Plays {@link AudioKit.Clip#BUTTON_CLICK} when
+     * clicked, the same default "haptic" feedback a button gets, since {@link PillToggle} has no disabled state to guard
+     * against, unlike {@link #button(String, Theme.ButtonKind, Theme.TextStyle)}.
      *
      * @return the switch, off
      */
     public PillToggle toggle() {
-        return new PillToggle(shapes);
+        PillToggle toggle = new PillToggle(shapes);
+        toggle.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if (audio != null) {
+                    audio.play(AudioKit.Clip.BUTTON_CLICK);
+                }
+            }
+        });
+        return toggle;
+    }
+
+    /**
+     * Creates a horizontal slider from 0 to 1 of the design: a pill track, a filled portion up to a round knob.
+     *
+     * @param value the starting value, 0 to 1
+     * @return the slider
+     */
+    public Slider slider(float value) {
+        return new Slider(shapes, value);
     }
 
     /**

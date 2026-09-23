@@ -26,6 +26,7 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
@@ -148,7 +149,8 @@ class WireProtocolTest {
             new ProgramRevealed(4, List.of(new Card(CardType.MOVE_2, 300), new Card(CardType.ROTATE_LEFT, 610))),
             new ChooseRespawnFacing(Direction.WEST),
             new RespawnFacingChosen(3, Direction.WEST),
-            new ReturnToLobby());
+            new ReturnToLobby(),
+            new SetProgrammingSeconds(120));
 
         for (Object message : messages) {
             assertEquals(message, roundTrip(message), message.getClass().getSimpleName());

@@ -379,7 +379,13 @@ The programming phase must never let one absent or slow player block everyone
 (this is the most common complaint about existing digital versions). 
 
 - **Hard cap:** each programming phase has a maximum length (default 90 s),
-  starting at the deal.
+  starting at the deal. **Host-adjustable in the lobby**: a stepper next to the (otherwise
+  read-only) "Programming time" fact lets the host change it in 15 s steps between 30 s and
+  300 s (`NetworkConstants`), sent as `SetProgrammingSeconds` and echoed to everyone via
+  `LobbyState`; refused (`RequestRejected`) for a non-host or outside the lobby. A short turn
+  and the 30/10-second warning sounds (4.4) interact on purpose: each warning band only starts if
+  the turn's *total* time is actually longer than that band's threshold, so a 30-second turn
+  never starts the warning siren on its own first frame and runs it for the whole turn.
 - **Last-player pressure (classic rule):** as soon as *all but one* active player
   have confirmed, the remaining player has at most 30 s.
 - **On expiry**, registers the player has not filled are filled *randomly* from
@@ -1016,13 +1022,23 @@ if a music bed is ever wanted.
 | `ROBOT_DIES` | A replayed beat contains a `GameEvent.RobotDestroyed`, whether or not that also eliminates the robot — once per beat, not once per event (`GameScreen.playBeatSounds`, called from the same beat-transition check `refreshResolution` already uses). |
 | `LASER` | A replayed beat is a laser volley — which, since the skip-if-no-hit change just above, only ever exists when somebody was actually hit (`GameScreen.playBeatSounds`, checking `beat.phase() == SubPhase.LASERS`). |
 | `PROBLEM_OR_ERROR` | `StageScreen.toast(...)` (every use today is a `RequestRejected` reason, in both `GameScreen` and `LobbyScreen`), and the four `Theme.DANGER`-striped dialogs on the Connect screen: can't-reach, version-mismatch, couldn't-join, disconnected. Deliberately *not* played for the eliminated-player dialog, which already gets `ROBOT_DIES`, or for anything else that isn't a real problem. |
-| `WARNING_30` / `WARNING_10` | Looped while the programming timer counts down: `WARNING_30` from 30 seconds, swapped for `WARNING_10` at 10, stopped at 0 — never both at once. Driven by `GameModel.timerCountingDown()` (true while the timer is actually decreasing: programming/submitted/sitting-out, not paused) and `secondsLeft()`, read every frame in `GameScreen.render` next to the existing `timeLabel`/`timeBar` update, and stopped explicitly in `GameScreen.dispose()` — the only place that starts the loop is also the only place still ticking it, so it must also be the one that stops it. |
+| `WARNING_30` / `WARNING_10` | Looped while the programming timer counts down: `WARNING_30` from 30 seconds, swapped for `WARNING_10` at 10, stopped at 0 — never both at once. Driven by `GameModel.timerCountingDown()` (true while the timer is actually decreasing: programming/submitted/sitting-out, not paused), `secondsLeft()` and `programmingSeconds()` (the turn's total, added 2026-09-23), read every frame in `GameScreen.render` next to the existing `timeLabel`/`timeBar` update, and stopped explicitly in `GameScreen.dispose()` — the only place that starts the loop is also the only place still ticking it, so it must also be the one that stops it. **Each band only starts if the turn's total is longer than that band's own threshold** (`AudioKit.updateCountdownWarning`): a 30-second turn (2.13's host-settable minimum) never starts the 30 s warning on its own first frame and runs it for the whole turn, since there was no "still plenty of time" phase before it to warn *away from*. |
 | `PLAYER_JOINS_LOBBY` / `PLAYER_LEFT_LOBBY` | A seat appears or disappears between one `LobbyState` and the next this player's own `LobbyScreen` receives (`LobbyScreen.playRosterChangeSounds`, diffing seat sets — there is no dedicated join/leave message for the lobby phase, unlike mid-game). Silent for the very first `LobbyState` a screen ever sees (nothing to diff against) and for this player's own join. |
 | `POWER_DOWN_NEXT_TURN` | The player confirms powering down from the explanation dialog (`GameScreen.applyPowerDownChoice`, only when `announce` is `true` — cancelling plays nothing). |
-| `BUTTON_CLICK` | The default for every `TextButton` `UiKit.button(...)` makes, added inside the one factory method every button in the client goes through (confirmed by grepping for `new TextButton` — there is exactly one call site, in `UiKit` itself). Suppressed for a disabled button (a second, independently-added `ClickListener` still receives the touch even though the button's own internal one no-ops — `Button.setDisabled` never touches `Touchable`) and for the handful of buttons whose own action already plays a more specific clip: Confirm Program (`PROGRAM_LOCKED_IN`), the power-down dialog's confirm button (`POWER_DOWN_NEXT_TURN`), and Connect (`CONNECTING`, only on a successful attempt, but silence on a validation failure was already the pre-existing behaviour). Those three use the new `UiKit.button(text, kind, style, silent)` overload. |
+| `BUTTON_CLICK` | The default for every `TextButton` `UiKit.button(...)` makes, added inside the one factory method every button in the client goes through (confirmed by grepping for `new TextButton` — there is exactly one call site, in `UiKit` itself). Suppressed for a disabled button (a second, independently-added `ClickListener` still receives the touch even though the button's own internal one no-ops — `Button.setDisabled` never touches `Touchable`) and for the handful of buttons whose own action already plays a more specific clip: Confirm Program (`PROGRAM_LOCKED_IN`), the power-down dialog's confirm button (`POWER_DOWN_NEXT_TURN`), and Connect (`CONNECTING`, only on a successful attempt, but silence on a validation failure was already the pre-existing behaviour). Those three use the new `UiKit.button(text, kind, style, silent)` overload. Also played for the Lobby's "I'm ready" `PillToggle` (`UiKit.toggle()`, its own `ClickListener` — a `PillToggle` is not a `TextButton` so it does not go through the factory above, and it has no disabled state to guard against). |
+| `GAME_WON` | The Game Over screen appears (`GameScreen.showGameOver`) — once, regardless of whether this player won or lost. |
+| `WELCOME_JINGLE` | Once per actual app launch, in `RobotRampageGame.create()` right after the Startup screen is shown — deliberately *not* in `StartupScreen`'s constructor, which re-runs every time the player clicks "Back" from the Connect screen and would replay it on every return. |
 | `BEEP_1`–`BEEP_4` | Loaded, not wired to anything yet — generic "whimsy" beeps the owner hadn't decided a use for at drop-in time. |
 
-**Not done:** any volume control (no Settings screen exists yet to hold it — see 4.2's "Next" note); the beeps above.
+**Volume:** one global slider in the Settings dialog (4.6) — no separate music bed exists, so there is no
+music/effects split. `AudioKit.setVolume` scales every `play`/`loop` call and live-updates whatever countdown loop is
+currently playing.
+
+**Laser rendering refinement:** `TurnReplay` already skipped a whole laser-volley beat when nobody was hit; it now also
+only turns the individual `LaserFired` events that hit someone into `Beam`s, so a volley with some hits and some misses
+draws (and sounds) only the beams that connect.
+
+**Not done:** the beeps above.
 
 ### 4.5 Asset pipeline
 
@@ -1074,9 +1090,21 @@ disconnecting, which isn't a "fill" at all. Still to be added with the lobby and
 - Standings details ("touched flag 3 in turn 11, register 4", "eliminated in turn 9") are derived by the client from the
   events it has replayed. **Done** (`GameModel` remembers the last flag of every robot and the turn it was eliminated in).
 
-**Client-only features the mockups imply:** local settings saved as JSON (music/effects volume, fullscreen, vsync, window
-size, playback speed, show my program on the board, auto-skip resolution), and the last server address, name and
+**Client-only features the mockups imply:** local settings saved as JSON (volume, fullscreen, vsync, window
+size, playback speed, show my program on the board), and the last server address, name and
 session token for rejoining "from this computer".
+
+**Settings dialog (implemented, 2026-09-23), two deliberate deviations from the mockup (owner's request):** one global
+volume slider replaces the mockup's separate Music/Sound-effects sliders — there is no music bed (4.4), so a split would
+control a track that doesn't exist; and the "Skip resolution automatically" toggle is dropped entirely, with no
+replacement in this dialog — the owner wanted the *programming timer* configurable instead, which is a game rule the
+host sets for everyone, not a personal client preference, so it lives on the **Lobby** screen next to the read-only
+"Programming time" fact (2.13, `Lobby (implemented)` below) rather than here. `client.screen.SettingsDialog` builds
+three columns — Audio (the volume slider), Graphics (fullscreen, vsync, window size) and Game (resolution playback
+speed, show-ghost-path) — from `ClientSettings`/`RobotRampageGame.saveAndApplyPreferences`; every
+control applies and saves live (no Cancel in the mockup), "Reset" restores `ClientSettings.defaults()`. The volume
+slider is a new hand-rolled `client.ui.Slider` widget (`PillToggle`'s pattern: a `DragListener`, drawn with
+`Theme.Shapes`) since the design system had no slider component to reuse. Opens from both Startup and the in-game Menu.
 
 **Decided (owner, 2026-09-21):** the pieces the designer drew as suggestions beyond this document — the Menu dialog,
 Settings, the leave confirmation, the board key, the ranking rules in the standings, and the archive-marker diamond — are
@@ -1101,7 +1129,12 @@ options later belong in a "create game" step, see 7) → `Game` (alternating **P
 lobby model are open (7).
 
 **Lobby (implemented).** The screen shows a row for every seat of the board (robot, name, Host/You/Ready chips, or
-"Waiting for a player…"), the facts of the game, the "I am ready" switch and, for the host, "Start game". **The start
+"Waiting for a player…"), the facts of the game, the "I am ready" switch and, for the host, "Start game". **The
+"Programming time" fact is a host-only +/- stepper** (2.13; `LobbyScreen.programmingTimeStepper`, in
+`NetworkConstants.PROGRAMMING_SECONDS_STEP` steps, clamped client-side to `MIN_PROGRAMMING_SECONDS`/
+`MAX_PROGRAMMING_SECONDS` and again authoritatively by `GameSession.setProgrammingSeconds`) — everyone else sees it as
+the same plain fact as before. No optimistic local update: a click just sends `SetProgrammingSeconds` and the displayed
+value waits for the server's next `LobbyState`. **The start
 button follows the server's rule exactly** (`LobbyView.canStart`): the player is the host, at least `minPlayers` are
 seated, and every player *except the host* is ready — the host's own ready flag does not matter. Everybody else sees a
 disabled "Waiting for the host". A refused request (`RequestRejected`) appears as a toast. **DECISIONS (owner may

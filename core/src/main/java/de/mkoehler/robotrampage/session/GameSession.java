@@ -110,6 +110,7 @@ public final class GameSession {
     private GameState state;
     private int turn;
     private Set<Integer> respawnedThisTurn = Set.of();
+    private long programmingMillis;
     private long programmingDeadline;
     private boolean timerPaused;
     private long pausedAt;
@@ -131,6 +132,7 @@ public final class GameSession {
         this.board = board;
         this.boardJson = BoardLoader.toJson(board.definition());
         this.config = config;
+        this.programmingMillis = config.programmingMillis();
         this.seed = seed;
         this.clock = clock;
         this.outbox = outbox;
@@ -287,6 +289,36 @@ public final class GameSession {
             return;
         }
         player.ready = ready;
+        broadcastLobby();
+    }
+
+    /**
+     * Sets how long players get to program a turn, on the host's request. Only meaningful in the lobby: it takes effect
+     * from the next turn dealt, which for a game not yet started is every turn. Refused for anybody but the host, outside
+     * the lobby, or outside {@link NetworkConstants#MIN_PROGRAMMING_SECONDS} to
+     * {@link NetworkConstants#MAX_PROGRAMMING_SECONDS} seconds.
+     *
+     * @param seat    the requesting player's seat
+     * @param seconds the new programming time, in seconds
+     */
+    public void setProgrammingSeconds(int seat, int seconds) {
+        if (!players.containsKey(seat)) {
+            return;
+        }
+        if (phase != Phase.LOBBY) {
+            reject(seat, "The programming time can only be changed in the lobby.");
+            return;
+        }
+        if (seat != hostSeat()) {
+            reject(seat, "Only the host can change the programming time.");
+            return;
+        }
+        if (seconds < NetworkConstants.MIN_PROGRAMMING_SECONDS || seconds > NetworkConstants.MAX_PROGRAMMING_SECONDS) {
+            reject(seat, "The programming time must be between " + NetworkConstants.MIN_PROGRAMMING_SECONDS + " and "
+                + NetworkConstants.MAX_PROGRAMMING_SECONDS + " seconds.");
+            return;
+        }
+        programmingMillis = seconds * 1000L;
         broadcastLobby();
     }
 
@@ -530,11 +562,11 @@ public final class GameSession {
             }
         }
         long now = clock.getAsLong();
-        programmingDeadline = now + config.programmingMillis();
+        programmingDeadline = now + programmingMillis;
         squeezeActive = false;
         phase = Phase.PROGRAMMING;
 
-        outbox.broadcast(new TurnStarted(turn, respawnLog.entries(), awaited, (int) (config.programmingMillis() / 1000)));
+        outbox.broadcast(new TurnStarted(turn, respawnLog.entries(), awaited, (int) (programmingMillis / 1000)));
         for (SessionPlayer player : players.values()) {
             HandDealt hand = handFor(player);
             if (hand != null) {
@@ -806,7 +838,7 @@ public final class GameSession {
     private void broadcastLobby() {
         outbox.broadcast(new LobbyState(playerInfos(), board.definition().name(), board.board().startSquares().size(),
             config.minPlayers(), board.board().width(), board.board().height(), board.board().flags().size(),
-            Robot.STARTING_LIVES, (int) (config.programmingMillis() / 1000)));
+            Robot.STARTING_LIVES, (int) (programmingMillis / 1000)));
     }
 
     /**

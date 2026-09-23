@@ -49,3 +49,7 @@ audio-settings.json
 
 ## Claude Code's per-machine settings:
 .claude/settings.local.json
+
+## Test classpath dump for lwjgl3's main()-driven dev tools (GameScreenDriver, ScreenSnapshot, BoardSnapshot),
+## generated on demand via `mvn -pl lwjgl3 dependency:build-classpath`:
+lwjgl3/cp.txt

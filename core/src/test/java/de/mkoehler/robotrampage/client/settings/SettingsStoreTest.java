@@ -41,7 +41,9 @@ class SettingsStoreTest {
     @Test
     void savedSettingsComeBack() {
         SettingsStore store = new SettingsStore(folder.resolve("nested").resolve("settings.json"));
-        ClientSettings settings = new ClientSettings("robots.example.org:4000", "Łukasz", "token-abc");
+        ClientSettings settings = ClientSettings.defaults().withServerAddress("robots.example.org:4000")
+            .withDisplayName("Łukasz").withSessionToken("token-abc").withPreferences(0.4f, true, false, 1600, 900, 4f,
+                false);
 
         assertTrue(store.save(settings));
 
@@ -54,11 +56,11 @@ class SettingsStoreTest {
     @Test
     void savingAgainReplacesTheFile() {
         SettingsStore store = new SettingsStore(folder.resolve("settings.json"));
-        store.save(new ClientSettings("a:1", "A", null));
+        store.save(ClientSettings.defaults().withServerAddress("a:1").withDisplayName("A"));
 
-        store.save(new ClientSettings("b:2", "B", null));
+        store.save(ClientSettings.defaults().withServerAddress("b:2").withDisplayName("B"));
 
-        assertEquals(new ClientSettings("b:2", "B", null), store.load());
+        assertEquals(ClientSettings.defaults().withServerAddress("b:2").withDisplayName("B"), store.load());
     }
 
     /**
@@ -75,8 +77,10 @@ class SettingsStoreTest {
     }
 
     /**
-     * Properties a future version added are ignored, missing text ones become empty text, and a missing session token
-     * stays {@code null}.
+     * An unknown property (such as one a later version removed) is ignored, and a property the file simply never had
+     * (such as one a later version added) is merged in from the real defaults instead of coming back as a bare
+     * {@code 0}/{@code false}/{@code null} — the point of loading onto {@link ClientSettings#defaults()} rather than
+     * parsing the file alone.
      *
      * @throws IOException if the test file cannot be written
      */
@@ -87,7 +91,9 @@ class SettingsStoreTest {
 
         ClientSettings loaded = new SettingsStore(future).load();
 
-        assertEquals(new ClientSettings("h:1", "", null), loaded);
+        ClientSettings expected = ClientSettings.defaults().withServerAddress("h:1");
+        assertEquals(expected, loaded);
+        assertEquals(expected.volume(), loaded.volume(), "an unknown property must not disturb a real default");
     }
 
     /**

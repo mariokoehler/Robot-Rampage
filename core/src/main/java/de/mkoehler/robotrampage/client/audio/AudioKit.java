@@ -47,6 +47,10 @@ public final class AudioKit implements Disposable {
         POWER_DOWN_NEXT_TURN("power_down_next_turn.mp3"),
         /** The default click every button plays unless it already has a more specific sound of its own. */
         BUTTON_CLICK("button_click.mp3"),
+        /** The Game Over screen appears, showing the final standings. */
+        GAME_WON("game_won.mp3"),
+        /** The application finishes loading and the Startup screen appears. */
+        WELCOME_JINGLE("welcome_jingle.mp3"),
         /** Not wired to anything yet; kept loaded and ready for whatever earns it. */
         BEEP_1("beep_1.mp3"),
         /** Not wired to anything yet; kept loaded and ready for whatever earns it. */
@@ -66,6 +70,7 @@ public final class AudioKit implements Disposable {
     private final Map<Clip, Sound> sounds = new EnumMap<>(Clip.class);
     private Clip countdownClip;
     private long countdownId = -1;
+    private float volume = 1f;
 
     /**
      * Loads every clip from {@code assets/sfx}.
@@ -78,27 +83,49 @@ public final class AudioKit implements Disposable {
     }
 
     /**
-     * Plays a clip once.
+     * Sets the master volume every clip plays at from now on, including a countdown warning loop already playing (so
+     * turning the volume down takes effect at once, not only the next time a clip starts).
+     *
+     * @param volume the volume, 0 to 1; clamped if out of range
+     */
+    public void setVolume(float volume) {
+        this.volume = Math.max(0f, Math.min(1f, volume));
+        if (countdownClip != null) {
+            sounds.get(countdownClip).setVolume(countdownId, this.volume);
+        }
+    }
+
+    /**
+     * Plays a clip once, at the current master volume.
      *
      * @param clip the clip
      */
     public void play(Clip clip) {
-        sounds.get(clip).play();
+        sounds.get(clip).play(volume);
     }
 
     /**
      * Keeps the programming-timer warning loop matching how much time is left, called once a frame: starts
      * {@link Clip#WARNING_30} at 30 seconds, swaps to {@link Clip#WARNING_10} at 10 (never both at once), and stops once the
      * timer is not counting down for this screen any more or reaches zero. Repeated calls within the same band do nothing,
-     * so the loop is never restarted mid-loop.
+     * so the loop is never restarted mid-loop. Each band only starts if the turn's total programming time is actually
+     * longer than the band's own threshold ({@code totalSeconds > 30} for the 30 s warning, {@code totalSeconds > 10} for
+     * the 10 s one) — otherwise a short turn (the host can set as little as
+     * {@link de.mkoehler.robotrampage.net.NetworkConstants#MIN_PROGRAMMING_SECONDS}) would start a warning siren on its
+     * very first frame and run it for most or all of the turn, which is not a "running low" warning any more.
      *
-     * @param active      whether the programming timer is counting down right now
-     * @param secondsLeft the seconds left, rounded up; ignored unless {@code active}
+     * @param active       whether the programming timer is counting down right now
+     * @param secondsLeft  the seconds left, rounded up; ignored unless {@code active}
+     * @param totalSeconds the turn's total programming time, in seconds
      */
-    public void updateCountdownWarning(boolean active, int secondsLeft) {
+    public void updateCountdownWarning(boolean active, int secondsLeft, int totalSeconds) {
         Clip wanted = null;
         if (active && secondsLeft > 0) {
-            wanted = secondsLeft <= 10 ? Clip.WARNING_10 : secondsLeft <= 30 ? Clip.WARNING_30 : null;
+            if (secondsLeft <= 10 && totalSeconds > 10) {
+                wanted = Clip.WARNING_10;
+            } else if (secondsLeft <= 30 && totalSeconds > 30) {
+                wanted = Clip.WARNING_30;
+            }
         }
         if (wanted == countdownClip) {
             return;
@@ -106,7 +133,7 @@ public final class AudioKit implements Disposable {
         stopCountdownWarning();
         if (wanted != null) {
             countdownClip = wanted;
-            countdownId = sounds.get(wanted).loop();
+            countdownId = sounds.get(wanted).loop(volume);
         }
     }
 

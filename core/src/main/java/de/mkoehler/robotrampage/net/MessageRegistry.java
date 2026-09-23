@@ -19,6 +19,7 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
@@ -139,5 +140,6 @@ public final class MessageRegistry {
         kryo.register(RespawnFacingChosen.class);
         kryo.register(ChooseRespawnFacing.class);
         kryo.register(ReturnToLobby.class);
+        kryo.register(SetProgrammingSeconds.class);
     }
 }

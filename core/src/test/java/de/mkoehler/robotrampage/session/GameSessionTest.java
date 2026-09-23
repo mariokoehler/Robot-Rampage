@@ -389,6 +389,37 @@ class GameSessionTest {
         assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
     }
 
+    /**
+     * The host may change the programming time in the lobby; the new value shows up in the next {@link LobbyState} and
+     * is what the game actually starts with. Anybody else, being outside the lobby, or a value outside the allowed
+     * range is refused with a reason, and the value is unchanged.
+     */
+    @Test
+    void theHostMaySetTheProgrammingTimeInTheLobby() {
+        join("Ann");
+        join("Bo");
+        session.setProgrammingSeconds(0, NetworkConstants.MIN_PROGRAMMING_SECONDS);
+        assertEquals(NetworkConstants.MIN_PROGRAMMING_SECONDS,
+            outbox.lastReceivedBy(0, LobbyState.class).programmingSeconds());
+
+        session.setProgrammingSeconds(1, 150);
+        assertTrue(outbox.lastReceivedBy(1, RequestRejected.class).reason().contains("host"));
+        assertEquals(NetworkConstants.MIN_PROGRAMMING_SECONDS,
+            outbox.lastReceivedBy(0, LobbyState.class).programmingSeconds(), "the non-host's request had no effect");
+
+        session.setProgrammingSeconds(0, NetworkConstants.MAX_PROGRAMMING_SECONDS + 1);
+        assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("between"));
+
+        session.setProgrammingSeconds(0, 150);
+        session.setReady(1, true);
+        session.startGame(0);
+        assertEquals(150, outbox.lastReceivedBy(0, TurnStarted.class).programmingSeconds());
+
+        session.setProgrammingSeconds(0, 60);
+        assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("lobby"),
+            "the game is running now, not in the lobby any more");
+    }
+
     // ------------------------------------------------------------------------------------- the first turn
 
     /**
