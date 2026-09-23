@@ -16,10 +16,14 @@ import java.util.List;
  * @param flagCount          how many flags the board has, to be touched in order
  * @param lives              how many lives each robot starts with
  * @param programmingSeconds the most time players get to program a turn
+ * @param boardId            the id of the board that will be played
+ * @param boardJson          that board as JSON, for the lobby's preview
+ * @param boards             every board the host can choose from, in the server's order
  * @author Mario Koehler
  */
 public record LobbyState(List<PlayerInfo> players, String boardName, int maxPlayers, int minPlayers, int boardWidth,
-                         int boardHeight, int flagCount, int lives, int programmingSeconds) {
+                         int boardHeight, int flagCount, int lives, int programmingSeconds, String boardId,
+                         String boardJson, List<BoardChoice> boards) {
 
     /**
      * Creates the message. Lists are copied into {@link ArrayList}s, the list type the wire format registers.
@@ -33,8 +37,12 @@ public record LobbyState(List<PlayerInfo> players, String boardName, int maxPlay
      * @param flagCount          how many flags the board has, to be touched in order
      * @param lives              how many lives each robot starts with
      * @param programmingSeconds the most time players get to program a turn
+     * @param boardId            the id of the board that will be played
+     * @param boardJson          that board as JSON, for the lobby's preview
+     * @param boards             every board the host can choose from, in the server's order
      */
     public LobbyState {
         players = new ArrayList<>(players);
+        boards = new ArrayList<>(boards);
     }
 }

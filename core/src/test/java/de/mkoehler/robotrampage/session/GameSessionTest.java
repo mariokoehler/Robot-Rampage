@@ -4,10 +4,12 @@ import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.net.NetworkConstants;
+import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
+import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
@@ -35,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -418,6 +421,127 @@ class GameSessionTest {
         session.setProgrammingSeconds(0, 60);
         assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("lobby"),
             "the game is running now, not in the lobby any more");
+    }
+
+    // ------------------------------------------------------------------------------------- choosing the board
+
+    /**
+     * A second board for the board-choice tests: two start squares only, so it cannot seat a third player.
+     */
+    private static final String SMALL_BOARD_JSON = """
+        {"formatVersion": 1, "id": "small", "name": "Small Board", "width": 5, "height": 30,
+         "flags": [{"x": 4, "y": 29}, {"x": 0, "y": 29}],
+         "startSquares": [{"x": 0, "y": 0, "facing": "NORTH"}, {"x": 1, "y": 0, "facing": "NORTH"}]}
+        """;
+
+    /**
+     * Replaces the session with one that offers the test board first and the small board second.
+     */
+    private void offerTwoBoards() {
+        SessionConfig config = new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, 2);
+        session = new GameSession(List.of(BoardLoader.parse(BOARD_JSON), BoardLoader.parse(SMALL_BOARD_JSON)), config,
+            42L, now::get, outbox);
+    }
+
+    /**
+     * The lobby state lists every offered board and says which is chosen, with that board's JSON for the preview; the
+     * first board is chosen until the host picks another.
+     */
+    @Test
+    void theLobbyListsTheBoardsAndTheFirstIsChosen() {
+        offerTwoBoards();
+        join("Host");
+
+        LobbyState lobby = outbox.lastReceivedBy(0, LobbyState.class);
+
+        assertEquals(List.of(new BoardChoice("t", "Test Board", 4), new BoardChoice("small", "Small Board", 2)),
+            lobby.boards());
+        assertEquals("t", lobby.boardId());
+        assertEquals("t", BoardLoader.parse(lobby.boardJson()).definition().id());
+    }
+
+    /**
+     * The host's choice changes the board everybody sees, clears every ready flag (they agreed to another board), and is
+     * the board the game is then started on.
+     */
+    @Test
+    void theHostsChoiceIsTheBoardThatIsPlayed() {
+        offerTwoBoards();
+        join("Host");
+        join("Guest");
+        session.setReady(1, true);
+
+        session.selectBoard(0, "small");
+
+        LobbyState lobby = outbox.lastReceivedBy(1, LobbyState.class);
+        assertEquals("small", lobby.boardId());
+        assertEquals("Small Board", lobby.boardName());
+        assertEquals(2, lobby.maxPlayers());
+        assertTrue(lobby.players().stream().noneMatch(PlayerInfo::ready), "choosing a board clears ready");
+        session.setReady(1, true);
+        session.startGame(0);
+        assertEquals("small", BoardLoader.parse(outbox.lastReceivedBy(1, GameStarted.class).boardJson()).definition().id());
+    }
+
+    /**
+     * Choosing the board that is already chosen changes nothing, not even the ready flags.
+     */
+    @Test
+    void choosingTheSameBoardAgainKeepsEveryoneReady() {
+        offerTwoBoards();
+        join("Host");
+        join("Guest");
+        session.setReady(1, true);
+        long before = outbox.broadcasts(LobbyState.class);
+
+        session.selectBoard(0, "t");
+
+        assertEquals(before, outbox.broadcasts(LobbyState.class));
+        assertTrue(outbox.lastReceivedBy(1, LobbyState.class).players().get(1).ready());
+    }
+
+    /**
+     * Only the host may choose, only in the lobby, only a board the server offers, and only one that has a start square
+     * for every seat already taken.
+     */
+    @Test
+    void boardChoicesThatCannotWorkAreRefused() {
+        offerTwoBoards();
+        join("Host");
+        join("Guest");
+        join("Third");
+
+        session.selectBoard(1, "small");
+        assertTrue(outbox.lastReceivedBy(1, RequestRejected.class).reason().contains("host"));
+
+        session.selectBoard(0, "../../etc/passwd");
+        assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("no board"));
+
+        session.selectBoard(0, "small");
+        assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("seat 3"));
+        assertEquals("t", outbox.lastReceivedBy(0, LobbyState.class).boardId());
+
+        session.setReady(1, true);
+        session.setReady(2, true);
+        session.startGame(0);
+        session.selectBoard(0, "t");
+        assertTrue(outbox.lastReceivedBy(0, RequestRejected.class).reason().contains("lobby"));
+    }
+
+    /**
+     * A board with fewer start squares than a game needs players could never be started, so a session refuses to offer
+     * it at all, as it refuses two boards with the same id.
+     */
+    @Test
+    void boardsThatCanNeverStartOrShareAnIdAreRefusedUpFront() {
+        SessionConfig config = new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, 3);
+        LoadedBoard small = BoardLoader.parse(SMALL_BOARD_JSON);
+        LoadedBoard test = BoardLoader.parse(BOARD_JSON);
+
+        assertThrows(IllegalArgumentException.class,
+            () -> new GameSession(List.of(test, small), config, 1L, now::get, outbox));
+        assertThrows(IllegalArgumentException.class,
+            () -> new GameSession(List.of(test, test), config, 1L, now::get, outbox));
     }
 
     // ------------------------------------------------------------------------------------- the first turn

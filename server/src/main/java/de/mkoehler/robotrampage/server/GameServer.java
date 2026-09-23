@@ -2,13 +2,14 @@ package de.mkoehler.robotrampage.server;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
-import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.board.BoardCatalog;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkServer;
 import de.mkoehler.robotrampage.session.SessionConfig;
 
 import java.io.IOException;
+import java.util.List;
 
 /**
  * Headless libGDX application hosting the dedicated server: it starts the network endpoint and the
@@ -20,7 +21,6 @@ import java.io.IOException;
 public class GameServer extends ApplicationAdapter {
 
     private static final String TAG = "GameServer";
-    private static final String BOARD_RESOURCE = "boards/proving-grounds.json";
 
     private final int tcpPort;
     private final long seed;
@@ -40,21 +40,25 @@ public class GameServer extends ApplicationAdapter {
     }
 
     /**
-     * Loads the board, starts listening and announces the server.
+     * Loads every board of the index (BoardCatalog), starts listening and announces the server.
      */
     @Override
     public void create() {
-        LoadedBoard board = BoardLoader.loadResource(BOARD_RESOURCE);
-        board.warnings().forEach(warning -> Gdx.app.log(TAG, "Board warning: " + warning));
+        List<LoadedBoard> boards = BoardCatalog.loadResources();
+        for (LoadedBoard board : boards) {
+            board.warnings().forEach(warning -> Gdx.app.log(TAG, "Board " + board.definition().id() + " warning: "
+                + warning));
+        }
         network = new NetworkServer();
         try {
             network.start(tcpPort);
         } catch (IOException e) {
             throw new IllegalStateException("Could not listen on TCP port " + tcpPort, e);
         }
-        controller = new ServerController(network, board, SessionConfig.defaults(), seed, System::currentTimeMillis);
+        controller = new ServerController(network, boards, SessionConfig.defaults(), seed, System::currentTimeMillis);
         Gdx.app.log(TAG, "Robot Rampage server v" + AppVersion.getVersion() + " listening on TCP " + tcpPort
-            + ", playing \"" + board.definition().name() + "\", game seed " + seed + ".");
+            + ", offering " + boards.stream().map(board -> board.definition().id()).toList() + ", game seed " + seed
+            + ".");
     }
 
     /**

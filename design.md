@@ -594,8 +594,9 @@ derived from the game seed and a fill counter — like the deck, never a live
 | Direction | Message | Purpose |
 |---|---|---|
 | C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name (at most 20 characters, `NetworkConstants.MAX_DISPLAY_NAME_LENGTH`), optional session token; the response carries the seat, the token, the **server's version** (on a refusal too, so the client can show both versions) and, once accepted, the reconnect grace period in seconds (`GameSession.reconnectGraceSeconds()`), so a dropped client knows how long it may keep trying. This pair is a compatibility surface: a client of another version may not be able to read the response that says the versions differ, so the client treats an unreadable handshake like an unreachable server. |
-| S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name, and the facts the lobby shows: seats, minimum players (so the client can tell whether the host may start), board size, flag count, lives, programming seconds. Sent again to everybody at every change, and once more when a game ends and the session returns to the lobby, so the lobby screen must be buildable from one `LobbyState` alone. |
+| S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name, and the facts the lobby shows: seats, minimum players (so the client can tell whether the host may start), board size, flag count, lives, programming seconds; the chosen board's id and JSON (for the lobby's preview) and every board the host can choose (`BoardChoice`: id, name, seats). Sent again to everybody at every change, and once more when a game ends and the session returns to the lobby, so the lobby screen must be buildable from one `LobbyState` alone. |
 | C→S | `SetReady`, `StartGameRequest` | Lobby actions (start: host only). |
+| C→S | `SelectBoard` | The host chooses the board by id (3.6). Refused for anybody else, outside the lobby, for an id the server does not offer, or for a board with fewer start squares than the highest seat taken. A change clears every ready flag. **Security:** the id is only looked up among the boards loaded at startup, never turned into a file or resource path. |
 | S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
 | S→all | `TurnStarted` | Turn number, the respawn events, who must program, the time limit. |
 | S→each | `HandDealt` | That player's cards only, their locked-register cards, whether they may pick a respawn facing, whether they are powered down. |
@@ -655,6 +656,14 @@ boards**. Design decisions:
   generated boards there is an extra reachability check: every flag must be
   reachable from every start square over a path that avoids pits and walls. A
   generator's output must pass the same validator as a hand-made board.
+
+**Several boards (M6).** The boards a server offers are listed in **`assets/boards/boards.txt`**, one id per line
+(blank lines ignored, first line = the board a new server starts with, order = the lobby's order); `BoardCatalog`
+loads and validates all of them at startup, and any problem — a missing or invalid file, a file whose `id` differs from
+its name, an id listed twice — stops the server from starting. `GameSession` also refuses a board with fewer start
+squares than `minPlayers` (it could never be started). `BoardCatalogTest` keeps the index and the files in step both
+ways. The host picks the board in the lobby (`SelectBoard`, 3.5, 5.1); the board editor (3.13) adds a newly saved
+board to the end of the index by itself.
 
 **Implemented in M2:** `BoardDefinition` (the JSON model, immutable records),
 `BoardValidator`, `BoardConverter` (definition ↔ `Board`), `BoardLoader` (read/write JSON,
@@ -877,7 +886,8 @@ packaged, and players never see it. Run it with `start_board_editor.cmd` or
   same checks `BoardLoader` runs). **Save is disabled while there are errors** (warnings are
   fine): the game refuses to load a board with errors, and so would the editor. The id doubles as
   the file name and must be lower-case letters/digits joined by hyphens. Saving over a *different*
-  board's file asks first; New, Open and closing the window ask before discarding unsaved changes.
+  board's file asks first; New, Open and closing the window ask before discarding unsaved changes. Saving a board
+  that is not in `assets/boards/boards.txt` yet adds it at the end (3.6), so it shows up in the lobby's board picker.
 - **File layout.** Saved files use the compact one-entry-per-line layout of the hand-written
   `proving-grounds.json`, in the canonical export order (`BoardFiles.format`), not Jackson's
   pretty printer, which would spread every square over several lines — so saving an unchanged
@@ -1262,9 +1272,14 @@ the same plain fact as before. No optimistic local update: a click just sends `S
 value waits for the server's next `LobbyState`. **The start
 button follows the server's rule exactly** (`LobbyView.canStart`): the player is the host, at least `minPlayers` are
 seated, and every player *except the host* is ready — the host's own ready flag does not matter. Everybody else sees a
-disabled "Waiting for the host". A refused request (`RequestRejected`) appears as a toast. **DECISIONS (owner may
-revise):** the mockup's board preview is not drawn in the lobby — the board only reaches the client with `GameStarted`,
-so a bordered placeholder stands in until the board renderer exists; free seats use a solid border where the mockup
+disabled "Waiting for the host". A refused request (`RequestRejected`) appears as a toast. **The board preview is drawn** (since
+board selection, 3.6): `LobbyState` carries the chosen board's JSON, `LobbyScreen.refreshPreview` draws it with
+`BoardActor` (408 px square, so the panel still clears the button row), re-parsing only when the JSON changes. **The host
+chooses the board** with a row of pills in place of the "Board" fact (name + seats; the chosen one dark; a board with too
+few start squares for the seats already taken greyed out and not clickable, `LobbyView.boardOptions`); everybody else sees
+the plain "Board" fact. `GameScreenDriver.driveLobbyBoardChoice` checks both and writes `lobby-host.png`. With more than
+three boards the pills wrap to a second row, which eats into the space above the buttons — revisit the layout once the
+list grows. **DECISIONS (owner may revise):** free seats use a solid border where the mockup
 draws a dashed one; the lobby has no "leave" confirmation (leaving costs nothing here).
 **A dropped connection in the lobby ends the seat** (the session removes a disconnected player in the lobby, so there is
 no reconnect and no grace period): the player is sent back to the connect screen with a dialog. The "Connection lost"
@@ -1379,8 +1394,8 @@ no UI and is where the test value is:
   (Multiple concurrent games per server / real lobbies come after v1, see 7.)
 - **M6 — More boards & Board Editor.** Board selection, board composition, first procedural
   generator (3.6). **Board Editor: done** (3.13), in the new `dev-tools` module. Still to come: letting
-  the server load a board other than `proving-grounds` (today `GameServer` hard-codes it), so boards
-  made in the editor can actually be played; then board selection, composition and a generator.
+  **Board selection: done** (3.6) — the host picks among the boards of `assets/boards/boards.txt` in the
+  lobby. Still to come: board composition and a generator.
 - **M7 — Release pipeline.** jpackage client zip, Docker server image, tag-driven
   GitHub releases (3.9). jgitver is already in place.
 

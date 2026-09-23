@@ -5,6 +5,7 @@ import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.board.StartSquare;
 import de.mkoehler.robotrampage.net.NetworkConstants;
+import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
@@ -96,8 +97,9 @@ public final class GameSession {
     private static final int MAX_NAME_LENGTH = NetworkConstants.MAX_DISPLAY_NAME_LENGTH;
     private static final long FILL_STRIDE = 0x9E3779B97F4A7C15L;
 
-    private final LoadedBoard board;
-    private final String boardJson;
+    private final List<LoadedBoard> boards;
+    private final List<String> boardJsons;
+    private int selectedBoard;
     private final SessionConfig config;
     private final long seed;
     private final LongSupplier clock;
@@ -121,7 +123,7 @@ public final class GameSession {
     /**
      * Creates a session in the lobby phase.
      *
-     * @param board  the board that will be played
+     * @param board  the only board, which will be played
      * @param config the timings and limits
      * @param seed   the seed of the game's randomness: the deck's shuffles and the random fills of programs that
      *               time out
@@ -129,8 +131,39 @@ public final class GameSession {
      * @param outbox where outgoing messages go
      */
     public GameSession(LoadedBoard board, SessionConfig config, long seed, LongSupplier clock, Outbox outbox) {
-        this.board = board;
-        this.boardJson = BoardLoader.toJson(board.definition());
+        this(List.of(board), config, seed, clock, outbox);
+    }
+
+    /**
+     * Creates a session in the lobby phase that offers several boards for the host to choose from; the first one is
+     * chosen until the host picks another.
+     *
+     * @param boards the boards, in the order the lobby lists them; at least one, each with at least
+     *               {@link SessionConfig#minPlayers()} start squares, and no two with the same id
+     * @param config the timings and limits
+     * @param seed   the seed of the game's randomness: the deck's shuffles and the random fills of programs that
+     *               time out
+     * @param clock  the source of time, in milliseconds; only differences matter
+     * @param outbox where outgoing messages go
+     * @throws IllegalArgumentException if there is no board, two share an id, or one has too few start squares to ever
+     *                                  be started
+     */
+    public GameSession(List<LoadedBoard> boards, SessionConfig config, long seed, LongSupplier clock, Outbox outbox) {
+        if (boards.isEmpty()) {
+            throw new IllegalArgumentException("A session needs at least one board");
+        }
+        if (boards.stream().map(each -> each.definition().id()).distinct().count() != boards.size()) {
+            throw new IllegalArgumentException("Two boards share an id");
+        }
+        for (LoadedBoard each : boards) {
+            if (each.board().startSquares().size() < config.minPlayers()) {
+                throw new IllegalArgumentException("The board " + each.definition().id() + " has "
+                    + each.board().startSquares().size() + " start squares, but a game needs " + config.minPlayers()
+                    + " players");
+            }
+        }
+        this.boards = List.copyOf(boards);
+        this.boardJsons = boards.stream().map(each -> BoardLoader.toJson(each.definition())).toList();
         this.config = config;
         this.programmingMillis = config.programmingMillis();
         this.seed = seed;
@@ -323,6 +356,63 @@ public final class GameSession {
     }
 
     /**
+     * Chooses the board the game will be played on, on the host's request. Refused for anybody but the host, outside
+     * the lobby, for an id this session does not offer, or for a board with too few start squares for a seat already
+     * taken (seats are start squares). Choosing another board clears everybody's ready flag, since they agreed to a
+     * different one; choosing the board already chosen changes nothing. The id is only ever looked up among the boards
+     * this session was given, never turned into a file or resource name.
+     *
+     * @param seat    the requesting player's seat
+     * @param boardId the id of the board
+     */
+    public void selectBoard(int seat, String boardId) {
+        if (!players.containsKey(seat)) {
+            return;
+        }
+        if (phase != Phase.LOBBY) {
+            reject(seat, "The board can only be changed in the lobby.");
+            return;
+        }
+        if (seat != hostSeat()) {
+            reject(seat, "Only the host can choose the board.");
+            return;
+        }
+        int index = -1;
+        for (int i = 0; i < boards.size(); i++) {
+            if (boards.get(i).definition().id().equals(boardId)) {
+                index = i;
+            }
+        }
+        if (index < 0) {
+            reject(seat, "This server has no board called " + boardId + ".");
+            return;
+        }
+        LoadedBoard wanted = boards.get(index);
+        int seats = wanted.board().startSquares().size();
+        int highestSeat = players.keySet().stream().mapToInt(Integer::intValue).max().orElse(-1);
+        if (highestSeat >= seats) {
+            reject(seat, wanted.definition().name() + " has only " + seats + " start squares, but seat "
+                + (highestSeat + 1) + " is taken.");
+            return;
+        }
+        if (index == selectedBoard) {
+            return;
+        }
+        selectedBoard = index;
+        players.values().forEach(player -> player.ready = false);
+        broadcastLobby();
+    }
+
+    /**
+     * Returns the board chosen for the game.
+     *
+     * @return the board
+     */
+    public LoadedBoard board() {
+        return boards.get(selectedBoard);
+    }
+
+    /**
      * Starts the game on the host's request. It only happens in the lobby, if the request comes from the host,
      * there are enough players and every other player is ready; otherwise the requester is told why not.
      *
@@ -349,14 +439,14 @@ public final class GameSession {
 
         List<Robot> robots = new ArrayList<>();
         for (SessionPlayer player : players.values()) {
-            StartSquare start = board.board().startSquares().get(player.seat);
+            StartSquare start = board().board().startSquares().get(player.seat);
             robots.add(new Robot(player.seat, start.position(), start.facing()));
         }
-        state = new GameState(board.board(), robots, Deck.standard(seed));
+        state = new GameState(board().board(), robots, Deck.standard(seed));
         turn = 0;
         fillCounter = 0;
         for (SessionPlayer player : players.values()) {
-            outbox.send(player.seat, new GameStarted(boardJson, playerInfos(), player.seat));
+            outbox.send(player.seat, new GameStarted(boardJsons.get(selectedBoard), playerInfos(), player.seat));
         }
         beginTurn();
     }
@@ -782,7 +872,7 @@ public final class GameSession {
      * @param player the player to update
      */
     private void resync(SessionPlayer player) {
-        outbox.send(player.seat, new GameStarted(boardJson, playerInfos(), player.seat));
+        outbox.send(player.seat, new GameStarted(boardJsons.get(selectedBoard), playerInfos(), player.seat));
         outbox.send(player.seat, snapshot());
         switch (phase) {
             case PROGRAMMING -> {
@@ -836,9 +926,13 @@ public final class GameSession {
      * Tells everybody the state of the lobby.
      */
     private void broadcastLobby() {
+        LoadedBoard board = board();
+        List<BoardChoice> choices = boards.stream().map(each -> new BoardChoice(each.definition().id(),
+            each.definition().name(), each.board().startSquares().size())).toList();
         outbox.broadcast(new LobbyState(playerInfos(), board.definition().name(), board.board().startSquares().size(),
             config.minPlayers(), board.board().width(), board.board().height(), board.board().flags().size(),
-            Robot.STARTING_LIVES, (int) (programmingMillis / 1000)));
+            Robot.STARTING_LIVES, (int) (programmingMillis / 1000), board.definition().id(),
+            boardJsons.get(selectedBoard), choices));
     }
 
     /**
@@ -897,7 +991,7 @@ public final class GameSession {
      * @return the seat, or -1 if the board has no start square left
      */
     private int lowestFreeSeat() {
-        for (int seat = 0; seat < board.board().startSquares().size(); seat++) {
+        for (int seat = 0; seat < board().board().startSquares().size(); seat++) {
             if (!players.containsKey(seat)) {
                 return seat;
             }

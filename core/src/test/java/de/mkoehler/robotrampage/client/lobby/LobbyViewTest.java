@@ -1,5 +1,6 @@
 package de.mkoehler.robotrampage.client.lobby;
 
+import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,8 @@ class LobbyViewTest {
     }
 
     private static LobbyState lobby(PlayerInfo... players) {
-        return new LobbyState(List.of(players), "First Board", 8, 2, 12, 12, 3, 3, 90);
+        return new LobbyState(List.of(players), "First Board", 8, 2, 12, 12, 3, 3, 90, "first-board", "{}",
+            List.of(new BoardChoice("first-board", "First Board", 8), new BoardChoice("small", "Small", 2)));
     }
 
     /**
@@ -62,7 +64,7 @@ class LobbyViewTest {
      */
     @Test
     void oneFlagIsNotInOrder() {
-        LobbyState one = new LobbyState(List.of(), "B", 4, 2, 5, 30, 1, 3, 90);
+        LobbyState one = new LobbyState(List.of(), "B", 4, 2, 5, 30, 1, 3, 90, "b", "{}", List.of());
 
         assertEquals("1", new LobbyView(one, 0).flagsText());
     }
@@ -127,5 +129,24 @@ class LobbyViewTest {
         assertFalse(view.iAmHost());
         assertFalse(view.iAmReady());
         assertFalse(view.canStart());
+    }
+
+    /**
+     * Only the host may choose the board; every offered board is listed with the chosen one marked, and a board with too
+     * few start squares for the seats already taken does not fit.
+     */
+    @Test
+    void theHostChoosesAmongTheBoardsThatFit() {
+        LobbyState state = lobby(player(0, "Host", false, true), player(1, "B", false, false));
+        LobbyView host = new LobbyView(state, 0);
+        LobbyView guest = new LobbyView(state, 1);
+
+        assertTrue(host.canChooseBoard());
+        assertFalse(guest.canChooseBoard());
+        assertEquals(List.of(new LobbyView.BoardOption("first-board", "First Board", 8, true, true),
+            new LobbyView.BoardOption("small", "Small", 2, false, true)), host.boardOptions());
+
+        LobbyView seatThreeTaken = new LobbyView(lobby(player(0, "Host", false, true), player(2, "C", false, false)), 0);
+        assertFalse(seatThreeTaken.boardOptions().get(1).fits(), "seat 3 is taken, a two-seat board cannot hold it");
     }
 }

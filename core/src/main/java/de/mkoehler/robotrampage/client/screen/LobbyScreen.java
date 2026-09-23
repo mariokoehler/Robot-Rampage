@@ -2,18 +2,25 @@ package de.mkoehler.robotrampage.client.screen;
 
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Scaling;
+import de.mkoehler.robotrampage.board.Board;
+import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.board.InvalidBoardException;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.audio.AudioKit;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.lobby.LobbyView;
 import de.mkoehler.robotrampage.client.lobby.RobotLook;
+import de.mkoehler.robotrampage.client.render.BoardActor;
 import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
@@ -23,6 +30,7 @@ import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
@@ -47,8 +55,9 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
 
     private static final float ROW_HEIGHT = 72f;
     private static final float ROW_GAP = 10f;
-    private static final float PREVIEW_SIZE = 480f;
+    private static final float PREVIEW_SIZE = 408f;
     private static final float FACT_LABEL_WIDTH = 170f;
+    private static final int BOARDS_PER_ROW = 3;
 
     private final ConnectedServer server;
     private final ServerAddress address;
@@ -56,6 +65,8 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
     private final Table playerRows = new Table();
     private final Label countLabel;
     private final Table boardFacts = new Table();
+    private final Table preview;
+    private String previewedJson;
     private final Label hintLabel;
     private final PillToggle readyToggle;
     private final TextButton startButton;
@@ -85,6 +96,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         readyToggle = ui.toggle();
         startButton = ui.button("Start game", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
         startLabel = startButton.getLabel();
+        preview = ui.well();
 
         stage.addActor(headerTable());
         stage.addActor(contentTable());
@@ -134,8 +146,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         Table board = ui.panel();
         board.pad(28f).top().left();
         board.add(ui.label("The board", Theme.TextStyle.SUBTITLE, Theme.INK)).left().row();
-        Table preview = ui.well();
-        preview.add(ui.label("The board is shown when the game starts.", Theme.TextStyle.BODY, Theme.INK_MUTED));
+        preview.add(ui.label("Waiting for the server…", Theme.TextStyle.BODY, Theme.INK_MUTED));
         board.add(preview).size(PREVIEW_SIZE).left().padTop(20f).row();
         board.add(boardFacts).growX().padTop(20f).row();
         board.add(hintLabel).width(820f - 56f).left().padTop(Theme.SPACE_3);
@@ -269,6 +280,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         ui.setText(countLabel, Theme.TextStyle.CHIP, view.countText());
         rebuildRows(view);
         rebuildFacts(view);
+        refreshPreview();
         hintLabel.setText(view.hint());
         readyToggle.setChecked(view.iAmReady());
         ui.setText(startLabel, Theme.TextStyle.BUTTON, view.startLabel());
@@ -345,7 +357,11 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
     private void rebuildFacts(LobbyView view) {
         boardFacts.clearChildren();
         boardFacts.left();
-        fact("Board", view.boardText());
+        if (view.canChooseBoard()) {
+            factRow("Board", boardPicker(view));
+        }
+        fact(view.canChooseBoard() ? "Size" : "Board", view.canChooseBoard()
+            ? lastLobby.boardWidth() + " × " + lastLobby.boardHeight() : view.boardText());
         fact("Flags", view.flagsText());
         fact("Lives", view.livesText());
         if (view.iAmHost()) {
@@ -354,6 +370,62 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
             fact("Programming time", view.programmingTimeText());
         }
         fact("Rules", "Classic 2005");
+    }
+
+    /**
+     * Draws the chosen board in the preview, the same way the game will. The board is only parsed and drawn again when
+     * the server chose another one, not for every lobby update (every ready toggle sends one).
+     */
+    private void refreshPreview() {
+        if (lastLobby.boardJson() == null || lastLobby.boardJson().equals(previewedJson)) {
+            return;
+        }
+        previewedJson = lastLobby.boardJson();
+        preview.clearChildren();
+        try {
+            Board board = BoardLoader.parse(previewedJson).board();
+            float tile = PREVIEW_SIZE / Math.max(board.width(), board.height());
+            preview.add(new BoardActor(ui, board, tile)).size(board.width() * tile, board.height() * tile);
+        } catch (InvalidBoardException e) {
+            preview.add(ui.label("The board could not be shown.", Theme.TextStyle.BODY, Theme.INK_MUTED));
+        }
+    }
+
+    /**
+     * Builds the host's board picker: one pill per board the server offers, the chosen one dark. A board with too few
+     * start squares for the seats already taken is greyed out and cannot be clicked, since the server would refuse it.
+     *
+     * @param view what to show
+     * @return the picker
+     */
+    private Table boardPicker(LobbyView view) {
+        Table picker = new Table();
+        picker.left();
+        int column = 0;
+        for (LobbyView.BoardOption option : view.boardOptions()) {
+            Table pill = new Table();
+            pill.setBackground(option.selected() ? ui.rounded(Theme.INK, Theme.INK, 0, 8)
+                : ui.rounded(Theme.SURFACE_RAISED, Theme.LINE, Theme.BORDER_HAIRLINE, 8));
+            pill.pad(0f, Theme.SPACE_3, UiKit.SHAPE_RESERVE, Theme.SPACE_3);
+            Color ink = option.selected() ? Theme.ON_PRIMARY : option.fits() ? Theme.INK : Theme.LINE_STRONG;
+            pill.add(ui.label(option.name(), Theme.TextStyle.BODY, ink));
+            pill.add(ui.label(option.maxPlayers() + " seats", Theme.TextStyle.CAPTION, ink)).padLeft(Theme.SPACE_2);
+            if (option.fits() && !option.selected()) {
+                pill.setTouchable(Touchable.enabled);
+                pill.addListener(new ClickListener() {
+                    @Override
+                    public void clicked(InputEvent event, float x, float y) {
+                        game.audio().play(AudioKit.Clip.BUTTON_CLICK);
+                        server.link().send(new SelectBoard(option.id()));
+                    }
+                });
+            }
+            picker.add(pill).height(36f + UiKit.SHAPE_RESERVE).padRight(Theme.SPACE_2).padBottom(Theme.SPACE_1).left();
+            if (++column % BOARDS_PER_ROW == 0) {
+                picker.row();
+            }
+        }
+        return picker;
     }
 
     /**

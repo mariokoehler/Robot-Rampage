@@ -27,6 +27,11 @@ public final class BoardFiles {
 
     private static final String SUFFIX = ".json";
 
+    /**
+     * The index of the boards a server offers, in the same folder.
+     */
+    public static final String INDEX_FILE = "boards.txt";
+
     private final Path folder;
 
     /**
@@ -95,17 +100,36 @@ public final class BoardFiles {
     }
 
     /**
-     * Writes a board to {@code <id>.json}, replacing the file if there is one.
+     * Writes a board to {@code <id>.json}, replacing the file if there is one, and adds a new board to the end of the
+     * index {@value #INDEX_FILE} that lists the boards a server offers (see {@code BoardCatalog}), creating the index if
+     * there is none. A board already listed keeps its place.
      *
      * @param definition the board
-     * @throws UncheckedIOException if the file cannot be written
+     * @throws UncheckedIOException if a file cannot be written
      */
     public void write(BoardDefinition definition) {
         try {
             Files.createDirectories(folder);
             Files.writeString(file(definition.id()), format(definition), StandardCharsets.UTF_8);
+            register(definition.id());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Adds a board id to the end of the index unless it is listed already.
+     *
+     * @param id the board's identifier
+     * @throws IOException if the index cannot be read or written
+     */
+    private void register(String id) throws IOException {
+        Path index = folder.resolve(INDEX_FILE);
+        String text = Files.exists(index) ? Files.readString(index, StandardCharsets.UTF_8) : "";
+        boolean listed = text.lines().map(String::trim).anyMatch(id::equals);
+        if (!listed) {
+            String separator = text.isEmpty() || text.endsWith("\n") ? "" : "\n";
+            Files.writeString(index, text + separator + id + "\n", StandardCharsets.UTF_8);
         }
     }
 

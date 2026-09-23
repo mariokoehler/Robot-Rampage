@@ -140,7 +140,7 @@ class ConnectionAttemptTest {
         assertEquals(Phase.HANDSHAKING, attempt.flow().phase());
 
         HandshakeResponse welcome = new HandshakeResponse("Welcome", 1, "new-token", MINE, 600);
-        LobbyState lobby = new LobbyState(List.of(), "Proving Grounds", 8, 2, 12, 12, 3, 3, 90);
+        LobbyState lobby = new LobbyState(List.of(), "Proving Grounds", 8, 2, 12, 12, 3, 3, 90, "proving-grounds", "{}", List.of());
         link.incoming.add(welcome);
         link.incoming.add(lobby);
         updateUntil(attempt, () -> attempt.flow().phase() == Phase.ACCEPTED);

@@ -7,6 +7,7 @@ import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
+import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
@@ -18,6 +19,7 @@ import de.mkoehler.robotrampage.session.Outbox;
 import de.mkoehler.robotrampage.session.SessionConfig;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.LongSupplier;
 
@@ -48,8 +50,22 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
      * @param clock   the source of time in milliseconds
      */
     public ServerController(NetworkServer network, LoadedBoard board, SessionConfig config, long seed, LongSupplier clock) {
+        this(network, List.of(board), config, seed, clock);
+    }
+
+    /**
+     * Creates a controller with a fresh session in the lobby that offers several boards; the host chooses among them.
+     *
+     * @param network the network endpoint to serve on; already started or started later, the controller does not care
+     * @param boards  the boards to offer, the first chosen until the host picks another
+     * @param config  the session's timings
+     * @param seed    the game's random seed
+     * @param clock   the source of time in milliseconds
+     */
+    public ServerController(NetworkServer network, List<LoadedBoard> boards, SessionConfig config, long seed,
+                            LongSupplier clock) {
         this.network = network;
-        this.session = new GameSession(board, config, seed, clock, this);
+        this.session = new GameSession(boards, config, seed, clock, this);
     }
 
     /**
@@ -82,6 +98,8 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             session.setReady(seat, ready.ready());
         } else if (message instanceof SetProgrammingSeconds seconds) {
             session.setProgrammingSeconds(seat, seconds.seconds());
+        } else if (message instanceof SelectBoard select) {
+            session.selectBoard(seat, select.boardId());
         } else if (message instanceof StartGameRequest) {
             session.startGame(seat);
         } else if (message instanceof SubmitProgram program) {

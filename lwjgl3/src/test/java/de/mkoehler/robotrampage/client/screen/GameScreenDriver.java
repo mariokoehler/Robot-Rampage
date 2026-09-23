@@ -20,11 +20,13 @@ import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.game.GameModel;
+import de.mkoehler.robotrampage.client.render.BoardActor;
 import de.mkoehler.robotrampage.client.ui.FacingPicker;
 import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.ServerLink;
+import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
@@ -35,6 +37,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
@@ -128,6 +131,7 @@ public final class GameScreenDriver {
                 driveEliminated(this);
                 driveStayPoweredDown(this);
                 driveReconnect(this);
+                driveLobbyBoardChoice(this, folder);
                 System.out.println("GameScreenDriver: all checks passed");
                 Gdx.app.exit();
             }
@@ -238,7 +242,7 @@ public final class GameScreenDriver {
         click(screen, 1696f, 1006f);
         check(link.sent.size() == sentBefore, "the lobby button is disabled for anybody but the host");
         link.incoming.add(new LobbyState(List.of(new PlayerInfo(ME, "Bo", false, true, true)), "Proving Grounds", 8, 2, 12, 12,
-            3, 3, 90));
+            3, 3, 90, "proving-grounds", "{}", List.of()));
         frame(screen);
         check(game.getScreen() instanceof LobbyScreen, "the lobby state after the game should hand the connection to the lobby");
     }
@@ -268,6 +272,52 @@ public final class GameScreenDriver {
 
         check(link.sent.size() == 1 && link.sent.get(0) instanceof ReturnToLobby,
             "the host's lobby button should send ReturnToLobby");
+    }
+
+    /**
+     * Checks the host's board picker in the lobby: the chosen board is drawn in the preview, a click on another board
+     * sends {@link SelectBoard}, a board with too few seats for the seats already taken cannot be clicked, and a guest
+     * sees no picker at all.
+     *
+     * @param game   the game
+     * @param folder where to save {@code lobby-host.png}, or {@code null} to skip it
+     */
+    private static void driveLobbyBoardChoice(RobotRampageGame game, File folder) {
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<BoardChoice> boards = List.of(new BoardChoice("proving-grounds", "Proving Grounds", 8),
+            new BoardChoice("loading-dock", "Loading Dock", 8), new BoardChoice("tiny", "Tiny", 2));
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", false, true, true),
+            new PlayerInfo(2, "Bo", true, true, false));
+        LobbyState lobby = new LobbyState(players, "Proving Grounds", 8, 2, 12, 12, 3, 3, 90, "proving-grounds", board,
+            boards);
+
+        ScriptedLink link = new ScriptedLink();
+        LobbyScreen host = new LobbyScreen(game, new ConnectedServer(link,
+            new HandshakeResponse("Welcome", 0, "token", "test", 600), List.of(lobby), false),
+            new ServerAddress("localhost", 45725));
+        game.setScreen(host);
+        host.resize(WIDTH, HEIGHT);
+        frame(host);
+        check(findActor(host.stage.getRoot(), BoardActor.class) != null, "the lobby should draw the chosen board");
+        if (folder != null) {
+            snapshot(host, folder, "lobby-host.png");
+        }
+        float[] tiny = centerOf(findLabel(host.stage.getRoot(), "Tiny"));
+        click(host, tiny[0], tiny[1]);
+        check(link.sent.isEmpty(), "a board with two seats cannot hold seat 3, so it cannot be chosen");
+        float[] dock = centerOf(findLabel(host.stage.getRoot(), "Loading Dock"));
+        click(host, dock[0], dock[1]);
+        check(link.sent.size() == 1 && link.sent.get(0) instanceof SelectBoard select
+            && select.boardId().equals("loading-dock"), "a click on Loading Dock should send SelectBoard");
+
+        ScriptedLink guestLink = new ScriptedLink();
+        LobbyScreen guest = new LobbyScreen(game, new ConnectedServer(guestLink,
+            new HandshakeResponse("Welcome", 2, "token", "test", 600), List.of(lobby), false),
+            new ServerAddress("localhost", 45725));
+        game.setScreen(guest);
+        guest.resize(WIDTH, HEIGHT);
+        frame(guest);
+        check(findLabel(guest.stage.getRoot(), "Loading Dock") == null, "a guest sees no board picker");
     }
 
     /**
@@ -548,7 +598,7 @@ public final class GameScreenDriver {
      * @param folder where to write
      * @param name   the file name
      */
-    private static void snapshot(GameScreen screen, File folder, String name) {
+    private static void snapshot(StageScreen screen, File folder, String name) {
         FrameBuffer buffer = new FrameBuffer(Pixmap.Format.RGBA8888, WIDTH, HEIGHT, false);
         buffer.begin();
         frame(screen);
@@ -567,7 +617,7 @@ public final class GameScreenDriver {
      *
      * @param screen the screen
      */
-    private static void frame(GameScreen screen) {
+    private static void frame(StageScreen screen) {
         screen.render(0f);
     }
 
@@ -578,7 +628,7 @@ public final class GameScreenDriver {
      * @param x      the horizontal position
      * @param y      the vertical position
      */
-    private static void click(GameScreen screen, float x, float y) {
+    private static void click(StageScreen screen, float x, float y) {
         frame(screen);
         screen.stage.mouseMoved((int) x, (int) y);
         screen.stage.touchDown((int) x, (int) y, 0, Input.Buttons.LEFT);

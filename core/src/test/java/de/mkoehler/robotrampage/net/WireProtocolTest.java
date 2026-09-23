@@ -6,7 +6,9 @@ import com.esotericsoftware.kryo.io.Output;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import de.mkoehler.robotrampage.board.Board;
+import de.mkoehler.robotrampage.board.BoardCatalog;
 import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.board.StartSquare;
@@ -16,6 +18,7 @@ import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
+import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
@@ -26,6 +29,7 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
@@ -127,7 +131,8 @@ class WireProtocolTest {
             de.mkoehler.robotrampage.rules.RobotStatus.ELIMINATED, false, false);
         LoggedEvent event = new LoggedEvent(2, SubPhase.LASERS, new GameEvent.RobotDestroyed(3, DestructionCause.DAMAGE));
         List<Object> messages = List.of(
-            new LobbyState(players, "Proving Grounds", 8, 2, 12, 12, 3, 3, 90),
+            new LobbyState(players, "Proving Grounds", 8, 2, 12, 12, 3, 3, 90, "proving-grounds", "{\"json\": true}",
+                List.of(new BoardChoice("proving-grounds", "Proving Grounds", 8), new BoardChoice("dock", "Dock", 4))),
             new SetReady(true),
             new StartGameRequest(),
             new GameStarted("{\"json\": true}", players, 3),
@@ -150,7 +155,8 @@ class WireProtocolTest {
             new ChooseRespawnFacing(Direction.WEST),
             new RespawnFacingChosen(3, Direction.WEST),
             new ReturnToLobby(),
-            new SetProgrammingSeconds(120));
+            new SetProgrammingSeconds(120),
+            new SelectBoard("loading-dock"));
 
         for (Object message : messages) {
             assertEquals(message, roundTrip(message), message.getClass().getSimpleName());
@@ -234,6 +240,31 @@ class WireProtocolTest {
         assertTrue(largestTurn * 4 < NetworkConstants.OBJECT_BUFFER_SIZE,
             "the biggest turn (" + largestTurn + " bytes) leaves less than 4x headroom in the "
                 + NetworkConstants.OBJECT_BUFFER_SIZE + " byte object buffer");
+    }
+
+    /**
+     * The biggest lobby state the real boards can produce (eight players with names of the longest length, the largest
+     * board as JSON for the preview, every board offered) fits the object buffer with plenty of room to spare, and so does
+     * the start message that carries the same board.
+     */
+    @Test
+    void theBiggestLobbyStateFitsTheBuffers() {
+        List<LoadedBoard> boards = BoardCatalog.loadResources();
+        String largestJson = boards.stream().map(board -> BoardLoader.toJson(board.definition()))
+            .max(java.util.Comparator.comparingInt(String::length)).orElseThrow();
+        List<PlayerInfo> players = new ArrayList<>();
+        for (int seat = 0; seat < 8; seat++) {
+            players.add(new PlayerInfo(seat, "W".repeat(NetworkConstants.MAX_DISPLAY_NAME_LENGTH), true, true, seat == 0));
+        }
+        List<BoardChoice> choices = boards.stream().map(board -> new BoardChoice(board.definition().id(),
+            board.definition().name(), board.board().startSquares().size())).toList();
+
+        int lobby = serializedSize(new LobbyState(players, "W".repeat(60), 8, 2, 12, 12, 9, 3, 300, "w".repeat(60),
+            largestJson, choices));
+        int start = serializedSize(new GameStarted(largestJson, players, 7));
+
+        assertTrue(Math.max(lobby, start) * 4 < NetworkConstants.OBJECT_BUFFER_SIZE,
+            "a lobby state of " + lobby + " bytes or a start message of " + start + " bytes leaves less than 4x headroom");
     }
 
     /**

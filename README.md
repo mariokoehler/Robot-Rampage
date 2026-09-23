@@ -10,8 +10,8 @@ in order wins. Most turns don't go to plan, and that's the game.
 
 ![The programming screen: players on the left, the board in the middle with a faint "ghost path" of where your cards will take you, your robot's status and the board key on the right, your program and hand below](docs/screenshots/programming.png)
 
-**Status:** playable end to end and playtested. Still pre-1.0: there's one
-board, one game per server, and no persistence yet, so restarting the server
+**Status:** playable end to end and playtested. Still pre-1.0: there are only a
+couple of boards, one game per server, and no persistence yet, so restarting the server
 ends the running game.
 
 ## Features
@@ -22,6 +22,8 @@ ends the running game.
 - **Simultaneous secret programming.** Other players only see *that* you've
   confirmed, never your cards. The server is authoritative, so hands never
   reach other clients.
+- **The host picks the board** in the lobby, with a preview of it, from every
+  board the server offers.
 - **A ghost path** shows where your cards will take your robot as you place them.
 - **A step-by-step turn replay.** Every register plays through its phases
   (cards, movement, belts, pushers, gears, lasers, crushers, checkpoints) with a
@@ -153,8 +155,9 @@ mvn -pl dev-tools compile exec:exec
 
 It opens and saves 12×12 boards in `assets/boards/`, draws them exactly as the
 game does, and checks them live with the same validator the game uses. Saving
-is only possible once the board has no errors. For now, the server still always
-plays `proving-grounds`. See section 3.13 of [`design.md`](./design.md) for how
+is only possible once the board has no errors, and a newly saved board is added
+to `assets/boards/boards.txt`, the list of boards a server offers. The host picks
+the board in the lobby. See section 3.13 of [`design.md`](./design.md) for how
 the editor works.
 
 ## How it's built

@@ -30,6 +30,19 @@ public final class LobbyView {
                       boolean ready) {
     }
 
+    /**
+     * One board the host can choose.
+     *
+     * @param id         the board's identifier, to send in {@code SelectBoard}
+     * @param name       the board's name
+     * @param maxPlayers how many players it seats
+     * @param selected   whether it is the board chosen now
+     * @param fits       whether it has a start square for every seat already taken; a board that does not fit cannot be
+     *                   chosen, the server would refuse it
+     */
+    public record BoardOption(String id, String name, int maxPlayers, boolean selected, boolean fits) {
+    }
+
     private final LobbyState state;
     private final int mySeat;
     private final PlayerInfo me;
@@ -153,6 +166,27 @@ public final class LobbyView {
      */
     public String livesText() {
         return state.lives() + " per robot";
+    }
+
+    /**
+     * Returns whether the player looking at the screen may choose the board: only the host may.
+     *
+     * @return {@code true} for the host
+     */
+    public boolean canChooseBoard() {
+        return iAmHost();
+    }
+
+    /**
+     * Returns the boards the server offers, in its order. A board fits if it has a start square for the highest seat
+     * already taken, since seats are start squares; the server refuses one that does not.
+     *
+     * @return the boards
+     */
+    public List<BoardOption> boardOptions() {
+        int highestSeat = state.players().stream().mapToInt(PlayerInfo::seat).max().orElse(-1);
+        return state.boards().stream().map(board -> new BoardOption(board.id(), board.name(), board.maxPlayers(),
+            board.id().equals(state.boardId()), highestSeat < board.maxPlayers())).toList();
     }
 
     /**

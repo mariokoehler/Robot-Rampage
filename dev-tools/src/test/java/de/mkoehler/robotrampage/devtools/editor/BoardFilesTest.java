@@ -51,4 +51,26 @@ class BoardFilesTest {
         assertEquals(List.of(), files.list());
         assertFalse(files.exists("anything"));
     }
+
+    @Test
+    void savingANewBoardAddsItToTheIndexOnceAndCreatesTheIndexIfNeeded() throws Exception {
+        BoardFiles files = new BoardFiles(folder);
+        BoardDraft first = new BoardDraft("first", "First", null);
+        BoardDraft second = new BoardDraft("second", "Second", null);
+
+        files.write(first.toDefinition());
+        files.write(second.toDefinition());
+        files.write(first.toDefinition());
+
+        assertEquals(List.of("first", "second"), Files.readAllLines(folder.resolve(BoardFiles.INDEX_FILE)));
+    }
+
+    @Test
+    void anIndexWithoutATrailingLineBreakGetsTheNewIdOnItsOwnLine() throws Exception {
+        Files.writeString(folder.resolve(BoardFiles.INDEX_FILE), "proving-grounds");
+
+        new BoardFiles(folder).write(new BoardDraft("dock", "Dock", null).toDefinition());
+
+        assertEquals(List.of("proving-grounds", "dock"), Files.readAllLines(folder.resolve(BoardFiles.INDEX_FILE)));
+    }
 }

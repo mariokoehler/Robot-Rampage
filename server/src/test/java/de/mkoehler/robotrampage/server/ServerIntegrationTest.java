@@ -1,5 +1,6 @@
 package de.mkoehler.robotrampage.server;
 
+import de.mkoehler.robotrampage.board.BoardCatalog;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.client.connect.ConnectFlow;
@@ -20,6 +21,7 @@ import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -76,11 +78,11 @@ class ServerIntegrationTest {
         try (ServerSocket socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
         }
-        LoadedBoard board = BoardLoader.loadResource("boards/proving-grounds.json");
+        List<LoadedBoard> boards = BoardCatalog.loadResources();
         SessionConfig config = new SessionConfig(60_000, 30_000, 60_000, PAUSE_BETWEEN_TURNS, 0, PAUSE_BETWEEN_TURNS, 2);
         network = new NetworkServer();
         network.start(port);
-        ServerController controller = new ServerController(network, board, config, 7L, System::currentTimeMillis);
+        ServerController controller = new ServerController(network, boards, config, 7L, System::currentTimeMillis);
         loop = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "server-loop"));
         loop.scheduleWithFixedDelay(() -> {
             try {
@@ -183,6 +185,36 @@ class ServerIntegrationTest {
             confirmedRobots.add(ann.take(PlayerConfirmed.class).robotId());
         }
         assertEquals(Set.of(0, 1), confirmedRobots);
+    }
+
+    /**
+     * The server offers every board of the real index; the host's {@code SelectBoard} reaches the session and changes the
+     * board for everybody, a guest's is refused, and the game then starts on the chosen board.
+     *
+     * @throws Exception on any failure
+     */
+    @Test
+    void theHostChoosesTheBoardOverRealSockets() throws Exception {
+        TestClient ann = connect("Ann", null);
+        ann.take(HandshakeResponse.class);
+        TestClient bo = connect("Bo", null);
+        bo.take(HandshakeResponse.class);
+        LobbyState first = ann.take(LobbyState.class);
+        assertEquals("proving-grounds", first.boardId());
+        assertTrue(first.boards().stream().anyMatch(choice -> choice.id().equals("loading-dock")));
+
+        bo.send(new SelectBoard("loading-dock"));
+        assertTrue(bo.take(RequestRejected.class).reason().contains("host"));
+        ann.send(new SelectBoard("loading-dock"));
+        LobbyState chosen = bo.take(LobbyState.class);
+        while (!"loading-dock".equals(chosen.boardId())) {
+            chosen = bo.take(LobbyState.class);
+        }
+        assertEquals("Loading Dock", chosen.boardName());
+
+        bo.send(new SetReady(true));
+        ann.send(new StartGameRequest());
+        assertEquals("loading-dock", BoardLoader.parse(bo.take(GameStarted.class).boardJson()).definition().id());
     }
 
     /**

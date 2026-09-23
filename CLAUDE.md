@@ -29,7 +29,7 @@ atlas, the "ghost path" preview) done — nothing left "still to come" on M4's o
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 11 integration tests in `server` (real sockets, threads), plus 30 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
+picked up by surefire), plus 12 integration tests in `server` (real sockets, threads), plus 30 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -335,11 +335,25 @@ close-window prompt — the owner's in-app check. **Never create a Scene2D `Tabl
 `ApplicationListener`** — it runs in `main()` before `Lwjgl3Application` sets `Gdx.files`, and `Cell.defaults()` then
 recurses into a `StackOverflowError` (hit on the editor's first real launch; `EditorSnapshot` missed it because it
 constructs the app inside an already-running one). A click anywhere but a text field takes the keyboard away from it (a
-stage capture listener), so R/Ctrl+Z after typing a name never edit the id field. **Gap: boards from the editor can't be played yet** —
-`GameServer.BOARD_RESOURCE` hard-codes `proving-grounds`; making the server load another board is the natural next slice.
+stage capture listener), so R/Ctrl+Z after typing a name never edit the id field. Boards from the editor are playable since board selection (below).
 
-**Next: whatever the user picks** — the server loading other boards (above), the rest of M6 (board selection,
-composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
+**Board selection (M6, 2026-09-23): done.** `assets/boards/boards.txt` lists the offered boards (one id per line, first =
+default); `BoardCatalog.loadResources()` loads them all at server start and fails loudly on any problem;
+`BoardCatalogTest` checks index ↔ files both ways, so **adding a board file by hand means adding its id to
+`boards.txt`** (the editor does it by itself on save). `GameSession` takes a `List<LoadedBoard>` (the old single-board
+constructor delegates, so session tests are unchanged) and `selectBoard(seat, id)` is host/lobby-only, looks ids up only
+in that list (never a path), refuses a board too small for the highest seat taken, and clears every ready flag.
+`LobbyState` grew `boardId`, `boardJson` (the lobby preview, now drawn) and `boards` (`BoardChoice`); new C→S
+`SelectBoard`. `WireProtocolTest.theBiggestLobbyStateFitsTheBuffers` guards the message size. `GameScreenDriver`'s
+`click`/`frame`/`snapshot` now take any `StageScreen`, and `driveLobbyBoardChoice` clicks the real picker (writes
+`lobby-host.png`). **Note:** `GameScreenDriver` constructs `LobbyScreen`s, which save their session token ("token") to the
+real `~/.robot-rampage/client-settings.json` — harmless (an unknown token falls back to a join by name) but it does
+overwrite a real one. **Verified:** unit tests, full build, the server jar starting and offering both boards, the
+driver's clicks, and `ServerIntegrationTest.theHostChoosesTheBoardOverRealSockets` (real sockets: host's choice reaches
+everyone, a guest's is refused, the game starts on the chosen board; that test class now serves the real
+`BoardCatalog`); **not verified:** a real two-client game on `loading-dock` (owner's check).
+
+**Next: whatever the user picks** — the rest of M6 (board composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
 (2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.
 
 ## Decisions already made (with reasons)
