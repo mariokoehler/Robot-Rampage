@@ -21,6 +21,7 @@ import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.Reconnector;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
+import de.mkoehler.robotrampage.client.debug.TurnLog;
 import de.mkoehler.robotrampage.client.game.CardLook;
 import de.mkoehler.robotrampage.client.game.GameModel;
 import de.mkoehler.robotrampage.client.game.MovementPreview;
@@ -42,6 +43,7 @@ import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
+import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.Robot;
 import de.mkoehler.robotrampage.rules.SubPhase;
@@ -280,7 +282,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         timerButton.addListener(new ChangeListener() {
             @Override
             public void changed(ChangeEvent event, Actor actor) {
-                server.link().send(model.toggleTimerPaused());
+                send(model.toggleTimerPaused());
             }
         });
         return timerButton;
@@ -373,6 +375,9 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     @Override
     public void onMessage(Object message) {
+        if (!(message instanceof TimerUpdate)) {
+            TurnLog.log("RECV " + message);
+        }
         if (lobbyState != null) {
             returnToLobby.add(message);
         } else if (message instanceof LobbyState lobby) {
@@ -383,6 +388,16 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         } else {
             model.apply(message);
         }
+    }
+
+    /**
+     * Sends a message to the server, logging it first (see {@link TurnLog}).
+     *
+     * @param message the message
+     */
+    private void send(Object message) {
+        TurnLog.log("SEND " + message);
+        server.link().send(message);
     }
 
     /**
@@ -700,9 +715,10 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         key.add(keyColumn(new String[] {"Pit", "Repair site", "Flag"},
             new String[][] {{"tiles/pit.png"}, {"tiles/repair-site.png"}, {"tiles/floor.png", "board/flag.png"}}))
             .top().padRight(16f);
-        key.add(keyColumn(new String[] {"Wall", "Laser", "Pusher", "Crusher"},
+        key.add(keyColumn(new String[] {"Wall", "Laser", "Pusher"},
             new String[][] {{"tiles/floor.png", "board/wall.png"}, {"tiles/floor.png", "board/laser-emitter.png"},
-                {"board/pusher.png"}, {"board/crusher.png"}})).top();
+                {"board/pusher.png"}})).top().padRight(16f);
+        key.add(keyColumn(new String[] {"Crusher"}, new String[][] {{"board/crusher.png"}})).top();
         return key;
     }
 
@@ -978,7 +994,8 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void confirm() {
         if (model.canConfirm()) {
-            server.link().send(model.submit());
+            TurnLog.log("PROGRAM turn=" + model.turn() + " seat=" + model.mySeat() + " registers=" + model.draft().registers());
+            send(model.submit());
             refreshProgram();
         }
     }
@@ -1327,7 +1344,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         model.setPowerDownNext(announce);
         powerToggle.setChecked(announce);
         if (model.stage() == GameModel.Stage.SITTING_OUT && model.isPoweredDownThisTurn()) {
-            server.link().send(model.announceStayingDown());
+            send(model.announceStayingDown());
         }
     }
 
@@ -1414,7 +1431,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             @Override
             public void changed(ChangeEvent event, Actor actor) {
                 model.chooseRespawnFacing(picker.facing());
-                server.link().send(new ChooseRespawnFacing(picker.facing()));
+                send(new ChooseRespawnFacing(picker.facing()));
                 closeDialog();
                 refreshBoard();
             }

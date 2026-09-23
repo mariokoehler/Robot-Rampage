@@ -406,6 +406,14 @@ server). Java 25 (`maven.compiler.release`), Maven 3.9.x.
   above.
 - **The game seed** is logged by the server at startup (`game seed N`) and can be given as the 2nd launcher argument
   (`ServerLauncher [port] [seed]`); put it in any bug report — random fills and shuffles are reproducible from it.
+- **`client.debug.TurnLog`** (added 2026-09-24, for a playtest bug report) prints every protocol message a client
+  sends or receives to its console, one line each, all prefixed `TURNLOG` (filter the console down to just those); the
+  program a player is about to submit is logged separately just before it (`GameScreen.confirm`), since the card
+  priorities inside `SubmitProgram` alone are not readable. `TurnResolved`'s full per-register event list and every
+  `StateSnapshot` are the richest lines — records' default `toString()` already names every field, so no
+  message-specific formatting was needed. Ask the user to paste the `TURNLOG` lines (plus the seed, above) from around
+  the turn in question; that is normally enough to write a deterministic `GameSessionTest`/`TurnResolver` test that
+  reproduces it without needing a live two-client repro.
 - **Modules:** run `mvn install -pl core -am -DskipTests` before `mvn -pl server test` (server resolves core from
   `~/.m2`, see Build system).
 - **Rule-test gotcha:** a test whose expected result contradicts the rules is usually a

@@ -570,7 +570,8 @@ public final class GameModel {
      * Stops at the first free register that is still empty, even if a damage-locked register further along already
      * shows a known card: a path that skipped over an unknown gap would misrepresent what actually happens there.
      * Starts from the facing chosen for a just-re-entered robot ({@link #respawnFacing()}) when one was chosen, since
-     * that is what will actually be submitted, not the server's last-known facing.
+     * that is what will actually be submitted, not the server's last-known facing. Other robots are never simulated
+     * (see {@link MovementPreview} for exactly why and what board effects it does simulate).
      *
      * @return one step per card that would run to completion, in register order; empty while there is nothing placed
      *         yet, this player is not programming, or their own robot is not on the board
@@ -590,14 +591,8 @@ public final class GameModel {
         if (cards.isEmpty()) {
             return List.of();
         }
-        Set<Position> obstacles = new HashSet<>();
-        for (RobotState robot : robots.values()) {
-            if (robot.robotId() != mySeat && robot.status() == RobotStatus.ACTIVE && robot.position() != null) {
-                obstacles.add(robot.position());
-            }
-        }
         Direction facing = respawnFacing != null ? respawnFacing : me.facing();
-        return MovementPreview.path(board, me.position(), facing, cards, obstacles);
+        return MovementPreview.path(board, me.position(), facing, cards);
     }
 
     /**

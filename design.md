@@ -923,23 +923,31 @@ up" instead of "Program locked in"). Fixed by excluding the reconnecting player'
 status is conveyed by `HandDealt`/`ProgramRevealed` instead, which already says why correctly.
 
 **Implemented (M4 slice 11): the "ghost path" preview.** `client.game.MovementPreview` (new, libGDX-free) plays a
-robot's own cards against a `Board`, one at a time, and returns where each one leaves it — a *rough, local,
-never-authoritative* guess, not a reuse of the real rules engine (3.5 above explains why not, and this is the class
-that Javadoc points at): it reimplements walk/step against `Board`'s already-public `hasWall`/`inBounds`/`featureAt`,
-deliberately simplified from the real turn (2.4):
-- Only this robot's own cards move it — belts, pushers, gears, lasers and crushers are not simulated, since they are
-  already visible on the board as static pictures and the preview is only about what the player's own choices do.
-- Other robots block like a wall (the card's movement just stops one square short) but are never pushed, since their
-  own programs are secret; the real turn may push straight through a square this preview shows as blocking, or push
-  this robot somewhere the preview never shows.
-- A pit or the edge of the board ends the preview for good: no waypoint is drawn for the destroying card, and nothing
-  after it runs either, exactly as a destroyed robot plays no more cards in a real turn.
+robot's own cards against a `Board`, one register at a time, and returns where each register leaves it — a *rough,
+local, never-authoritative* guess, not a reuse of the real rules engine (3.5 above explains why not, and this is the
+class that Javadoc points at): it reimplements walk/step and the belt/pusher/gear sub-phases against `Board`'s
+already-public `hasWall`/`inBounds`/`featureAt`/`beltAt`/`pushers`, deliberately simplified from the real turn (2.4)
+in one way only:
+- Other robots are never simulated, neither as movers nor as obstacles — not blocking, not being walked through as if
+  they were not there in a way that matters, just genuinely absent from the preview. **Changed 2026-09-24** from an
+  earlier version that blocked like a wall: the owner found that just as misleading as ignoring them (a robot the
+  preview shows as blocking may have moved away for real, and one it shows the path passing is exactly as likely to
+  still be sitting there), so the simpler of the two wrong pictures won.
+- After the robot's own card, this register's belts (express pass, then all), the pusher on its square if any, and a
+  gear all run exactly as `TurnResolver` orders them and exactly as `BeltResolver`/`PusherResolver`/`GearResolver`
+  behave (including a belt turning the robot on a curve) — added the same day as the above, once removing the
+  obstacle check made "what would the board itself do here" the natural next question. Lasers and crushers still are
+  not simulated: unlike belts/pushers/gears they do not move or turn the robot, so previewing them would mean
+  predicting damage or destruction rather than a path, a different kind of feature.
+- A pit or the edge of the board — from the robot's own card or from a board effect — ends the preview for good: no
+  waypoint is drawn for the destroying register, and nothing after it runs either, exactly as a destroyed robot plays
+  no more of a real turn.
 
 `GameModel.ghostPath()` feeds it the cards placed so far (`ProgramDraft.registers()`, stopping at the first still-empty
 free register even if a damage-locked register further along is already known — a path that skipped over an unknown
-gap would misrepresent what actually happens there), this player's own robot as the start, every other active robot's
-current square as an obstacle, and the facing chosen in the respawn dialog when one was chosen (`respawnFacing()`) since
-that is what will actually be submitted. `GameScreen.refreshBoard` draws the result as faint copies of the player's own
+gap would misrepresent what actually happens there), this player's own robot as the start, and the facing chosen in
+the respawn dialog when one was chosen (`respawnFacing()`) since that is what will actually be submitted.
+`GameScreen.refreshBoard` draws the result as faint copies of the player's own
 robot (`RobotPose`, reusing its existing `alpha` field — no new art needed), drawn *before* the live robots so a live
 robot standing where a ghost would be always shows through fully opaque. **`RobotPose` gained a `showBadge` flag**
 (default `true`; every existing call site updated to pass it explicitly or via the unchanged 4-argument convenience

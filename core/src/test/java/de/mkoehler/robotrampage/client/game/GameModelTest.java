@@ -787,12 +787,12 @@ class GameModelTest {
     }
 
     /**
-     * Another robot's square blocks the preview exactly like {@link MovementPreviewTest} already verifies for
-     * {@link MovementPreview} alone; this only checks that {@link GameModel} actually passes the other robots through
-     * as obstacles.
+     * Another robot's square never blocks the preview, exactly like {@link MovementPreviewTest} already verifies for
+     * {@link MovementPreview} alone; this only checks that {@link GameModel} actually never passes the other robots'
+     * squares to it at all.
      */
     @Test
-    void ghostPathTreatsOtherRobotsAsObstacles() {
+    void ghostPathIgnoresOtherRobots() {
         GameModel model = programmingOnOpenBoard(0);
         model.apply(new StateSnapshot(1, List.of(
             new RobotState(0, new Position(0, 0), Direction.NORTH, 0, 3, 0, new Position(0, 0), RobotStatus.ACTIVE, false, false),
@@ -802,8 +802,8 @@ class GameModelTest {
 
         model.draft().place(model.draft().hand().get(0));
 
-        assertEquals(List.of(new MovementPreview.Step(new Position(2, 2), Direction.EAST)), model.ghostPath(),
-            "seat 2 sits right where seat 1 would move to: blocked, not moved, one square short of it");
+        assertEquals(List.of(new MovementPreview.Step(new Position(3, 2), Direction.EAST)), model.ghostPath(),
+            "walked straight onto the square seat 2 sits on, since another robot's own program is unpredictable");
     }
 
     /**
