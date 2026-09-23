@@ -768,8 +768,12 @@ pipeline (client zip via jpackage, server Docker image) is implemented — 3.11,
 All JSON via Jackson, plain bean-style classes for config files, following the
 StarWars conventions:
 
-- **Client:** `connection-config.json` (last server/name), later keybinds and
-  audio/graphics settings. Runtime-generated, gitignored.
+- **Client:** `client-settings.json` (`SettingsStore`, `~/.robot-rampage/`; the address/name/session-token fields plus
+  the Settings dialog's own preferences, 4.6). Runtime-generated, gitignored. **`ClientSettings.defaults()`'s server
+  address is the owner's own dedicated server**, `NAS5714.myqnapcloud.com:45725` (2026-09-25, changed from
+  `localhost:45725` now that the server is actually deployed there, 3.12) — only used when no settings file exists yet
+  (a fresh install) or it has no `serverAddress` of its own; once a player has typed or connected to any address, that
+  value is what's remembered and offered next time, never silently reset to the default.
 - **Server: autosave.** After every completed turn the server writes the full
   `GameState` (between turns there is no hidden hand data yet — the deck order and
   RNG state are all that is secret) to a JSON file, so a server restart can resume

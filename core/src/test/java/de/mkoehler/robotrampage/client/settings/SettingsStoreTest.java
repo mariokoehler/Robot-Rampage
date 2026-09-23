@@ -31,7 +31,7 @@ class SettingsStoreTest {
         ClientSettings loaded = new SettingsStore(folder.resolve("none.json")).load();
 
         assertEquals(ClientSettings.defaults(), loaded);
-        assertEquals("localhost:" + NetworkConstants.TCP_PORT, loaded.serverAddress());
+        assertEquals("NAS5714.myqnapcloud.com:" + NetworkConstants.TCP_PORT, loaded.serverAddress());
         assertTrue(loaded.displayName().length() <= NetworkConstants.MAX_DISPLAY_NAME_LENGTH);
     }
 
