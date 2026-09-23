@@ -15,6 +15,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
+import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -817,6 +818,23 @@ class GameModelTest {
         model.draft().place(model.draft().hand().get(0));
 
         assertEquals(List.of(new MovementPreview.Step(new Position(2, 3), Direction.NORTH)), model.ghostPath());
+    }
+
+    /**
+     * A robot that just re-entered turns to face the way its player picked as soon as the server broadcasts it, so
+     * every client's board shows it right away — not just the seat that made the choice.
+     */
+    @Test
+    void aRemoteRobotTurnsWhenItsPlayerPicksARespawnFacing() {
+        GameModel model = programmingOnOpenBoard(0);
+        RobotState before = model.robots().stream().filter(robot -> robot.robotId() == 0).findFirst().orElseThrow();
+        assertEquals(Direction.NORTH, before.facing());
+
+        model.apply(new RespawnFacingChosen(0, Direction.SOUTH));
+
+        RobotState after = model.robots().stream().filter(robot -> robot.robotId() == 0).findFirst().orElseThrow();
+        assertEquals(Direction.SOUTH, after.facing());
+        assertEquals(before.position(), after.position(), "only the facing changes");
     }
 
     private static PlayerRow row(GameModel model, int seat) {

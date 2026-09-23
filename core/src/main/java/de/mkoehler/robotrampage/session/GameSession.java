@@ -1,6 +1,7 @@
 package de.mkoehler.robotrampage.session;
 
 import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.board.StartSquare;
 import de.mkoehler.robotrampage.net.NetworkConstants;
@@ -14,6 +15,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
@@ -381,9 +383,35 @@ public final class GameSession {
         }
         if (program.respawnFacing() != null && respawnedThisTurn.contains(seat)) {
             robot.setFacing(program.respawnFacing());
+            outbox.broadcast(new RespawnFacingChosen(robot.id(), program.respawnFacing()));
         }
         confirm(player);
         afterConfirmation();
+    }
+
+    /**
+     * Turns a just-re-entered robot to the facing its player picked in the respawn dialog, sent the moment they press
+     * "Go" rather than only bundled with their full program submission (which may follow much later, or never if they
+     * are squeezed or disconnect) — so every client can show the choice right away (design.md 2.13). Equivalent to
+     * setting the same facing on {@link SubmitProgram}, since nothing else can happen to the robot in between; a
+     * program submitted afterwards may repeat the same facing there harmlessly.
+     *
+     * @param seat   the player's seat
+     * @param facing the facing they picked
+     */
+    public void chooseRespawnFacing(int seat, Direction facing) {
+        SessionPlayer player = players.get(seat);
+        if (player == null || phase != Phase.PROGRAMMING || !player.awaiting || player.confirmed) {
+            reject(seat, "You cannot pick a facing right now.");
+            return;
+        }
+        if (!respawnedThisTurn.contains(seat)) {
+            reject(seat, "Your robot did not re-enter this turn.");
+            return;
+        }
+        Robot robot = state.robot(seat);
+        robot.setFacing(facing);
+        outbox.broadcast(new RespawnFacingChosen(robot.id(), facing));
     }
 
     // ------------------------------------------------------------------------------------------------------

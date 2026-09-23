@@ -270,7 +270,7 @@ public final class BoardActor extends Actor {
         List<Position> flags = board.flags();
         for (int i = 0; i < flags.size(); i++) {
             square(batch, flag, flags.get(i), 0f);
-            text(batch, Theme.TextStyle.BUTTON, String.valueOf(i + 1), center(flags.get(i), 0.5f, 0.64f), 0.2f, Color.WHITE);
+            text(batch, Theme.TextStyle.BUTTON, String.valueOf(i + 1), center(flags.get(i), 0.5f, 0.67f), 0.2f, Color.WHITE);
         }
     }
 

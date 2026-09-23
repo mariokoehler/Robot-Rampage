@@ -13,6 +13,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
+import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -188,6 +189,8 @@ public final class GameModel {
             } else {
                 replaceRobots(snapshot.robots());
             }
+        } else if (message instanceof RespawnFacingChosen chosen) {
+            faceRobot(chosen);
         } else if (message instanceof PlayerConnection connection) {
             if (connection.connected()) {
                 disconnected.remove(connection.robotId());
@@ -258,6 +261,21 @@ public final class GameModel {
             }
         }
         stage = awaited.contains(mySeat) ? Stage.PROGRAMMING : Stage.SITTING_OUT;
+    }
+
+    /**
+     * Turns a re-entered robot to the facing its player just picked, so every client shows it right away instead of
+     * only once the turn resolves (design.md 2.13).
+     *
+     * @param chosen the message
+     */
+    private void faceRobot(RespawnFacingChosen chosen) {
+        RobotState robot = robots.get(chosen.robotId());
+        if (robot != null) {
+            robots.put(robot.robotId(), new RobotState(robot.robotId(), robot.position(), chosen.facing(), robot.damage(),
+                robot.lives(), robot.flagsTouched(), robot.archiveMarker(), robot.status(), robot.poweredDown(),
+                robot.powerDownAnnounced()));
+        }
     }
 
     /**

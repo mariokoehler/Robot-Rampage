@@ -13,6 +13,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
+import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
 import de.mkoehler.robotrampage.net.messages.TimerPaused;
@@ -1023,6 +1024,9 @@ class GameSessionTest {
         SubmitProgram program = programFor(1);
         session.submitProgram(1, new SubmitProgram(program.turn(), program.cardPriorities(), false, Direction.SOUTH));
         assertEquals(Direction.SOUTH, session.gameState().robot(1).facing());
+        RespawnFacingChosen chosen = outbox.lastReceivedBy(0, RespawnFacingChosen.class);
+        assertEquals(1, chosen.robotId());
+        assertEquals(Direction.SOUTH, chosen.facing());
 
         // Robot 0 may itself have fallen off the open board and re-entered by chance; only if it did not is the option refused.
         boolean respawned = outbox.lastReceivedBy(0, TurnStarted.class).respawnEvents().stream()
@@ -1034,6 +1038,45 @@ class GameSessionTest {
             SubmitProgram other = programFor(0);
             session.submitProgram(0, new SubmitProgram(other.turn(), other.cardPriorities(), false, Direction.WEST));
             assertEquals(before, session.gameState().robot(0).facing());
+        }
+    }
+
+    /**
+     * A re-entered robot's player may send the picked facing the moment they choose it, well before their program is
+     * complete: the robot turns and everybody is told right away, and the player can still go on to submit afterwards.
+     * A player whose robot did not re-enter this turn is refused.
+     */
+    @Test
+    void aRespawnedRobotsFacingIsAppliedAndBroadcastAsSoonAsItIsChosen() {
+        startWith(2);
+        submitFor(0);
+        submitFor(1);
+        Robot victim = session.gameState().robot(1);
+        victim.setStatus(RobotStatus.DESTROYED);
+        victim.setPosition(null);
+        victim.setLives(2);
+
+        advance(PAUSE);
+
+        session.chooseRespawnFacing(1, Direction.WEST);
+        assertEquals(Direction.WEST, session.gameState().robot(1).facing());
+        RespawnFacingChosen chosen = outbox.lastReceivedBy(0, RespawnFacingChosen.class);
+        assertEquals(1, chosen.robotId());
+        assertEquals(Direction.WEST, chosen.facing());
+
+        submitFor(1);
+        assertEquals(Direction.WEST, session.gameState().robot(1).facing(), "the later program submission does not undo it");
+
+        // Robot 0 may itself have fallen off the open board and re-entered by chance; only if it did not is the option refused.
+        boolean respawned = outbox.lastReceivedBy(0, TurnStarted.class).respawnEvents().stream()
+            .anyMatch(entry -> entry.event() instanceof de.mkoehler.robotrampage.rules.GameEvent.RobotRespawned respawn
+                && respawn.robotId() == 0);
+        if (!respawned) {
+            Direction before = session.gameState().robot(0).facing();
+            int rejectionsBefore = outbox.receivedBy(0, RequestRejected.class).size();
+            session.chooseRespawnFacing(0, Direction.SOUTH);
+            assertEquals(before, session.gameState().robot(0).facing());
+            assertTrue(outbox.receivedBy(0, RequestRejected.class).size() > rejectionsBefore);
         }
     }
 

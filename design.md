@@ -559,10 +559,21 @@ not merely disconnected — a disconnected player is still seated (their grace p
 runs *after* the "unknown/absent token → lobby only" gate, or a player trying to get back in with a stale token would
 be told their own name is taken instead of the accurate "a game is already in progress".
 
-**Respawn facing.** A robot re-enters with the direction it had; its player may
-change that in the same `SubmitProgram` (`respawnFacing`), which the session
-applies before execution — equivalent to choosing at respawn, because nothing
-happens in between. Only honoured for robots that respawned this turn.
+**Respawn facing.** A robot re-enters with the direction it had; its player may change that with `ChooseRespawnFacing`
+(C→S, just the facing), sent the moment "Go" is pressed in the dialog rather than waiting for the rest of their
+program — which may follow much later, or never if they are squeezed or disconnect. The session applies it at once and
+broadcasts `RespawnFacingChosen` (S→all) so every client turns the robot on the board right away. `SubmitProgram` still
+carries its own `respawnFacing` too (applied the same way, and broadcast again) as a second, redundant path — equivalent
+to choosing at respawn, since nothing else can happen to the robot in between — kept mainly so a program submitted
+without ever opening the dialog (a server-filled squeeze or reconnect) can still carry a facing if one is ever sent
+that way. Both paths are only honoured for robots that respawned this turn.
+
+Found missing in a two-client playtest (2026-09-23), in two stages: first the picking player's own client showed the
+stale pre-death facing on its own board wedge (only the ghost path used the chosen-but-not-yet-applied facing) — fixed
+by having `GameScreen.refreshBoard` draw the player's own robot at `respawnFacing()` once chosen. That still left other
+clients showing the stale facing, since back then the choice only reached the server bundled with the full
+`SubmitProgram`, which could be — and in the playtest, was — sent much later than the choice itself, or not at all
+before the turn resolved; `ChooseRespawnFacing` is the fix for that second stage.
 
 **Randomness in the session** (timeout random-fill) comes from a seeded stream
 derived from the game seed and a fill counter — like the deck, never a live
@@ -577,9 +588,11 @@ derived from the game seed and a fill counter — like the deck, never a live
 | S→all | `TurnStarted` | Turn number, the respawn events, who must program, the time limit. |
 | S→each | `HandDealt` | That player's cards only, their locked-register cards, whether they may pick a respawn facing, whether they are powered down. |
 | S→each | `ProgramRevealed` | That player's own five registers, once locked in for a reason that left them not knowing what is in it (a random fill, or a reconnect into an already-locked turn) — never sent for a program the player locked in themselves while connected. |
-| C→S | `SubmitProgram` | Card priorities (one per unlocked register, in order), power-down intent, optional respawn facing. |
+| C→S | `SubmitProgram` | Card priorities (one per unlocked register, in order), power-down intent, optional respawn facing (a second, redundant path — see 2.13's respawn-facing note). |
+| C→S | `ChooseRespawnFacing` | The facing picked in the respawn dialog, sent the moment "Go" is pressed, well before (or instead of) the rest of the program. |
 | S→each | `RequestRejected` | Why a request was refused (an invalid program, starting too early, ...); the player may try again. |
 | S→all | `PlayerConfirmed`, `TimerUpdate` | *That* a player locked in (never the cards); the remaining time when the last-player squeeze starts. |
+| S→all | `RespawnFacingChosen` | A re-entered robot's facing, the moment the session applies it (from either message above) — unlike `PlayerConfirmed`, this says exactly what was picked, since it is public table state, not a card. |
 | C→S | `SetTimerPaused` | The host stops or restarts the programming timer (2.13). Anybody else, or any other phase, is refused with `RequestRejected`. |
 | S→all | `TimerPaused` | The timer was stopped or restarted (also when the turn resolves while it is stopped), with the seconds left; sent again to a player who comes back while it is stopped. |
 | S→all | `TurnResolved` | The ordered `LoggedEvent` list of the turn. |
@@ -950,7 +963,12 @@ Turning the switch off needs no confirmation. **Respawn facing.** Offered at mos
 (`GameScreen.maybeShowRespawnDialog`, guarded by the turn number), while the player is programming and
 `GameModel.canChooseRespawnFacing()` is true; the new `client.ui.FacingPicker` widget pre-selects the facing the server
 already gave the robot (so dismissing without pressing "Go" is a no-op) and turns a copy of the robot's own wedge to
-match; "Go" calls `GameModel.chooseRespawnFacing`. **Eliminated.** `GameModel.myEliminationJustSeen()` is set, once, the
+match; "Go" calls `GameModel.chooseRespawnFacing` (for the local wedge/ghost path) and separately sends
+`ChooseRespawnFacing` to the server right away, rather than waiting for the rest of the program (3.5's protocol table).
+**`GameScreen.refreshBoard` turns the player's own live robot to `respawnFacing()` once chosen too** (not just the
+ghost path), so the on-board wedge itself no longer shows the stale pre-death facing after picking a new one;
+`GameModel` also applies an incoming `RespawnFacingChosen` to whichever robot it names, so a re-entered robot turns on
+*every* client's board the moment its player picks, not just its own (2026-09-23 playtest fix). **Eliminated.** `GameModel.myEliminationJustSeen()` is set, once, the
 moment this player's own robot is seen (by this client, in a turn it replayed) to lose its last life —
 `GameModel.noteEliminations`'s existing before/after check, extended for the player's own seat; a resync that already shows
 the robot eliminated, before any turn of its own was replayed, does not set it (tested). `GameScreen` shows the dialog once

@@ -14,6 +14,7 @@ import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Scaling;
+import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.board.BoardGeometry;
 import de.mkoehler.robotrampage.client.board.RobotPose;
@@ -36,6 +37,7 @@ import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkClient;
+import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
@@ -540,6 +542,11 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      * shows a stale ghost. {@link #place} and {@link #takeBack} call {@link #refreshAll} for exactly this reason;
      * route any future one (such as a {@code placeAt} for a specific register) through {@link #refreshAll} too,
      * rather than calling this method alone.
+     * <p>
+     * This player's own robot is drawn facing {@link GameModel#respawnFacing()} once chosen, not the server's
+     * last-known facing, for the same reason {@link GameModel#ghostPath()} does: that is what will actually be
+     * submitted, and showing the stale facing until the turn resolves misleads the player about which way "forward"
+     * currently is.
      */
     private void refreshBoard() {
         List<RobotPose> poses = new ArrayList<>();
@@ -549,7 +556,9 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         }
         for (RobotState robot : model.robots()) {
             if (robot.status() == RobotStatus.ACTIVE && robot.position() != null) {
-                poses.add(RobotPose.at(robot.robotId(), robot.position(), robot.facing()));
+                Direction facing = robot.robotId() == model.mySeat() && model.respawnFacing() != null
+                    ? model.respawnFacing() : robot.facing();
+                poses.add(RobotPose.at(robot.robotId(), robot.position(), facing));
             }
         }
         boardActor.setRobots(poses);
@@ -691,8 +700,9 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         key.add(keyColumn(new String[] {"Pit", "Repair site", "Flag"},
             new String[][] {{"tiles/pit.png"}, {"tiles/repair-site.png"}, {"tiles/floor.png", "board/flag.png"}}))
             .top().padRight(16f);
-        key.add(keyColumn(new String[] {"Wall", "Laser"},
-            new String[][] {{"tiles/floor.png", "board/wall.png"}, {"tiles/floor.png", "board/laser-emitter.png"}})).top();
+        key.add(keyColumn(new String[] {"Wall", "Laser", "Pusher", "Crusher"},
+            new String[][] {{"tiles/floor.png", "board/wall.png"}, {"tiles/floor.png", "board/laser-emitter.png"},
+                {"board/pusher.png"}, {"board/crusher.png"}})).top();
         return key;
     }
 
@@ -1404,6 +1414,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             @Override
             public void changed(ChangeEvent event, Actor actor) {
                 model.chooseRespawnFacing(picker.facing());
+                server.link().send(new ChooseRespawnFacing(picker.facing()));
                 closeDialog();
                 refreshBoard();
             }
