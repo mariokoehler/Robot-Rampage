@@ -11,12 +11,14 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.Group;
+import com.badlogic.gdx.scenes.scene2d.ui.Container;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.TextButton;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
+import de.mkoehler.robotrampage.client.board.BoardKey;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.game.GameModel;
@@ -132,6 +134,7 @@ public final class GameScreenDriver {
                 driveStayPoweredDown(this);
                 driveReconnect(this);
                 driveLobbyBoardChoice(this, folder);
+                driveBoardKeyTooltip(this, folder);
                 System.out.println("GameScreenDriver: all checks passed");
                 Gdx.app.exit();
             }
@@ -553,6 +556,68 @@ public final class GameScreenDriver {
                 if (found != null) {
                     return found;
                 }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Rests the pointer on the board key's crusher entry (the one furthest down and right, so the most likely to be
+     * pushed back inside the screen) and checks that its explanation appears fully on screen, survives the robot panel
+     * being rebuilt by another player confirming, and goes away when the pointer leaves.
+     *
+     * @param game   the game
+     * @param folder where to save {@code board-key-tooltip.png}, or {@code null} to skip it
+     */
+    private static void driveBoardKeyTooltip(RobotRampageGame game, File folder) {
+        List<Card> hand = new ArrayList<>();
+        for (int i = 0; i < 9; i++) {
+            hand.add(new Card(CardType.MOVE_1, 100 + i));
+        }
+        String board = BoardLoader.toJson(BoardLoader.loadResource("boards/proving-grounds.json").definition());
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        ConnectedServer connected = new ConnectedServer(new ScriptedLink(),
+            new HandshakeResponse("Welcome", ME, "token", "test", 600), List.of(), false);
+        GameScreen screen = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
+            new GameStarted(board, players, ME),
+            List.of(new TurnStarted(1, List.of(), List.of(0, 1, 2), 90), new HandDealt(1, hand, List.of(), false, false)));
+        game.setScreen(screen);
+        screen.resize(WIDTH, HEIGHT);
+        frame(screen);
+
+        Label crusher = findLabel(screen.stage.getRoot(), BoardKey.CRUSHER.title());
+        check(crusher != null, "the board key should list the crusher");
+        float[] at = centerOf(crusher);
+        screen.stage.mouseMoved((int) at[0], (int) at[1]);
+        screen.render(0.3f);
+        Container<?> tooltip = shownTooltip(screen);
+        check(tooltip != null, "resting on a key entry should show its explanation");
+        check(tooltip.getX() >= 0f && tooltip.getY() >= 0f && tooltip.getX() + tooltip.getWidth() <= WIDTH
+            && tooltip.getY() + tooltip.getHeight() <= HEIGHT, "the explanation should be fully on screen");
+
+        screen.model().apply(new PlayerConfirmed(0));
+        screen.render(0.1f);
+        check(shownTooltip(screen) != null, "another player confirming should not take the explanation away");
+        if (folder != null) {
+            snapshot(screen, folder, "board-key-tooltip.png");
+        }
+
+        screen.stage.mouseMoved(WIDTH / 2, HEIGHT / 2);
+        frame(screen);
+        check(shownTooltip(screen) == null, "moving the pointer away should hide the explanation");
+    }
+
+    /**
+     * Finds a tooltip showing on a screen: Scene2D puts it on the stage root in a {@link Container} of its own.
+     *
+     * @param screen the screen
+     * @return the tooltip's container, or {@code null} if none is showing
+     */
+    private static Container<?> shownTooltip(StageScreen screen) {
+        for (Actor child : screen.stage.getRoot().getChildren()) {
+            if (child instanceof Container<?> container) {
+                return container;
             }
         }
         return null;

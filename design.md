@@ -923,7 +923,7 @@ The pure geometry (turning a picture for a direction, the walls of a board once 
 lead into it (`BoardGeometry.beltPiece`): fed from behind (or from nowhere) is plain; fed from one side only is a corner;
 from behind and one side is a join on that side; from both sides without a belt behind is a T; from all three is an X. The
 design draws these pieces for a belt leaving north; the renderer turns them, and normal and express belts have their own
-set. Damage tags are drawn on robots during a replay; there is no program preview, highlight or archive marker yet. Crusher squares show no register numbers. Pusher register numbers are turned to run along the bar on east and west
+set. Damage tags are drawn on robots during a replay; there is no program preview, highlight or archive marker yet. Crusher squares show their register numbers on a small dark label along the bottom of the square (added 2026-09-24 with the board key tooltips, 4.3, which point at them; the board editor used to draw its own such tag and now relies on this one) *(unconfirmed)*. Pusher register numbers are turned to run along the bar on east and west
 pushers. The game screen parses the board in its constructor (`GameModel`); the server validated it and versions are checked, so a
 bad board is not expected, but a failure there would be an uncaught crash. `BoardSnapshot` (`lwjgl3/src/test`, a dev
 tool run by hand) renders a board with a robot on every start square into a PNG through a hidden window, so the renderer can
@@ -1136,6 +1136,20 @@ output folder as its argument, also saves it (`dialog-powerdown.png`). `GameScre
 power-down round trip (open, cancel leaves it off and sends nothing, confirm turns it on) and the respawn picker (opens
 once, a click on a direction button changes the pick without touching the model, "Go" applies it and closes the dialog,
 and it does not reopen for a turn already offered).
+
+**Board key tooltips (2026-09-24, owner request).** Resting the mouse pointer on an entry of the board key (the robot
+panel's bottom section) shows what that element does to a robot and *when* in the register it acts (2.4), including
+that pushers and crushers only act in the registers printed on them. Hover tooltips rather than a click dialog: they
+need no dismissal and never block the programming clock. The texts live in `client.board.BoardKey` (libGDX-free, one
+enum entry per key row, `BoardKeyTest` checks every picture exists); they describe *this* game's rules (2.9), e.g.
+flags do not repair. `client.ui.InfoTooltips` wraps Scene2D's `Tooltip` with its own `TooltipManager` (instant, a short
+fade instead of the default zoom, gone at once on exit); `GameScreen` hides all tooltips when a dialog opens, the
+layout switches to the replay or Game Over, and on dispose. **The key is built once, outside the robot panel's
+rebuilt body** — that body is rebuilt on every model change (another player confirming, every card click), which
+would pull the hovered entry and its tooltip away. The caption reads "Board key · point at an entry for details"
+*(unconfirmed)*. `GameScreenDriver.driveBoardKeyTooltip` hovers the crusher entry, checks the tooltip is fully on
+screen, survives a rebuild caused by `PlayerConfirmed` and goes away when the pointer leaves, and writes
+`board-key-tooltip.png`.
 
 ### 4.4 Audio
 

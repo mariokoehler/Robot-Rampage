@@ -7,8 +7,6 @@ import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
-import com.badlogic.gdx.scenes.scene2d.ui.Label;
-import com.badlogic.gdx.scenes.scene2d.ui.Table;
 import com.badlogic.gdx.scenes.scene2d.utils.Drawable;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
@@ -21,13 +19,11 @@ import de.mkoehler.robotrampage.client.ui.UiKit;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * The board in the editor: drawn by the game's own {@link BoardActor}, so it looks exactly as it will in a game, plus
- * what only an editor needs on top: a faint robot on every start square (showing its seat and facing), the registers of
- * every crusher, and a highlight of the square or side the pointer would change. It turns the mouse into
+ * what only an editor needs on top: a faint robot on every start square (showing its seat and facing) and a highlight of
+ * the square or side the pointer would change. It turns the mouse into
  * {@link BoardEditor} gestures: the left button places, the right button removes, and dragging continues the gesture.
  *
  * @author Mario Koehler
@@ -135,26 +131,6 @@ final class BoardArea extends Group {
         }
         board.setRobots(robots);
         addActor(board);
-        draft.crushers().forEach((position, registers) -> addActor(registerTag(position, registers)));
-    }
-
-    /**
-     * Builds the small dark tag at the bottom of a crusher that lists the registers it is active in.
-     *
-     * @param position  the crusher's square
-     * @param registers its registers
-     * @return the tag, already placed
-     */
-    private Table registerTag(Position position, Set<Integer> registers) {
-        Table tag = new Table();
-        tag.setBackground(ui.rounded(Theme.INK, Theme.INK, 0, 6));
-        tag.setTouchable(Touchable.disabled);
-        Label text = ui.label(registers.stream().sorted().map(String::valueOf).collect(Collectors.joining(" ")),
-            Theme.TextStyle.CAPTION, Theme.ON_PRIMARY);
-        tag.add(text).padLeft(6f).padRight(6f).padBottom(UiKit.SHAPE_RESERVE);
-        tag.pack();
-        tag.setPosition(position.x() * tile + (tile - tag.getWidth()) / 2f, position.y() * tile + 2f);
-        return tag;
     }
 
     /**

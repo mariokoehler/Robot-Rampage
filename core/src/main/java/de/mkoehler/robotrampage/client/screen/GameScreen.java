@@ -18,6 +18,7 @@ import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.audio.AudioKit;
+import de.mkoehler.robotrampage.client.board.BoardKey;
 import de.mkoehler.robotrampage.client.board.BoardGeometry;
 import de.mkoehler.robotrampage.client.board.RobotPose;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
@@ -34,6 +35,7 @@ import de.mkoehler.robotrampage.client.replay.TurnReplay;
 import de.mkoehler.robotrampage.client.settings.ClientSettings;
 import de.mkoehler.robotrampage.client.ui.CardView;
 import de.mkoehler.robotrampage.client.ui.FacingPicker;
+import de.mkoehler.robotrampage.client.ui.InfoTooltips;
 import de.mkoehler.robotrampage.client.ui.ModalDialog;
 import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.ProgressPill;
@@ -80,6 +82,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private static final float BOARD_LEFT = 660f;
     private static final float MAX_TILE = 50f;
     private static final float KEY_ICON = 40f;
+    private static final int KEY_ROWS = 3;
     private static final float GHOST_ALPHA = 0.4f;
     private static final String HAND_HINT = "Click a card to put it in the next free register. Click a filled register to take "
         + "its card back. If the timer runs out, empty registers are filled at random.";
@@ -92,6 +95,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private final Table headerLeft = new Table();
     private final Table playersBody = new Table();
     private final Table robotBody = new Table();
+    private final InfoTooltips tooltips;
     private final Table programBody = new Table();
     private final Label timeLabel;
     private final Label timeCaption;
@@ -149,6 +153,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         this.address = address;
         this.model = new GameModel(started);
         this.cards = new CardView(ui);
+        this.tooltips = new InfoTooltips(ui);
         this.timeLabel = ui.label("0:00", Theme.TextStyle.HEADING, Theme.INK);
         this.timeCaption = ui.label("Time left", Theme.TextStyle.CHIP, Theme.INK_MUTED);
         this.timeBar = new ProgressPill(ui, 10);
@@ -216,7 +221,8 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         Table robot = ui.panel();
         robot.pad(20f).top().left();
         robotBody.top().left();
-        robot.add(robotBody).grow();
+        robot.add(robotBody).grow().row();
+        robot.add(boardKeySection()).growX().bottom();
         place(robot, 1284f, PANEL_TOP, 604f, PANEL_HEIGHT);
 
         Table program = ui.panel();
@@ -703,11 +709,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         flag.add(new Image(ui.image("icons/flag.png"))).size(20f).padRight(Theme.SPACE_2);
         flag.add(ui.label(model.nextFlagText(), Theme.TextStyle.BODY_LARGE, Theme.INK));
         stat(stats, "Next flag", flag);
-        robotBody.add(stats).left().growX().padTop(14f).row();
-
-        robotBody.add(new Image(ui.solid(Theme.LINE))).growX().height(1f).padTop(14f).row();
-        robotBody.add(ui.label("Board key", Theme.TextStyle.CAPTION, Theme.INK_MUTED)).left().padTop(10f).row();
-        robotBody.add(boardKey()).left().padTop(Theme.SPACE_2);
+        robotBody.add(stats).left().growX().padTop(14f);
     }
 
     /**
@@ -723,44 +725,52 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Builds the key that says what the pictures on the board mean.
+     * Builds the board key at the bottom of the robot panel: a line, the caption, and the key itself, each entry of which
+     * explains what it does in a tooltip while the pointer rests on it (design.md 4.3).
+     * <p>
+     * Built once, outside {@link #robotBody}: that panel is cleared and rebuilt on every change of the model, such as
+     * another player confirming, which would take the entry the pointer rests on away from under it and its tooltip
+     * with it.
      *
-     * @return the key
+     * @return the section
      */
-    private Table boardKey() {
+    private Table boardKeySection() {
+        Table section = new Table();
+        section.left();
+        section.add(new Image(ui.solid(Theme.LINE))).growX().height(1f).row();
+        section.add(ui.label("Board key · point at an entry for details", Theme.TextStyle.CAPTION, Theme.INK_MUTED))
+            .left().padTop(10f).row();
         Table key = new Table();
         key.top().left();
-        key.add(keyColumn(new String[] {"Belt", "Express belt", "Gear"},
-            new String[][] {{"tiles/belt.png"}, {"tiles/belt-express.png"}, {"tiles/gear-clockwise.png"}})).top().padRight(16f);
-        key.add(keyColumn(new String[] {"Pit", "Repair site", "Flag"},
-            new String[][] {{"tiles/pit.png"}, {"tiles/repair-site.png"}, {"tiles/floor.png", "board/flag.png"}}))
-            .top().padRight(16f);
-        key.add(keyColumn(new String[] {"Wall", "Laser", "Pusher"},
-            new String[][] {{"tiles/floor.png", "board/wall.png"}, {"tiles/floor.png", "board/laser-emitter.png"},
-                {"board/pusher.png"}})).top().padRight(16f);
-        key.add(keyColumn(new String[] {"Crusher"}, new String[][] {{"board/crusher.png"}})).top();
-        return key;
+        BoardKey[] entries = BoardKey.values();
+        for (int start = 0; start < entries.length; start += KEY_ROWS) {
+            Table column = new Table();
+            column.top().left();
+            for (int i = start; i < Math.min(start + KEY_ROWS, entries.length); i++) {
+                column.add(keyEntry(entries[i])).left().padBottom(8f).row();
+            }
+            key.add(column).top().padRight(start + KEY_ROWS < entries.length ? 16f : 0f);
+        }
+        section.add(key).left().padTop(Theme.SPACE_2);
+        return section;
     }
 
     /**
-     * Builds one column of the board key.
+     * Builds one entry of the board key: its icon and name, with its explanation as a tooltip.
      *
-     * @param names    the names of the things
-     * @param pictures for each thing the pictures it is drawn from, bottom first
-     * @return the column
+     * @param entry the entry
+     * @return the entry
      */
-    private Table keyColumn(String[] names, String[][] pictures) {
-        Table column = new Table();
-        column.top().left();
-        for (int i = 0; i < names.length; i++) {
-            Stack icon = new Stack();
-            for (String path : pictures[i]) {
-                icon.add(new Image(ui.image(path)));
-            }
-            column.add(icon).size(KEY_ICON).padBottom(8f);
-            column.add(ui.label(names[i], Theme.TextStyle.BODY, Theme.INK)).left().padLeft(10f).padBottom(8f).row();
+    private Table keyEntry(BoardKey entry) {
+        Table row = new Table();
+        Stack icon = new Stack();
+        for (String path : entry.pictures()) {
+            icon.add(new Image(ui.image(path)));
         }
-        return column;
+        row.add(icon).size(KEY_ICON);
+        row.add(ui.label(entry.title(), Theme.TextStyle.BODY, Theme.INK)).left().padLeft(10f);
+        tooltips.attach(row, entry.title(), entry.explanation());
+        return row;
     }
 
     // ------------------------------------------------------------------------------------------------------
@@ -1174,6 +1184,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             || model.stage() == GameModel.Stage.OVER && replay != null;
         if (resolving != showingResolution) {
             showingResolution = resolving;
+            tooltips.hideAll();
             programmingGroup.setVisible(!resolving);
             resolutionGroup.setVisible(resolving);
             if (resolving) {
@@ -1621,6 +1632,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void showGameOver() {
         closeDialog();
+        tooltips.hideAll();
         game.audio().play(AudioKit.Clip.GAME_WON);
         gameOverView = new GameOverView(ui, model.standings(), this::leaveGame, this::returnToLobby, model.canReturnToLobby());
         gameOverGroup.clearChildren();
@@ -1637,6 +1649,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      */
     private void open(ModalDialog next) {
         closeDialog();
+        tooltips.hideAll();
         dialog = next;
         dialog.show(stage);
     }
@@ -1683,6 +1696,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             reconnector = null;
         }
         game.audio().stopCountdownWarning();
+        tooltips.hideAll();
         super.dispose();
     }
 }

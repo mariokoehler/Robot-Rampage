@@ -25,7 +25,7 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 **M0, M1 (rules engine), M2 (board format), M3 (server session + protocol) and M5 (pushers/crushers in play) done, M4
 slices 1-11 (client shell, Startup, Connect, Lobby, static board renderer, programming screen, turn replay, Game Over
 screen, respawn/power-down/eliminated dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture
-atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 423 unit tests in `core`, 4
+atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 425 unit tests in `core`, 4
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
@@ -230,6 +230,16 @@ a stale ghost). **The regular `ScreenSnapshot` states are too crowded with other
 trail by eye** — verified instead with a from-scratch debug harness on a small open board (see the slice's design.md
 4.3 paragraph for the exact scenario), plus a `GameScreenDriver` check that placing/taking back a card grows/shrinks
 `model.ghostPath()`.
+**Board key tooltips (2026-09-24):** hovering a board-key entry explains it (texts in `client.board.BoardKey`,
+tooltip plumbing in `client.ui.InfoTooltips`, design.md 4.3); crushers now show their registers on the board
+(`BoardActor`, so the editor lost its own tag). Scene2D traps hit or checked against the 1.14.2 source:
+`TooltipManager.getInstance()` waits 2 s before showing — use an own instance; a `Table` is `childrenOnly` touchable,
+so a tooltip on it fires only over its children unless it is set `Touchable.enabled` (`InfoTooltips.attach` does);
+a wrapped `Label` needs a fixed cell width or wraps one word per line; a shown tooltip sits on the stage root above
+every group, so hide it (`InfoTooltips.hideAll`) whenever a dialog opens or the layout switches. **Anything in
+`GameScreen` that must stay under a resting pointer (tooltips, hover) cannot live in `robotBody`/`programBody`/
+`playersBody`** — those are cleared and rebuilt on every model revision.
+
 **With slice 11, M4's own roadmap has nothing left "still to come".** Verified with the same loop as every other
 client slice: full `mvn clean package`, then `BoardSnapshot`/`ScreenSnapshot`/`GameScreenDriver` (all pictures —
 robots, tiles, cards, icons, dialog icons — visually spot-checked across several generated PNGs, not just one).

@@ -36,9 +36,9 @@ import java.util.stream.Collectors;
  * layout; the numbers in the mockups are for a 50 px square.
  * <p>
  * Everything is drawn from the pictures in {@code assets/tiles}, {@code assets/board} and {@code assets/robots}, turned to
- * face the right way, plus the beams of the board lasers, which are drawn as bars, and the numbers of flags, start squares
- * and pushers, which are drawn with the game fonts. The layers, from the bottom: the ground, the start squares, crushers,
- * pushers and flags, the lasers, the walls, and the robots.
+ * face the right way, plus the beams of the board lasers, which are drawn as bars, and the numbers of flags, start
+ * squares, pushers and crushers, which are drawn with the game fonts. The layers, from the bottom: the ground, the start
+ * squares, crushers, pushers and flags, the lasers, the walls, and the robots.
  *
  * @author Mario Koehler
  */
@@ -52,6 +52,7 @@ public final class BoardActor extends Actor {
     private static final float BEAM_CORE_WIDTH = 0.03f;
     private static final float BEAM_SPACING = 0.14f;
     private static final float DOOM_MARKER_SIZE = 0.8f;
+    private static final float CRUSHER_LABEL_HEIGHT = 0.26f;
 
     private final UiKit ui;
     private final Board board;
@@ -84,6 +85,7 @@ public final class BoardActor extends Actor {
     private List<Beam> beams = List.of();
     private boolean staticBeams = true;
     private final Drawable tagShape;
+    private final Drawable crusherLabel;
 
     /**
      * Creates the actor for a board, with no robots.
@@ -122,6 +124,7 @@ public final class BoardActor extends Actor {
         beamOuter = (TransformDrawable) ui.solid(Theme.DANGER);
         beamCore = (TransformDrawable) ui.solid(Theme.SURFACE_RAISED);
         tagShape = ui.rounded(Theme.DANGER, Theme.SURFACE_RAISED, Theme.BORDER_CONTROL, 8);
+        crusherLabel = ui.rounded(Theme.INK, Theme.INK, 0, 6);
         for (int seat = 0; seat < bodies.length; seat++) {
             bodies[seat] = ui.image(RobotLook.picture(seat));
         }
@@ -250,13 +253,24 @@ public final class BoardActor extends Actor {
     }
 
     /**
-     * Draws every crusher.
+     * Draws every crusher, with the registers it crushes in on a dark label along the bottom of its square, since its
+     * stripes leave no plain area for the numbers the way a pusher's bar does.
      *
      * @param batch the batch
      */
     private void drawCrushers(Batch batch) {
         for (Position position : board.crusherPositions()) {
             square(batch, crusher, position, 0f);
+            String registers = board.crusherRegisters(position).stream().sorted().map(String::valueOf)
+                .collect(Collectors.joining(" "));
+            float width = Math.min(0.92f, 0.16f + 0.075f * registers.length()) * tile;
+            float height = CRUSHER_LABEL_HEIGHT * tile;
+            float left = tileX(position) + (tile - width) / 2f;
+            float bottom = tileY(position) + 0.05f * tile;
+            batch.setColor(1f, 1f, 1f, getColor().a);
+            crusherLabel.draw(batch, left, bottom - UiKit.SHAPE_RESERVE, width, height + UiKit.SHAPE_RESERVE);
+            text(batch, Theme.TextStyle.NAME, registers, new float[] {left + width / 2f, bottom + height / 2f}, 0.16f,
+                Color.WHITE);
         }
     }
 
