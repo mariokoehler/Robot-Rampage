@@ -32,8 +32,8 @@ public enum BoardKey {
     /** A pit. */
     PIT("Pit", List.of("tiles/pit.png"),
         "Destroys a robot the moment it moves, is pushed or is carried onto it. Leaving the board does the same. A "
-            + "destroyed robot loses a life, sits out the rest of the turn and comes back next turn on its archive "
-            + "marker, undamaged, facing whichever way its player picks."),
+            + "destroyed robot loses a life and sits out the rest of the turn; unless that was its last life, it comes "
+            + "back next turn on its archive marker, undamaged, facing whichever way its player picks."),
 
     /** A repair site. */
     REPAIR_SITE("Repair site", List.of("tiles/repair-site.png"),
@@ -55,8 +55,9 @@ public enum BoardKey {
     /** A board laser, mounted on a wall. */
     LASER("Laser", List.of("tiles/floor.png", "board/laser-emitter.png"),
         "Fires every register, after the gears, along its red line until it hits a wall or the first robot. Each beam "
-            + "does 1 damage. Robots fire a laser straight ahead at the same time. At 5 damage and more, registers "
-            + "start to lock with the last card played in them; at 10 damage the robot is destroyed."),
+            + "does 1 damage. Robots that are not powered down fire a laser straight ahead at the same time. At 5 "
+            + "damage and more, registers start to lock with the last card played in them; at 10 damage the robot is "
+            + "destroyed."),
 
     /** A pusher, mounted on a wall. */
     PUSHER("Pusher", List.of("board/pusher.png"),
