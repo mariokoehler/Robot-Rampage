@@ -51,6 +51,7 @@ public final class BoardActor extends Actor {
     private static final float BEAM_WIDTH = 0.1f;
     private static final float BEAM_CORE_WIDTH = 0.03f;
     private static final float BEAM_SPACING = 0.14f;
+    private static final float DOOM_MARKER_SIZE = 0.8f;
 
     private final UiKit ui;
     private final Board board;
@@ -74,10 +75,12 @@ public final class BoardActor extends Actor {
     private final TextureRegionDrawable wall;
     private final TextureRegionDrawable wedge;
     private final TextureRegionDrawable badge;
+    private final TextureRegionDrawable doomMarker;
     private final TransformDrawable beamOuter;
     private final TransformDrawable beamCore;
     private final TextureRegionDrawable[] bodies = new TextureRegionDrawable[RobotLook.COUNT];
     private List<RobotPose> robots = List.of();
+    private List<Position> doomMarkers = List.of();
     private List<Beam> beams = List.of();
     private boolean staticBeams = true;
     private final Drawable tagShape;
@@ -115,6 +118,7 @@ public final class BoardActor extends Actor {
         wall = ui.image("board/wall.png");
         wedge = ui.image("board/robot-wedge.png");
         badge = ui.image("board/robot-badge.png");
+        doomMarker = ui.image("icons/warning.png");
         beamOuter = (TransformDrawable) ui.solid(Theme.DANGER);
         beamCore = (TransformDrawable) ui.solid(Theme.SURFACE_RAISED);
         tagShape = ui.rounded(Theme.DANGER, Theme.SURFACE_RAISED, Theme.BORDER_CONTROL, 8);
@@ -131,6 +135,17 @@ public final class BoardActor extends Actor {
      */
     public void setRobots(List<RobotPose> poses) {
         this.robots = List.copyOf(poses);
+    }
+
+    /**
+     * Sets the squares where a robot would be destroyed, each drawn as a red warning sign on top of everything on the
+     * square, robots included, such as where the "ghost path" preview (design.md 4.3) says a program ends in a pit or
+     * off the board.
+     *
+     * @param squares the squares to mark
+     */
+    public void setDoomMarkers(List<Position> squares) {
+        this.doomMarkers = List.copyOf(squares);
     }
 
     /**
@@ -169,6 +184,7 @@ public final class BoardActor extends Actor {
         drawLasers(batch);
         drawWalls(batch);
         drawRobots(batch);
+        drawDoomMarkers(batch);
         drawShots(batch);
     }
 
@@ -336,6 +352,21 @@ public final class BoardActor extends Actor {
             if (pose.tag() > 0) {
                 drawTag(batch, x, y, pose.tag());
             }
+        }
+        batch.setColor(1f, 1f, 1f, getColor().a);
+    }
+
+    /**
+     * Draws the red warning signs of {@link #setDoomMarkers}, centred on their squares.
+     *
+     * @param batch the batch
+     */
+    private void drawDoomMarkers(Batch batch) {
+        float size = tile * DOOM_MARKER_SIZE;
+        float inset = (tile - size) / 2f;
+        batch.setColor(Theme.DANGER.r, Theme.DANGER.g, Theme.DANGER.b, getColor().a);
+        for (Position square : doomMarkers) {
+            doomMarker.draw(batch, tileX(square) + inset, tileY(square) + inset, size, size);
         }
         batch.setColor(1f, 1f, 1f, getColor().a);
     }

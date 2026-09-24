@@ -25,11 +25,11 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 **M0, M1 (rules engine), M2 (board format), M3 (server session + protocol) and M5 (pushers/crushers in play) done, M4
 slices 1-11 (client shell, Startup, Connect, Lobby, static board renderer, programming screen, turn replay, Game Over
 screen, respawn/power-down/eliminated dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture
-atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 408 unit tests in `core`, 4
+atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 423 unit tests in `core`, 4
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 12 integration tests in `server` (real sockets, threads), plus 30 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
+picked up by surefire), plus 12 integration tests in `server` (real sockets, threads), plus 32 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -207,13 +207,15 @@ cd lwjgl3 && java -cp "target/classes;target/test-classes;$(cat target/test-cp.t
 **Ghost path (slice 11):** `client.game.MovementPreview` (new, libGDX-free, `MovementPreviewTest`) plays a robot's own
 cards against a `Board` and returns where each one leaves it — **does not reuse `MovementResolver`** (it's
 package-private, and its push-chain semantics are wrong for a preview that can't see other robots' hidden programs
-anyway): reimplements walk/step directly against `Board.hasWall`/`inBounds`/`featureAt`, all already public. Three
-deliberate simplifications, all documented in the class Javadoc since a future "the preview is wrong" report needs to
-be answerable: no belts/pushers/gears/lasers/crushers (only the player's own cards move the robot); another robot
-**blocks like a wall, never gets pushed** (their program is secret); a pit or the board edge **ends the preview for
-good**, no waypoint drawn for the destroying card. `GameModel.ghostPath()` (`GameModelTest`) feeds it the draft's cards
+anyway): reimplements walk/step directly against `Board.hasWall`/`inBounds`/`featureAt`, all already public. Its
+simplifications are documented in the class Javadoc (and design.md 4.3) since a future "the preview is wrong" report
+needs to be answerable: belts/pushers/gears are simulated, lasers/crushers are not; other robots are **ignored
+entirely** (changed 2026-09-24, they used to block like a wall); a pit or the board edge **ends the preview** with a
+last step marked `destroyed` (changed 2026-09-24 after a playtest where an edge death looked like "stays on the board"
+— that step is drawn with a red warning sign above the live robots, always on an on-board square).
+`GameModel.ghostPath()` (`GameModelTest`) feeds it the draft's cards
 — **stopping at the first still-empty free register, even past a known damage-locked tail** (a path that skipped an
-unknown gap would misrepresent what happens there) — the other active robots' squares as obstacles, and
+unknown gap would misrepresent what happens there; once the free registers are full the locked cards ARE previewed) — and
 `respawnFacing()` as the start facing when one was chosen (what will actually be submitted, not the server's
 last-known facing). `GameScreen.refreshBoard` draws the steps as faint copies of the player's own robot, reusing
 `RobotPose`'s existing `alpha` (no new art) and drawn *before* the live robots so one standing on a ghost square

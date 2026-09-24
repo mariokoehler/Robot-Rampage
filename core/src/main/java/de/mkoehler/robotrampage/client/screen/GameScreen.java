@@ -15,6 +15,7 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.utils.Scaling;
 import de.mkoehler.robotrampage.board.Direction;
+import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.audio.AudioKit;
 import de.mkoehler.robotrampage.client.board.BoardGeometry;
@@ -567,18 +568,27 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
      * submitted, and showing the stale facing until the turn resolves misleads the player about which way "forward"
      * currently is.
      * <p>
+     * A card that would destroy the robot (a pit, or off the board) gets a ghost too, plus a red warning sign on that
+     * square, drawn above the live robots: when the first card already drives off the edge, that square is the one the
+     * live robot stands on, which would hide a ghost alone.
+     * <p>
      * The ghost path itself is only drawn while {@link ClientSettings#showGhostPath()} is on (the Settings dialog's
      * "Show my program on the board" switch); everything else in this method still runs, so a robot standing where a
      * ghost would have been is unaffected either way.
      */
     private void refreshBoard() {
         List<RobotPose> poses = new ArrayList<>();
+        List<Position> doomed = new ArrayList<>();
         if (game.settings().showGhostPath()) {
             for (MovementPreview.Step step : model.ghostPath()) {
                 poses.add(new RobotPose(model.mySeat(), step.position().x(), step.position().y(),
                     BoardGeometry.rotation(step.facing()), GHOST_ALPHA, 0, false));
+                if (step.destroyed()) {
+                    doomed.add(step.position());
+                }
             }
         }
+        boardActor.setDoomMarkers(doomed);
         for (RobotState robot : model.robots()) {
             if (robot.status() == RobotStatus.ACTIVE && robot.position() != null) {
                 Direction facing = robot.robotId() == model.mySeat() && model.respawnFacing() != null

@@ -789,6 +789,29 @@ class GameModelTest {
     }
 
     /**
+     * A damage-locked card that would drive the robot off the board shows as the path's last, destroyed step, once the
+     * free registers before it are filled: the robot faces south on the bottom edge after the four free cards, and the
+     * locked move 3 takes it off the board from there.
+     */
+    @Test
+    void aLockedCardThatDrivesOffTheBoardEndsThePathDestroyed() {
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", false, true, true),
+            new PlayerInfo(1, "Bo", true, true, false), new PlayerInfo(2, "Cy", true, true, false));
+        GameModel model = new GameModel(new GameStarted(OPEN_BOARD, players, ME));
+        model.apply(turn(1, List.of(0, 1, 2)));
+        List<Card> hand = List.of(new Card(CardType.MOVE_3, 700), new Card(CardType.MOVE_3, 710),
+            new Card(CardType.ROTATE_RIGHT, 80), new Card(CardType.MOVE_1, 500));
+        model.apply(new HandDealt(1, hand, List.of(new Card(CardType.MOVE_3, 720)), false, false));
+
+        hand.forEach(model.draft()::place);
+
+        List<MovementPreview.Step> path = model.ghostPath();
+        assertEquals(5, path.size());
+        assertEquals(new MovementPreview.Step(new Position(8, 1), Direction.SOUTH), path.get(3));
+        assertEquals(new MovementPreview.Step(new Position(8, 0), Direction.SOUTH, true), path.get(4));
+    }
+
+    /**
      * The path is empty once the program is confirmed: it is not the programming stage any more.
      */
     @Test

@@ -151,6 +151,13 @@ public final class ScreenSnapshot {
             write(game, folder, "resolution-" + (int) seconds + "s.png", resolution(game), seconds);
         }
         write(game, folder, "dialog-respawn.png", respawnDialogState(game), 0f);
+        write(game, folder, "game-ghost-doom-first.png", ghostDoomState(game, new Position(0, 6), List.of(),
+            List.of(new Card(CardType.MOVE_1, 520), new Card(CardType.ROTATE_RIGHT, 220),
+                new Card(CardType.MOVE_2, 700), new Card(CardType.MOVE_1, 530), new Card(CardType.U_TURN, 30))), 23f);
+        write(game, folder, "game-ghost-doom-locked.png", ghostDoomState(game, new Position(5, 6),
+            List.of(new Card(CardType.MOVE_3, 810)),
+            List.of(new Card(CardType.MOVE_2, 700), new Card(CardType.ROTATE_RIGHT, 220),
+                new Card(CardType.ROTATE_LEFT, 150), new Card(CardType.MOVE_1, 530))), 23f);
         write(game, folder, "dialog-eliminated.png", eliminatedDialogState(game), 0f);
     }
 
@@ -183,6 +190,44 @@ public final class ScreenSnapshot {
         HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test", 600);
         return new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
             new ServerAddress("localhost", 45725), new GameStarted(board, players, ME), messages);
+    }
+
+    /**
+     * An open 12x12 board with no hazards, so the ghost path of {@link #ghostDoomState} shows nothing but the robot's
+     * own cards.
+     */
+    private static final String OPEN_BOARD = """
+        {"formatVersion": 1, "id": "open", "name": "Open Board", "width": 12, "height": 12,
+         "flags": [{"x": 11, "y": 11}],
+         "startSquares": [{"x": 0, "y": 0, "facing": "NORTH"}, {"x": 1, "y": 0, "facing": "NORTH"}]}
+        """;
+
+    /**
+     * Builds the programming screen with a program whose ghost path drives this player's robot, facing west, off the
+     * west edge of an open board, showing the red warning sign where it would be lost.
+     *
+     * @param game   the game
+     * @param start  where this player's robot stands
+     * @param locked the damage-locked cards, in register order
+     * @param hand   the hand, every card of which is placed into the free registers in order
+     * @return the screen
+     */
+    private static GameScreen ghostDoomState(RobotRampageGame game, Position start, List<Card> locked, List<Card> hand) {
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, NAMES.get(0), true, true, true),
+            new PlayerInfo(ME, NAMES.get(ME), true, true, false));
+        List<RobotState> robots = List.of(
+            new RobotState(0, new Position(8, 2), Direction.NORTH, 0, 3, 0, new Position(0, 0), RobotStatus.ACTIVE, false,
+                false),
+            new RobotState(ME, start, Direction.WEST, locked.isEmpty() ? 0 : locked.size() + 4, 3, 0, new Position(1, 0),
+                RobotStatus.ACTIVE, false, false));
+        List<Object> messages = List.of(new StateSnapshot(3, robots, false, -1),
+            new TurnStarted(4, List.of(), List.of(0, ME), 90), new HandDealt(4, hand, locked, false, false));
+        HandshakeResponse welcome = new HandshakeResponse("Welcome", ME, "token", "test", 600);
+        GameScreen screen = new GameScreen(game, new ConnectedServer(new DeadLink(), welcome, List.of(), false),
+            new ServerAddress("localhost", 45725), new GameStarted(OPEN_BOARD, players, ME), messages);
+        hand.forEach(screen.model().draft()::place);
+        screen.refresh();
+        return screen;
     }
 
     /**

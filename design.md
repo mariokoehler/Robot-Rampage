@@ -1078,9 +1078,18 @@ in one way only:
   obstacle check made "what would the board itself do here" the natural next question. Lasers and crushers still are
   not simulated: unlike belts/pushers/gears they do not move or turn the robot, so previewing them would mean
   predicting damage or destruction rather than a path, a different kind of feature.
-- A pit or the edge of the board — from the robot's own card or from a board effect — ends the preview for good: no
-  waypoint is drawn for the destroying register, and nothing after it runs either, exactly as a destroyed robot plays
-  no more of a real turn.
+- A pit or the edge of the board — from the robot's own card or from a board effect — ends the preview for good:
+  nothing after it runs, exactly as a destroyed robot plays no more of a real turn. **Changed 2026-09-24** (playtest:
+  a robot on the edge whose damage-locked fifth card drove it off looked, in the preview, like it stayed on the board —
+  the locked card *was* previewed, but the destroying register used to get no waypoint at all, so the trail simply
+  stopped one card early): the destroying register now gets a last step marked `destroyed`, on the pit itself or, for
+  the edge, on the last square the robot stood on before leaving (never off the board, which `BoardActor` does not
+  clip). `GameScreen` draws a ghost there like any other step, plus a red warning sign (`icons/warning.png` tinted
+  `Theme.DANGER`, 0.8 of a square, `BoardActor.setDoomMarkers`) drawn *above* the live robots — when the very first
+  card drives off, that square is the live robot's own, which would hide a ghost alone. *(unconfirmed: the marker's
+  look)* Only deaths from the robot's own cards and the simulated belts/pushers are foreseen; a crusher, lasers, or
+  another robot pushing it off are not. `ScreenSnapshot` writes `game-ghost-doom-first.png` (first card drives off,
+  marker on the live robot) and `game-ghost-doom-locked.png` (the playtest case: the locked fifth card drives off).
 
 `GameModel.ghostPath()` feeds it the cards placed so far (`ProgramDraft.registers()`, stopping at the first still-empty
 free register even if a damage-locked register further along is already known — a path that skipped over an unknown

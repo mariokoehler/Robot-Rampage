@@ -16,8 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Verifies {@link MovementPreview} against small boards: it plays a robot's own cards and this register's board
- * effects the way the real rules do (design.md 2.4), except that other robots are never simulated and the preview
- * simply stops instead of modelling destruction.
+ * effects the way the real rules do (design.md 2.4), except that other robots are never simulated, and marks where
+ * the robot would be destroyed with a last step.
  *
  * @author Mario Koehler
  */
@@ -91,30 +91,61 @@ class MovementPreviewTest {
     }
 
     /**
-     * A pit ends the preview for good: no step is added for the destroying card, and nothing after it runs either,
-     * exactly as a destroyed robot plays no more cards in a real turn.
+     * A pit ends the preview for good: the destroying card's step is marked destroyed and lies on the pit itself, and
+     * nothing after it runs, exactly as a destroyed robot plays no more cards in a real turn.
      */
     @Test
-    void aPitEndsThePreviewWithNoFurtherSteps() {
+    void aPitEndsThePreviewWithADestroyedStepOnThePit() {
         Board board = AsciiBoard.board(". . o . .");
 
         List<Step> path = MovementPreview.path(board, new Position(0, 0), Direction.EAST,
             List.of(card(CardType.MOVE_2), card(CardType.ROTATE_LEFT)));
 
-        assertTrue(path.isEmpty());
+        assertEquals(List.of(new Step(new Position(2, 0), Direction.EAST, true)), path);
     }
 
     /**
-     * Walking off the edge of the board is treated exactly like a pit: the preview ends with no further steps.
+     * Walking off the edge of the board ends the preview like a pit, with the destroyed step on the last square the
+     * robot stood on, since the square it drove onto is not on the board to be drawn.
      */
     @Test
-    void theEdgeOfTheBoardEndsThePreview() {
+    void theEdgeOfTheBoardEndsThePreviewWithADestroyedStepOnTheEdgeSquare() {
         Board board = AsciiBoard.board(". . .");
 
         List<Step> path = MovementPreview.path(board, new Position(2, 0), Direction.EAST,
-            List.of(card(CardType.MOVE_1)));
+            List.of(card(CardType.MOVE_1), card(CardType.MOVE_1)));
 
-        assertTrue(path.isEmpty());
+        assertEquals(List.of(new Step(new Position(2, 0), Direction.EAST, true)), path);
+    }
+
+    /**
+     * A move card that leaves the board partway marks the square the robot got to before leaving, not the one it
+     * started the card on.
+     */
+    @Test
+    void aMoveThreeThatLeavesTheBoardPartwayMarksTheLastSquareReached() {
+        Board board = AsciiBoard.board(". . . .");
+
+        List<Step> path = MovementPreview.path(board, new Position(1, 0), Direction.EAST,
+            List.of(card(CardType.MOVE_1), card(CardType.MOVE_3)));
+
+        assertEquals(List.of(new Step(new Position(2, 0), Direction.EAST),
+            new Step(new Position(3, 0), Direction.EAST, true)), path);
+    }
+
+    /**
+     * Only the last step is destroyed: every step before it is one the robot survives.
+     */
+    @Test
+    void theDestroyingCardComesAfterTheSurvivedOnes() {
+        Board board = AsciiBoard.board(". . .");
+
+        List<Step> path = MovementPreview.path(board, new Position(0, 0), Direction.EAST,
+            List.of(card(CardType.MOVE_1), card(CardType.ROTATE_RIGHT), card(CardType.MOVE_1)));
+
+        assertEquals(List.of(new Step(new Position(1, 0), Direction.EAST),
+            new Step(new Position(1, 0), Direction.SOUTH),
+            new Step(new Position(1, 0), Direction.SOUTH, true)), path);
     }
 
     /**
@@ -223,16 +254,33 @@ class MovementPreviewTest {
     }
 
     /**
-     * A board effect that would destroy the robot ends the preview exactly like its own card would: no waypoint for
-     * the destroying square, nothing after it runs.
+     * A board effect that would destroy the robot ends the preview exactly like its own card would: a destroyed step on
+     * the pit, nothing after it.
      */
     @Test
     void aBeltCarryingTheRobotIntoAPitEndsThePreview() {
         Board board = AsciiBoard.board(". > o");
 
-        List<Step> path = MovementPreview.path(board, new Position(0, 0), Direction.EAST, List.of(card(CardType.MOVE_1)));
+        List<Step> path = MovementPreview.path(board, new Position(0, 0), Direction.EAST,
+            List.of(card(CardType.MOVE_1), card(CardType.MOVE_1)));
 
-        assertTrue(path.isEmpty());
+        assertEquals(List.of(new Step(new Position(2, 0), Direction.EAST, true)), path);
+    }
+
+    /**
+     * A pusher that shoves the robot off the board marks the pusher's square, the last one the robot stood on.
+     */
+    @Test
+    void aPusherShovingTheRobotOffTheBoardEndsThePreview() {
+        Board board = AsciiBoard.board("""
+            . .
+            . .
+            """, builder -> builder.pusher(new Position(0, 1), Direction.EAST, 1));
+
+        List<Step> path = MovementPreview.path(board, new Position(0, 0), Direction.NORTH, List.of(card(CardType.MOVE_1)));
+
+        assertEquals(List.of(new Step(new Position(0, 1), Direction.NORTH, true)), path,
+            "moved onto the pusher's square, then pushed west off the board");
     }
 
     /**

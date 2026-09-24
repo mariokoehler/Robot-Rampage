@@ -579,8 +579,9 @@ public final class GameModel {
      * that is what will actually be submitted, not the server's last-known facing. Other robots are never simulated
      * (see {@link MovementPreview} for exactly why and what board effects it does simulate).
      *
-     * @return one step per card that would run to completion, in register order; empty while there is nothing placed
-     *         yet, this player is not programming, or their own robot is not on the board
+     * @return one step per card, in register order, the last one marked {@link MovementPreview.Step#destroyed()} if
+     *         that card would destroy the robot, a damage-locked card included; empty while there is nothing placed yet,
+     *         this player is not programming, or their own robot is not on the board
      */
     public List<MovementPreview.Step> ghostPath() {
         RobotState me = myRobot();

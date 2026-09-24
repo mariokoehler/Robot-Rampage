@@ -23,9 +23,12 @@ import java.util.Optional;
  * wrong pictures wins. After the robot's own card, this register's board effects run exactly as
  * {@code TurnResolver} orders them (express belts, then all belts, then the pusher on this square if any, then a
  * gear): a robot standing still on a belt still rides it, and a belt that curves into another belt turns the robot to
- * match, exactly like {@code BeltResolver}. The preview simply ends at the first thing, own card or board effect,
- * that would destroy the robot (a pit, or off the board) — nothing after it runs either, and no waypoint is added for
- * the destroying square itself, exactly as a destroyed robot plays no more of a real turn.
+ * match, exactly like {@code BeltResolver}. The first thing, own card or board effect, that would destroy the robot (a
+ * pit, or off the board) ends the preview with one last step marked {@link Step#destroyed() destroyed}, and nothing
+ * after it runs, exactly as a destroyed robot plays no more of a real turn. That step always lies on the board, so it
+ * can be drawn: the pit itself, or the last square the robot stood on before it left the board. Only destruction by
+ * the robot's own cards and the board effects simulated here is foreseen; crushers and lasers are not simulated, and
+ * neither is another robot pushing this one off the board.
  *
  * @author Mario Koehler
  */
@@ -34,19 +37,42 @@ public final class MovementPreview {
     /**
      * Where the robot would be after one register of the preview.
      *
-     * @param position the square
-     * @param facing   the direction the robot would face
+     * @param position  the square; for a destroyed robot, the pit it fell into or the last square it stood on before
+     *                  leaving the board
+     * @param facing    the direction the robot would face
+     * @param destroyed whether this register destroys the robot, which makes this the preview's last step
      */
-    public record Step(Position position, Direction facing) {
+    public record Step(Position position, Direction facing, boolean destroyed) {
+
+        /**
+         * Creates a step the robot survives.
+         *
+         * @param position the square
+         * @param facing   the direction the robot would face
+         */
+        public Step(Position position, Direction facing) {
+            this(position, facing, false);
+        }
     }
 
     /**
      * A robot's position and facing partway through a register's board effects.
      *
-     * @param position the square
-     * @param facing   the direction faced
+     * @param position  the square; for a destroyed robot, where it was lost, as in {@link Step#position()}
+     * @param facing    the direction faced
+     * @param destroyed whether the robot has been destroyed, after which no later phase moves it
      */
-    private record Pose(Position position, Direction facing) {
+    private record Pose(Position position, Direction facing, boolean destroyed) {
+    }
+
+    /**
+     * Where a walk ended.
+     *
+     * @param position  the square reached; for a destroyed robot, the pit it fell into or the last square it stood on
+     *                  before leaving the board
+     * @param destroyed whether the walk destroyed the robot
+     */
+    private record Walk(Position position, boolean destroyed) {
     }
 
     /**
@@ -63,8 +89,8 @@ public final class MovementPreview {
      * @param start       the robot's position before the first card
      * @param startFacing the robot's facing before the first card
      * @param cards       the cards to play, in the order they would run (register 1 first)
-     * @return one step per register that ran to completion; shorter than {@code cards} if a register would destroy
-     *         the robot, in which case nothing beyond that register is included
+     * @return one step per register played; if a register would destroy the robot, its step is marked
+     *         {@link Step#destroyed() destroyed} and is the last one, even if cards are left
      */
     public static List<Step> path(Board board, Position start, Direction startFacing, List<Card> cards) {
         List<Step> steps = new ArrayList<>();
@@ -73,7 +99,7 @@ public final class MovementPreview {
         for (int index = 0; index < cards.size(); index++) {
             Card card = cards.get(index);
             int register = index + 1;
-            Position moved = position;
+            Walk moved = new Walk(position, false);
             switch (card.type()) {
                 case MOVE_1 -> moved = walk(board, position, facing, 1);
                 case MOVE_2 -> moved = walk(board, position, facing, 2);
@@ -83,20 +109,17 @@ public final class MovementPreview {
                 case ROTATE_RIGHT -> facing = facing.rotateRight();
                 case U_TURN -> facing = facing.opposite();
             }
-            if (moved == null) {
-                break;
-            }
-            Pose pose = new Pose(moved, facing);
+            Pose pose = new Pose(moved.position(), facing, moved.destroyed());
             pose = crossBelt(board, pose, true);
-            pose = pose == null ? null : crossBelt(board, pose, false);
-            pose = pose == null ? null : push(board, pose, register);
-            pose = pose == null ? null : turnOnGear(board, pose);
-            if (pose == null) {
-                break;
-            }
+            pose = crossBelt(board, pose, false);
+            pose = push(board, pose, register);
+            pose = turnOnGear(board, pose);
             position = pose.position();
             facing = pose.facing();
-            steps.add(new Step(position, facing));
+            steps.add(new Step(position, facing, pose.destroyed()));
+            if (pose.destroyed()) {
+                break;
+            }
         }
         return steps;
     }
@@ -108,20 +131,24 @@ public final class MovementPreview {
      * @param position  the robot's position before this card
      * @param direction the direction to walk in
      * @param steps     the maximum number of steps
-     * @return the position after walking, or {@code null} if a step would destroy the robot (a pit or off the board)
+     * @return where the walk ended: the square reached, or, if a step would destroy the robot, the pit it fell into or
+     *         the last square it stood on before leaving the board
      */
-    private static Position walk(Board board, Position position, Direction direction, int steps) {
+    private static Walk walk(Board board, Position position, Direction direction, int steps) {
         for (int step = 0; step < steps; step++) {
             if (board.hasWall(position, direction)) {
-                return position;
+                return new Walk(position, false);
             }
             Position next = position.step(direction);
-            if (!board.inBounds(next) || board.featureAt(next) == SquareFeature.PIT) {
-                return null;
+            if (!board.inBounds(next)) {
+                return new Walk(position, true);
+            }
+            if (board.featureAt(next) == SquareFeature.PIT) {
+                return new Walk(next, true);
             }
             position = next;
         }
-        return position;
+        return new Walk(position, false);
     }
 
     /**
@@ -131,18 +158,23 @@ public final class MovementPreview {
      * @param board       the board
      * @param pose        the robot's pose before this pass
      * @param expressOnly {@code true} to move only if the belt is an express belt
-     * @return the pose after the pass, or {@code null} if it would destroy the robot
+     * @return the pose after the pass, marked destroyed if it would destroy the robot; a destroyed robot is returned
+     *         unchanged
      */
     private static Pose crossBelt(Board board, Pose pose, boolean expressOnly) {
+        if (pose.destroyed()) {
+            return pose;
+        }
         Optional<Belt> belt = board.beltAt(pose.position());
         if (belt.isEmpty() || (expressOnly && !belt.get().express())) {
             return pose;
         }
         Direction heading = belt.get().direction();
-        Position moved = walk(board, pose.position(), heading, 1);
-        if (moved == null) {
-            return null;
+        Walk walked = walk(board, pose.position(), heading, 1);
+        if (walked.destroyed()) {
+            return new Pose(walked.position(), pose.facing(), true);
         }
+        Position moved = walked.position();
         if (moved.equals(pose.position())) {
             return pose;
         }
@@ -156,7 +188,7 @@ public final class MovementPreview {
                 facing = facing.rotateLeft();
             }
         }
-        return new Pose(moved, facing);
+        return new Pose(moved, facing, false);
     }
 
     /**
@@ -166,13 +198,17 @@ public final class MovementPreview {
      * @param board    the board
      * @param pose     the robot's pose before this phase
      * @param register the register being played, 1 to 5
-     * @return the pose after the phase, or {@code null} if it would destroy the robot
+     * @return the pose after the phase, marked destroyed if it would destroy the robot; a destroyed robot is returned
+     *         unchanged
      */
     private static Pose push(Board board, Pose pose, int register) {
+        if (pose.destroyed()) {
+            return pose;
+        }
         for (Pusher pusher : board.pushers()) {
             if (pusher.isActiveIn(register) && pusher.position().equals(pose.position())) {
-                Position moved = walk(board, pose.position(), pusher.pushDirection(), 1);
-                return moved == null ? null : new Pose(moved, pose.facing());
+                Walk walked = walk(board, pose.position(), pusher.pushDirection(), 1);
+                return new Pose(walked.position(), pose.facing(), walked.destroyed());
             }
         }
         return pose;
@@ -183,14 +219,17 @@ public final class MovementPreview {
      *
      * @param board the board
      * @param pose  the robot's pose before this phase
-     * @return the turned pose
+     * @return the turned pose; a destroyed robot is returned unchanged
      */
     private static Pose turnOnGear(Board board, Pose pose) {
+        if (pose.destroyed()) {
+            return pose;
+        }
         SquareFeature feature = board.featureAt(pose.position());
         if (feature == SquareFeature.GEAR_CLOCKWISE) {
-            return new Pose(pose.position(), pose.facing().rotateRight());
+            return new Pose(pose.position(), pose.facing().rotateRight(), false);
         } else if (feature == SquareFeature.GEAR_COUNTERCLOCKWISE) {
-            return new Pose(pose.position(), pose.facing().rotateLeft());
+            return new Pose(pose.position(), pose.facing().rotateLeft(), false);
         }
         return pose;
     }
