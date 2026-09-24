@@ -833,7 +833,10 @@ Compose "Application" (`deploy/docker-compose.yml`, pinned to an exact version t
 `maven:3.9-eclipse-temurin-25` build stage (build context is the whole repo root — Maven
 needs to parse every module the root `pom.xml` declares to build its reactor graph, even
 with `-pl`/`-am` restricting what actually builds), `eclipse-temurin:25-jre` runtime stage
-(not `-alpine` — libGDX natives are glibc-built).
+(not `-alpine` — libGDX natives are glibc-built). The image build runs Maven with
+`-DskipTests` (owner decision, 2026-09-24): a version is only tagged once the full build and tests
+have passed locally, and `ServerIntegrationTest`'s real-socket tests took 20+ minutes on GitHub's
+runners. The client release (`release-client.yml`, `verify`) still runs the tests.
 
 **No data volume**, unlike StarWars' account-data bind mount: this server has no persistence
 yet (3.10 — autosave is designed but not implemented). Add a bind mount to

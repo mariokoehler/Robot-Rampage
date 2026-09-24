@@ -21,8 +21,10 @@ WORKDIR /build
 COPY . .
 # -am so core is built fresh in this reactor, matching how the client
 # release build works (README/CLAUDE.md) - no local .m2 install to rely on.
-# Tests run as part of this (no -DskipTests): a broken build should fail
-# here, not ship as an image.
+# -DskipTests: a version is only tagged after the full build and tests have
+# passed locally, so running them again here adds nothing - and the
+# real-socket server integration tests took over 20 minutes on GitHub's
+# runners. A local `docker build` therefore does not test either.
 #
 # APP_VERSION (build-arg, plain "0.0.1" not "v0.0.1") overrides jgitver's own
 # auto-detection via -Djgitver.use-version (design.md 3.9): jgitver reliably
@@ -36,9 +38,9 @@ COPY . .
 # jgitver's own - correct - auto-detection outside CI).
 ARG APP_VERSION=""
 RUN if [ -n "$APP_VERSION" ]; then \
-      mvn -pl server -am "-Djgitver.use-version=$APP_VERSION" package; \
+      mvn -pl server -am -DskipTests "-Djgitver.use-version=$APP_VERSION" package; \
     else \
-      mvn -pl server -am package; \
+      mvn -pl server -am -DskipTests package; \
     fi
 
 # Not eclipse-temurin's -alpine variant: libGDX's native libraries are built
