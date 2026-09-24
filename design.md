@@ -1086,8 +1086,8 @@ in one way only:
   the edge, on the last square the robot stood on before leaving (never off the board, which `BoardActor` does not
   clip). `GameScreen` draws a ghost there like any other step, plus a red warning sign (`icons/warning.png` tinted
   `Theme.DANGER`, 0.8 of a square, `BoardActor.setDoomMarkers`) drawn *above* the live robots — when the very first
-  card drives off, that square is the live robot's own, which would hide a ghost alone. *(unconfirmed: the marker's
-  look)* Only deaths from the robot's own cards and the simulated belts/pushers are foreseen; a crusher, lasers, or
+  card drives off, that square is the live robot's own, which would hide a ghost alone. The marker's look is a default
+  *(unconfirmed)*. Only deaths from the robot's own cards and the simulated belts/pushers are foreseen; a crusher, lasers, or
   another robot pushing it off are not. `ScreenSnapshot` writes `game-ghost-doom-first.png` (first card drives off,
   marker on the live robot) and `game-ghost-doom-locked.png` (the playtest case: the locked fifth card drives off).
 
