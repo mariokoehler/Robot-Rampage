@@ -3,16 +3,15 @@ package de.mkoehler.robotrampage.bot;
 import de.mkoehler.robotrampage.board.Board;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.board.WalkingDistances;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
 import de.mkoehler.robotrampage.rules.GameState;
 import de.mkoehler.robotrampage.rules.Robot;
 import de.mkoehler.robotrampage.rules.TurnResolver;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -32,8 +31,6 @@ import java.util.Set;
  */
 public final class BotBrain {
 
-    /** Walking distance used for a square from which the next flag cannot be reached. */
-    private static final int UNREACHABLE = 200;
     private static final double WIN = 1_000_000;
     private static final double LOST = -10_000;
     private static final double PER_FLAG = 1_000;
@@ -156,35 +153,14 @@ public final class BotBrain {
     }
 
     /**
-     * Works out, for every square, how many steps it takes to walk to a flag, around walls and pits.
+     * Works out, for every square, how many steps it takes to walk to the robot's next flag, around walls and pits.
      *
      * @param board        the board
      * @param flagsTouched how many flags the robot has touched; the next one is the target
-     * @return the steps by {@code [x][y]}, {@link #UNREACHABLE} where the flag cannot be reached, or {@code null} if every
-     *         flag has been touched
+     * @return the steps by {@code [x][y]}, or {@code null} if every flag has been touched
      */
-    static int[][] distances(Board board, int flagsTouched) {
-        if (flagsTouched >= board.flags().size()) {
-            return null;
-        }
-        int[][] steps = new int[board.width()][board.height()];
-        for (int[] column : steps) {
-            Arrays.fill(column, UNREACHABLE);
-        }
-        Position flag = board.flags().get(flagsTouched);
-        steps[flag.x()][flag.y()] = 0;
-        Deque<Position> queue = new ArrayDeque<>(List.of(flag));
-        while (!queue.isEmpty()) {
-            Position at = queue.removeFirst();
-            for (Direction direction : Direction.values()) {
-                Position next = at.step(direction);
-                if (board.inBounds(next) && !board.hasWall(at, direction) && !board.isPit(next)
-                    && steps[next.x()][next.y()] > steps[at.x()][at.y()] + 1) {
-                    steps[next.x()][next.y()] = steps[at.x()][at.y()] + 1;
-                    queue.addLast(next);
-                }
-            }
-        }
-        return steps;
+    private static int[][] distances(Board board, int flagsTouched) {
+        return flagsTouched >= board.flags().size() ? null
+            : WalkingDistances.to(board, board.flags().get(flagsTouched));
     }
 }

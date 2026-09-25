@@ -946,6 +946,38 @@ packaged, and players never see it. Run it with `start_board_editor.cmd` or
   and `BoardEditorLauncher` are the window. `EditorSnapshot` (`dev-tools/src/test`) draws the
   editor on a hidden window into PNGs to check its layout, and sends real pointer events through the
   stage to check that a click lands on the right square and side.
+- **Metrics (added 2026-09-25, step 1 of board generation, 3.14).** Below the checks, the editor rates every valid board.
+  *At once, on every change* (`devtools.analysis.BoardMetrics`): the walking distance from each seat to flag 1 (around
+  walls and pits, `board.WalkingDistances`, the same measure the bots use), the spread between the nearest and the
+  farthest seat (flagged above 6 steps *(unconfirmed)*), flag to flag, the whole route; hazards (pits, crushers, lasers
+  and how many squares their beams cover) and moving parts (belts, gears, pushers), each also as a share of the board. An
+  unreachable flag is flagged in red. *In the background* (`devtools.analysis.Playouts`): once the board has stayed
+  unchanged for a second, bots (2.14) play 20 games with a robot on every start square, seed 1 so a board always gives
+  the same numbers, and the panel fills in game by game: games finished within 60 turns and how long they took, flags
+  touched, robots destroyed per game by cause, and wins by seat. It flags boards whose games mostly run past 60 turns,
+  and one seat winning most games. About 1.3 s per game on proving-grounds, on one daemon worker thread; any edit
+  cancels the run and starts over, while typing the id, name or author does not. Wording and flags are in the
+  libGDX-free `MetricsText`; `MetricsPanel` is the widget.
+
+### 3.14 Board generation (planned)
+
+Decided 2026-09-25 after web research (owner request: no hand-drawn library of template pieces). Generation lives in
+the **board editor**, not in the lobby: a human looks over every generated board and fixes what needs fixing, helped by
+the metrics above. The approach is *search-based procedural content generation* in the *mixed-initiative* style of
+Sentient Sketchbook and the Evolutionary Dungeon Designer:
+- **Mutations** are small code functions that make a sensible local change (lay a belt path by a random walk, make a
+  belt express, put a gear where belts meet, add a pit cluster away from the starts, run a wall, mount a laser along a
+  corridor, aim a pusher at a crusher, move a flag, delete a feature), so the design knowledge sits in them, not in
+  drawn pieces.
+- **Two populations (FI2Pop):** boards that break a hard rule (unreachable flag, a start square that dies at once) evolve
+  towards validity, valid ones towards quality.
+- **Rating:** the instant metrics for every candidate; bot playouts only for the finalists (a game costs ~1 s).
+- **Steps:** (1) the metrics panel — done; (2) "Generate": a plain evolutionary search seeded from the board on the
+  canvas, one result, one undo step; (3) MAP-Elites: a grid of distinct good boards along axes such as hazard share,
+  route length and moving share, shown as thumbnails to pick from.
+- **Rejected:** wave function collapse as the main generator (only local consistency, needs example boards we do not
+  have, no notion of reachable flags or fairness); answer set programming (needs an external solver, and "fun" does not
+  reduce to constraints); on-the-fly generation in the lobby (no human check).
 
 ## 4. Rendering & presentation
 

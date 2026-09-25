@@ -58,6 +58,8 @@ public final class EditorSnapshot {
                 opened.create();
                 opened.selectTool(Tool.PUSHER);
                 write(opened, new File(folder, "editor-proving-grounds.png"));
+                waitForBotGames(opened, 5);
+                write(opened, new File(folder, "editor-metrics.png"));
                 opened.dispose();
 
                 BoardEditorApp fresh = new BoardEditorApp(null);
@@ -85,6 +87,29 @@ public final class EditorSnapshot {
                 Gdx.app.exit();
             }
         }, configuration);
+    }
+
+    /**
+     * Lets the metrics panel's bots play until some games are shown, the way frames passing would.
+     *
+     * @param app   the editor, with a valid board open
+     * @param games how many games to wait for
+     * @throws IllegalStateException if they do not arrive within a minute
+     */
+    private static void waitForBotGames(BoardEditorApp app, int games) {
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (app.metrics().gamesShown() < games) {
+            if (System.currentTimeMillis() > deadline) {
+                throw new IllegalStateException("The bots did not play " + games + " games within a minute");
+            }
+            app.metrics().update(0.1f);
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     /**

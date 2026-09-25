@@ -46,6 +46,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
 
     private static final float TILE = 72f;
     private static final float SIDE_WIDTH = 440f;
+    private static final float CHECKS_HEIGHT = 80f;
     private static final float FIELD_HEIGHT = 48f;
     private static final float PILL_HEIGHT = 40f;
     private static final String NEW_ID = "new-board";
@@ -84,6 +85,8 @@ public final class BoardEditorApp extends ApplicationAdapter {
     private TextButton saveButton;
     private Label status;
     private BoardArea boardArea;
+    private MetricsPanel metrics;
+    private BoardDefinition measuredLayout;
 
     /**
      * Creates the editor.
@@ -117,6 +120,15 @@ public final class BoardEditorApp extends ApplicationAdapter {
      */
     BoardEditor editor() {
         return editor;
+    }
+
+    /**
+     * Returns the metrics panel, for tools that wait for its bot games.
+     *
+     * @return the panel
+     */
+    MetricsPanel metrics() {
+        return metrics;
     }
 
     /**
@@ -156,6 +168,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
         if (editor.revision() != shownRevision) {
             refresh();
         }
+        metrics.update(Gdx.graphics.getDeltaTime());
         Gdx.gl.glClearColor(Theme.SURFACE.r, Theme.SURFACE.g, Theme.SURFACE.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         stage.act(Gdx.graphics.getDeltaTime());
@@ -178,6 +191,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
      */
     @Override
     public void dispose() {
+        metrics.dispose();
         stage.dispose();
         ui.dispose();
     }
@@ -221,11 +235,28 @@ public final class BoardEditorApp extends ApplicationAdapter {
         } else if (result.isValid() && idValid) {
             addCheck("No errors. The board can be saved; the warnings are legal but worth a look.", Theme.SUCCESS);
         }
+        BoardDefinition layout = result.isValid() ? layoutOf(editor.draft().toDefinition()) : null;
+        if (layout == null || !layout.equals(measuredLayout)) {
+            measuredLayout = layout;
+            metrics.boardChanged(layout == null ? null : editor.draft().toBoard());
+        }
         String file = "boards/" + editor.draft().id() + ".json";
         String state = editor.isDirty() ? "Unsaved changes, will save to " : openedId == null ? "Not saved yet, will save to "
             : "Saved as ";
         ui.setText(status, Theme.TextStyle.BODY, state + file);
         Gdx.graphics.setTitle("Board Editor - " + editor.draft().id() + (editor.isDirty() ? " *" : ""));
+    }
+
+    /**
+     * Strips a board's id, name and author, so typing them does not count as a change to what is measured.
+     *
+     * @param definition the board
+     * @return the same board without its metadata
+     */
+    private static BoardDefinition layoutOf(BoardDefinition definition) {
+        return new BoardDefinition(definition.formatVersion(), "", "", null, definition.generator(), definition.seed(),
+            definition.width(), definition.height(), definition.squares(), definition.edges(), definition.flags(),
+            definition.startSquares());
     }
 
     /**
@@ -237,6 +268,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
         tools = new Table();
         options = new Table();
         checks = new Table();
+        metrics = new MetricsPanel(ui, SIDE_WIDTH - 2 * Theme.SPACE_6 - Theme.SPACE_2);
         Table root = new Table();
         root.setFillParent(true);
         root.pad(Theme.SPACE_8).top();
@@ -309,7 +341,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
     }
 
     /**
-     * Builds the metadata fields and the validation list.
+     * Builds the metadata fields, the validation list and the metrics.
      *
      * @return the panel
      */
@@ -347,7 +379,13 @@ public final class BoardEditorApp extends ApplicationAdapter {
         ScrollPane scroll = new ScrollPane(checks);
         scroll.setFadeScrollBars(false);
         scroll.setScrollingDisabled(true, false);
-        panel.add(scroll).grow().left().top();
+        panel.add(scroll).growX().height(CHECKS_HEIGHT).left().top().row();
+        panel.add(ui.label("Metrics", Theme.TextStyle.HEADING, Theme.INK)).left().padTop(Theme.SPACE_4)
+            .padBottom(Theme.SPACE_3).row();
+        ScrollPane metricsScroll = new ScrollPane(metrics.table());
+        metricsScroll.setFadeScrollBars(false);
+        metricsScroll.setScrollingDisabled(true, false);
+        panel.add(metricsScroll).grow().left().top();
         return panel;
     }
 

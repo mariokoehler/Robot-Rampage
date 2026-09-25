@@ -25,11 +25,11 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 **M0, M1 (rules engine), M2 (board format), M3 (server session + protocol) and M5 (pushers/crushers in play) done, M4
 slices 1-11 (client shell, Startup, Connect, Lobby, static board renderer, programming screen, turn replay, Game Over
 screen, respawn/power-down/eliminated dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture
-atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 460 unit tests in `core`, 4
+atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 461 unit tests in `core`, 4
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 32 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
+picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 40 in `dev-tools` (board editor and its metrics). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -376,6 +376,14 @@ by `GameSessionTest`'s bot tests: every place that clears ready flags must keep 
 to an empty lobby (`forgetBotsIfNoHumanIsLeft`, and `disconnect` in `GAME_OVER`). `ServerIntegrationTest.
 aSoloPlayerPlaysAgainstABotOverRealSockets` is what proves `ServerController` dispatches the new messages. Still open for
 a second slice: difficulty levels, and nothing in `GameScreen` marks a bot yet (only the lobby's "Bot" chip).
+
+**Board metrics in the editor (2026-09-25): done** — step 1 of board generation (design.md 3.13 metrics, 3.14
+plan). `board.WalkingDistances` (core) is now the one walking-distance search, used by `BotBrain` and by
+`devtools.analysis.BoardMetrics`; `devtools.analysis.Playouts` plays whole bot games (all seats) and `MetricsPanel` runs it
+on a daemon worker that any edit cancels (a run number, checked every turn). **dev-tools tests read real boards from
+`../assets/boards`, not from the classpath** — the board files are only on core's test classpath
+(`BoardMetricsTest.provingGrounds()`). `EditorSnapshot` now waits for five bot games and writes `editor-metrics.png`.
+Next per 3.14: "Generate" (plain evolutionary search), then MAP-Elites.
 
 **Next: whatever the user picks** — the rest of M6 (board composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
 (2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.

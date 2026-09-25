@@ -83,19 +83,6 @@ class BotBrainTest {
     }
 
     /**
-     * The walking distance goes around walls and pits, not through them.
-     */
-    @Test
-    void distancesGoAroundWallsAndPits() {
-        Board board = AsciiBoard.board(". . | 1\n. o .\n. . .");
-
-        int[][] steps = BotBrain.distances(board, 0);
-
-        assertEquals(0, steps[2][2]);
-        assertEquals(6, steps[0][2], "around the wall, down the left, along the bottom and up the right");
-    }
-
-    /**
      * What the other players have programmed makes no difference to the bot's choice: it never looks. The situation is
      * built so that looking would pay off: the other robot, acting after the bot in register 1, would shove it east into
      * the pit, and only backing up in register 1 escapes that; a bot that cannot see it prefers heading for the flag.
