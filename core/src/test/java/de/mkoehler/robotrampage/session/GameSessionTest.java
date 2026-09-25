@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.session;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.LoadedBoard;
+import de.mkoehler.robotrampage.bot.BotNames;
 import de.mkoehler.robotrampage.net.NetworkConstants;
 import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.GameOver;
@@ -1265,5 +1266,166 @@ class GameSessionTest {
             assertEquals(84, Programs.cardsInPlay(session.gameState()), "after turn " + turn);
             advance(PAUSE);
         }
+    }
+    // ---------------------------------------------------------------------------------------------- bots
+
+    /**
+     * A board whose only flag is one square north of the second start square, so a bot there wins in its first turn.
+     */
+    private static final String FLAG_AHEAD_JSON = """
+        {"formatVersion": 1, "id": "ahead", "name": "Flag Ahead", "width": 5, "height": 30,
+         "flags": [{"x": 1, "y": 1}],
+         "startSquares": [{"x": 0, "y": 0, "facing": "NORTH"}, {"x": 1, "y": 0, "facing": "NORTH"},
+                          {"x": 2, "y": 0, "facing": "NORTH"}, {"x": 3, "y": 0, "facing": "NORTH"}]}
+        """;
+
+    /**
+     * Returns the players of the latest lobby state a seat received.
+     *
+     * @param seat the seat
+     * @return the players
+     */
+    private List<PlayerInfo> lobbyPlayers(int seat) {
+        return outbox.lastReceivedBy(seat, LobbyState.class).players();
+    }
+
+    /**
+     * The host adds bots on the lowest free seats, ready and named from the pool, and removes them again; the table can
+     * fill up, but never beyond its seats.
+     */
+    @Test
+    void theHostAddsAndRemovesBots() {
+        join("Ann");
+        session.addBot(0);
+
+        PlayerInfo bot = lobbyPlayers(0).get(1);
+        assertEquals(1, bot.seat());
+        assertTrue(bot.bot() && bot.ready() && !bot.host());
+        assertTrue(BotNames.POOL.contains(bot.name()), bot.name());
+
+        session.addBot(0);
+        session.addBot(0);
+        assertEquals(4, lobbyPlayers(0).size());
+        session.addBot(0);
+        assertEquals("Every seat is taken.", outbox.lastReceivedBy(0, RequestRejected.class).reason());
+
+        session.removeBot(0, 2);
+        assertEquals(List.of(0, 1, 3), lobbyPlayers(0).stream().map(PlayerInfo::seat).toList());
+    }
+
+    /**
+     * Only the host may add or remove bots, only in the lobby, and removing never works on a human.
+     */
+    @Test
+    void botRequestsThatCannotWorkAreRefused() {
+        join("Ann");
+        join("Bo");
+        session.addBot(1);
+        assertEquals(2, lobbyPlayers(0).size(), "a guest cannot add bots");
+
+        session.removeBot(0, 1);
+        assertEquals(2, lobbyPlayers(0).size(), "a human is never removed as a bot");
+        assertEquals("There is no bot on seat 2.", outbox.lastReceivedBy(0, RequestRejected.class).reason());
+
+        session.addBot(0);
+        session.setReady(1, true);
+        session.startGame(0);
+        session.addBot(0);
+        session.removeBot(0, 2);
+        assertEquals(3, session.gameState().robots().size(), "the table is fixed once the game runs");
+    }
+
+    /**
+     * One person can play alone against bots: the bots lock their programs in at the deal, and the human is not squeezed to
+     * the last player's time just because the bots were quick.
+     */
+    @Test
+    void aSoloPlayerPlaysAgainstBotsWithTheFullTime() {
+        join("Ann");
+        session.addBot(0);
+        session.addBot(0);
+        session.startGame(0);
+
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        assertEquals(List.of(1, 2), outbox.receivedBy(0, PlayerConfirmed.class).stream().map(PlayerConfirmed::robotId)
+            .toList());
+        assertEquals(0, outbox.broadcasts(TimerUpdate.class), "no squeeze on the only human");
+        advance(LAST_PLAYER);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+
+        submitFor(0);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+        advance(PAUSE);
+        assertEquals(2, session.turn());
+    }
+
+    /**
+     * Bots stay ready when the host picks another board and when everybody returns to the lobby, since they cannot get
+     * ready again by themselves; and a bot really plays: here it drives onto the flag right in front of it and wins.
+     */
+    @Test
+    void botsStayReadyAndReallyPlay() {
+        SessionConfig config = new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, 2);
+        session = new GameSession(List.of(BoardLoader.parse(FLAG_AHEAD_JSON), BoardLoader.parse(BOARD_JSON)), config,
+            42L, now::get, outbox);
+        join("Ann");
+        session.addBot(0);
+        session.selectBoard(0, "t");
+        session.selectBoard(0, "ahead");
+        assertTrue(lobbyPlayers(0).get(1).ready(), "a board change keeps the bot ready");
+
+        session.startGame(0);
+        submitFor(0);
+
+        assertEquals(GameSession.Phase.GAME_OVER, session.phase());
+        assertEquals(1, outbox.lastReceivedBy(0, GameOver.class).winnerRobotId());
+        session.returnToLobby(0);
+        assertTrue(lobbyPlayers(0).get(1).ready(), "the bot is ready for the next game");
+        session.startGame(0);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+    }
+
+    /**
+     * A bot is never the host: when the last human leaves the lobby, the bots go with them, and the next person to join
+     * finds an empty table and hosts it.
+     */
+    @Test
+    void botsNeverHostAndLeaveWithTheLastHuman() {
+        join("Ann");
+        session.addBot(0);
+        session.disconnect(0);
+
+        int seat = join("Bo");
+
+        assertEquals(0, seat);
+        assertEquals(1, lobbyPlayers(0).size());
+        assertTrue(lobbyPlayers(0).get(0).host());
+    }
+
+    /**
+     * Once no human is left in a running game, the bots do not play on alone: the session goes back to an empty lobby, so
+     * the server is free for the next game. The same happens when the last human closes the results.
+     */
+    @Test
+    void botsDoNotPlayOnWithoutHumans() {
+        join("Ann");
+        session.addBot(0);
+        session.startGame(0);
+        session.disconnect(0);
+
+        advance(GRACE);
+
+        assertEquals(GameSession.Phase.LOBBY, session.phase());
+        assertTrue(session.join("Bo", null).accepted());
+
+        session = newSession(42L, FLAG_AHEAD_JSON);
+        join("Cy");
+        session.addBot(0);
+        session.startGame(0);
+        submitFor(0);
+        assertEquals(GameSession.Phase.GAME_OVER, session.phase());
+        session.disconnect(0);
+        assertEquals(GameSession.Phase.LOBBY, session.phase(), "nobody is left to take the results back to the lobby");
+        assertTrue(session.join("Di", null).accepted());
     }
 }

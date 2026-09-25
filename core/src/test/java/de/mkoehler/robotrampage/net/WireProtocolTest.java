@@ -12,6 +12,7 @@ import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.board.StartSquare;
+import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
@@ -27,6 +28,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
+import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
@@ -124,7 +126,8 @@ class WireProtocolTest {
      */
     @Test
     void everyProtocolMessageSurvivesTheWire() {
-        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true), new PlayerInfo(3, "Bo", false, false, false));
+        List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true), new PlayerInfo(3, "Bo", false, false, false),
+            new PlayerInfo(5, "WALL-E", true, true, false, true));
         RobotState robot = new RobotState(3, new Position(4, 5), Direction.WEST, 2, 3, 1, new Position(1, 1),
             de.mkoehler.robotrampage.rules.RobotStatus.ACTIVE, false, true);
         RobotState gone = new RobotState(0, null, Direction.NORTH, 9, 0, 0, new Position(0, 0),
@@ -156,7 +159,9 @@ class WireProtocolTest {
             new RespawnFacingChosen(3, Direction.WEST),
             new ReturnToLobby(),
             new SetProgrammingSeconds(120),
-            new SelectBoard("loading-dock"));
+            new SelectBoard("loading-dock"),
+            new AddBot(),
+            new RemoveBot(5));
 
         for (Object message : messages) {
             assertEquals(message, roundTrip(message), message.getClass().getSimpleName());

@@ -415,6 +415,41 @@ The programming phase must never let one absent or slow player block everyone
   enabled for the host, disabled ("Waiting for host…") for everybody else (4.1).
 - A game with fewer than two connected/remaining players ends per 2.10.
 
+### 2.14 Bots (computer-controlled robots)
+
+Added 2026-09-25 (owner request): computer opponents that take a seat like a player, so one person can play alone or
+friends can fill out the table.
+
+- **Lobby only.** The host adds a bot (`AddBot`) to the lowest free seat and removes one (`RemoveBot(seat)`); refused for
+  anybody else, outside the lobby, on a full table, and `RemoveBot` for any seat that is not a bot, so a human can never
+  be kicked this way. A bot counts toward the minimum player count (a host plus one bot can start) and is always ready.
+  Bots cannot be added to a running game, nor take over an abandoned seat *(unconfirmed)*.
+- **Names** come from a pool of 20 famous film/TV/game robots (`bot.BotNames`: C-3PO, R2-D2, WALL-E, EVE, Johnny 5,
+  Robby, Bender, Marvin, HAL 9000, T-800, RoboCop, Baymax, Data, K-9, Optimus, Bishop, Gort, Chappie, Dalek, GLaDOS),
+  picked at random among those nobody at the table uses (case-insensitive, like player names); `Bot N` once the pool is
+  used up. The lobby and the game show them like players, marked with a "Bot" chip in the lobby.
+- **Playing:** the server decides for a bot the moment a turn is dealt and locks its program in at once
+  (`GameSession.playBot`), so bots never hold a turn up. The **squeeze** (2.13) only counts humans: bots confirming at the
+  deal must not cut a solo player down to the last player's 30 seconds.
+- **The brain** (`bot.BotBrain`, rules/board imports only, ArchUnit-guarded): it tries every program its hand allows that
+  differs in its sequence of card types (a few hundred, usually), plays each through the real `TurnResolver` on a copy of
+  the game, and keeps the best end. Score: winning beats everything; each flag touched +1000; losing a life −10000;
+  otherwise −20 per step of **walking distance** to the next flag (a breadth-first search around walls and pits, not a
+  straight line) and −8 per damage point; a tiny random amount breaks ties. A robot that re-entered this turn also tries
+  all four facings. It **powers down** when its best program leaves it alive with 6 or more damage *(unconfirmed)*.
+  **Fair play:** every other robot's registers are emptied in the copy, so the bot never sees a hidden program (other
+  robots stand still in its imagination, the same limitation as the ghost path, 4.3); since only its own robot acts,
+  priorities cannot change the outcome and programs are compared by card types alone. There is one difficulty
+  *(unconfirmed; easy/hard would pick among the top few vs. the best)*. Measured: at most ~50 ms per bot per turn on
+  proving-grounds (about four times that for a bot choosing a re-entry facing), on the session's own thread; four bots
+  alone finish their games (`BotBrainTest`). A bot's randomness comes from the game seed, so a bug report's seed
+  reproduces its choices. Should the brain ever throw, the bot's cards are filled in at random instead.
+- **No humans left:** bots never play or wait on their own. When the last human leaves the lobby, or is removed from a
+  running game after the grace period, or disconnects from the results screen, the session returns to an empty lobby
+  (bots removed), so the server is free for the next group. Bots stay seated and ready for the next game after
+  `ReturnToLobby`, and stay ready when the host picks another board (they cannot get ready again by themselves).
+- A bot is never the host; it has a session token like everyone, which is never handed out.
+
 ## 3. Architecture
 
 ### 3.1 High-level shape
@@ -594,9 +629,10 @@ derived from the game seed and a fill counter — like the deck, never a live
 | Direction | Message | Purpose |
 |---|---|---|
 | C→S | `HandshakeRequest` / S→C `HandshakeResponse` | Version check, display name (at most 20 characters, `NetworkConstants.MAX_DISPLAY_NAME_LENGTH`), optional session token; the response carries the seat, the token, the **server's version** (on a refusal too, so the client can show both versions) and, once accepted, the reconnect grace period in seconds (`GameSession.reconnectGraceSeconds()`), so a dropped client knows how long it may keep trying. This pair is a compatibility surface: a client of another version may not be able to read the response that says the versions differ, so the client treats an unreadable handshake like an unreachable server. |
-| S→all | `LobbyState` | Players (seat, name, ready, connected, host), board name, and the facts the lobby shows: seats, minimum players (so the client can tell whether the host may start), board size, flag count, lives, programming seconds; the chosen board's id and JSON (for the lobby's preview) and every board the host can choose (`BoardChoice`: id, name, seats). Sent again to everybody at every change, and once more when a game ends and the session returns to the lobby, so the lobby screen must be buildable from one `LobbyState` alone. |
+| S→all | `LobbyState` | Players (seat, name, ready, connected, host, bot), board name, and the facts the lobby shows: seats, minimum players (so the client can tell whether the host may start), board size, flag count, lives, programming seconds; the chosen board's id and JSON (for the lobby's preview) and every board the host can choose (`BoardChoice`: id, name, seats). Sent again to everybody at every change, and once more when a game ends and the session returns to the lobby, so the lobby screen must be buildable from one `LobbyState` alone. |
 | C→S | `SetReady`, `StartGameRequest` | Lobby actions (start: host only). |
 | C→S | `SelectBoard` | The host chooses the board by id (3.6). Refused for anybody else, outside the lobby, for an id the server does not offer, or for a board with fewer start squares than the highest seat taken. A change clears every ready flag. **Security:** the id is only looked up among the boards loaded at startup, never turned into a file or resource path. |
+| C→S | `AddBot`, `RemoveBot` | The host seats a bot on the lowest free seat / takes the bot on a seat away (2.14). Refused for anybody else, outside the lobby, on a full table, and `RemoveBot` for a seat without a bot. |
 | S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
 | S→all | `TurnStarted` | Turn number, the respawn events, who must program, the time limit. |
 | S→each | `HandDealt` | That player's cards only, their locked-register cards, whether they may pick a respawn facing, whether they are powered down. |

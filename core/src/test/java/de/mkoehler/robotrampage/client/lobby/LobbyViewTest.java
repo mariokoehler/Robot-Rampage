@@ -38,9 +38,9 @@ class LobbyViewTest {
         List<LobbyView.Row> rows = view.rows();
 
         assertEquals(8, rows.size());
-        assertEquals(new LobbyView.Row(0, true, "Sophie", "Bolt", true, false, true), rows.get(0));
-        assertEquals(new LobbyView.Row(1, false, "", "Twin", false, false, false), rows.get(1));
-        assertEquals(new LobbyView.Row(2, true, "Kenji", "Cog", false, true, false), rows.get(2));
+        assertEquals(new LobbyView.Row(0, true, "Sophie", "Bolt", true, false, true, false, false, false), rows.get(0));
+        assertEquals(new LobbyView.Row(1, false, "", "Twin", false, false, false, false, false, false), rows.get(1));
+        assertEquals(new LobbyView.Row(2, true, "Kenji", "Cog", false, true, false, false, false, false), rows.get(2));
         assertFalse(rows.get(7).occupied());
         assertEquals("Stack", rows.get(7).robotName());
     }
@@ -103,7 +103,7 @@ class LobbyViewTest {
         LobbyView view = new LobbyView(lobby(player(0, "Host", true, true)), 0);
 
         assertFalse(view.canStart());
-        assertEquals("At least 2 players are needed to start.", view.hint());
+        assertEquals("At least 2 players are needed to start. Add a bot to play alone.", view.hint());
     }
 
     /**
@@ -148,5 +148,25 @@ class LobbyViewTest {
 
         LobbyView seatThreeTaken = new LobbyView(lobby(player(0, "Host", false, true), player(2, "C", false, false)), 0);
         assertFalse(seatThreeTaken.boardOptions().get(1).fits(), "seat 3 is taken, a two-seat board cannot hold it");
+    }
+    /**
+     * The host is offered a bot on the first free seat only, which is the seat the server fills, and may remove bots but
+     * never humans; everybody else gets neither. A bot counts as a ready player, so the host can start with bots alone.
+     */
+    @Test
+    void theHostManagesBots() {
+        PlayerInfo bot = new PlayerInfo(1, "WALL-E", true, true, false, true);
+        LobbyState state = lobby(player(0, "Sophie", false, true), bot, player(3, "Kenji", true, false));
+
+        List<LobbyView.Row> host = new LobbyView(state, 0).rows();
+        List<LobbyView.Row> guest = new LobbyView(state, 3).rows();
+
+        assertTrue(host.get(1).bot() && host.get(1).removable());
+        assertFalse(host.get(3).removable(), "a human is never removable");
+        assertTrue(host.get(2).addBot());
+        assertFalse(host.get(4).addBot(), "only the first free seat offers a bot");
+        assertTrue(guest.stream().noneMatch(row -> row.addBot() || row.removable()));
+        assertEquals(1, new LobbyView(state, 0).botCount());
+        assertTrue(new LobbyView(lobby(player(0, "Sophie", false, true), bot), 0).canStart());
     }
 }

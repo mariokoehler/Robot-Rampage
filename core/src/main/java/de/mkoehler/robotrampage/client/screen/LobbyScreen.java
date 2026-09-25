@@ -26,9 +26,11 @@ import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.NetworkConstants;
+import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
+import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
@@ -55,6 +57,8 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
 
     private static final float ROW_HEIGHT = 72f;
     private static final float ROW_GAP = 10f;
+    private static final float BOT_BUTTON_WIDTH = 150f;
+    private static final float BOT_BUTTON_HEIGHT = 44f;
     private static final float PREVIEW_SIZE = 408f;
     private static final float FACT_LABEL_WIDTH = 170f;
     private static final int BOARDS_PER_ROW = 3;
@@ -301,7 +305,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
     }
 
     /**
-     * Builds the line of a seat with a player.
+     * Builds the line of a seat with a player or a bot; the host can remove a bot from its line.
      *
      * @param row the seat
      * @return the line
@@ -326,13 +330,26 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         if (row.you()) {
             line.add(ui.chip("You", UiKit.ChipKind.PRIMARY)).height(UiKit.CHIP_CELL_HEIGHT).padLeft(Theme.SPACE_2);
         }
+        if (row.bot()) {
+            line.add(ui.chip("Bot", UiKit.ChipKind.ACCENT)).height(UiKit.CHIP_CELL_HEIGHT).padLeft(Theme.SPACE_2);
+        }
         line.add(row.ready() ? ui.chip("Ready", UiKit.ChipKind.SUCCESS) : ui.chip("Not ready", UiKit.ChipKind.OUTLINE))
             .height(UiKit.CHIP_CELL_HEIGHT).padLeft(Theme.SPACE_2);
+        if (row.removable()) {
+            TextButton remove = ui.button("Remove", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+            remove.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    server.link().send(new RemoveBot(row.seat()));
+                }
+            });
+            line.add(remove).size(BOT_BUTTON_WIDTH, BOT_BUTTON_HEIGHT + UiKit.SHAPE_RESERVE).padLeft(Theme.SPACE_4);
+        }
         return line;
     }
 
     /**
-     * Builds the line of a free seat.
+     * Builds the line of a free seat, with the host's "Add bot" button on the seat a new bot would take.
      *
      * @param row the seat
      * @return the line
@@ -345,6 +362,16 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         line.add(ui.label(String.valueOf(row.seat() + 1), Theme.TextStyle.HEADING, Theme.INK_MUTED)).width(32f);
         line.add(ui.label("Waiting for a player…", Theme.TextStyle.BODY_LARGE, Theme.INK_MUTED)).expandX().left()
             .padLeft(72f);
+        if (row.addBot()) {
+            TextButton add = ui.button("Add bot", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+            add.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    server.link().send(new AddBot());
+                }
+            });
+            line.add(add).size(BOT_BUTTON_WIDTH, BOT_BUTTON_HEIGHT + UiKit.SHAPE_RESERVE);
+        }
         return line;
     }
 

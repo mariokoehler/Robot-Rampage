@@ -3,9 +3,11 @@ package de.mkoehler.robotrampage.server;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkServer;
+import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
+import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
@@ -110,6 +112,10 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             session.chooseRespawnFacing(seat, chosen.facing());
         } else if (message instanceof ReturnToLobby) {
             session.returnToLobby(seat);
+        } else if (message instanceof AddBot) {
+            session.addBot(seat);
+        } else if (message instanceof RemoveBot remove) {
+            session.removeBot(seat, remove.seat());
         }
     }
 

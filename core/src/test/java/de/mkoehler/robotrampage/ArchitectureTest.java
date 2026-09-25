@@ -49,6 +49,18 @@ class ArchitectureTest {
     }
 
     /**
+     * {@code bot} plays by the rules and nothing else: no libGDX, no network, no client, and no session, which is where the
+     * other players' hidden programs live.
+     */
+    @Test
+    void botsOnlyKnowTheRules() {
+        noClasses().that().resideInAPackage("de.mkoehler.robotrampage.bot..")
+            .should().dependOnClassesThat().resideInAnyPackage("com.badlogic..", "de.mkoehler.robotrampage.net..",
+                "de.mkoehler.robotrampage.client..", "de.mkoehler.robotrampage.session..")
+            .check(productionClasses);
+    }
+
+    /**
      * {@code board} sits below {@code rules} in the layering and must not depend on it.
      */
     @Test

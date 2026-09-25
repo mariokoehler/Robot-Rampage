@@ -18,6 +18,12 @@ final class SessionPlayer {
     final int joinOrder;
 
     /**
+     * Whether the seat is played by the computer (design.md 2.14). A bot never has a connection of its own, yet counts as
+     * connected and always as ready, so nothing that waits for, times out or forgets absent humans ever touches it.
+     */
+    final boolean bot;
+
+    /**
      * Whether the player is currently connected.
      */
     boolean connected = true;
@@ -66,9 +72,24 @@ final class SessionPlayer {
      * @param joinOrder when they joined, relative to the others; the earliest joiner is the host
      */
     SessionPlayer(int seat, String name, String token, int joinOrder) {
+        this(seat, name, token, joinOrder, false);
+    }
+
+    /**
+     * Creates a newly seated human player or bot. A bot starts ready.
+     *
+     * @param seat      the seat, which is also the robot id
+     * @param name      the display name
+     * @param token     the session token; a bot's is never handed out
+     * @param joinOrder when they joined, relative to the others
+     * @param bot       whether the computer plays this seat
+     */
+    SessionPlayer(int seat, String name, String token, int joinOrder, boolean bot) {
         this.seat = seat;
         this.name = name;
         this.token = token;
         this.joinOrder = joinOrder;
+        this.bot = bot;
+        this.ready = bot;
     }
 }

@@ -25,9 +25,13 @@ public final class LobbyView {
      * @param host      whether the player is the host
      * @param you       whether the player is the one looking at the screen
      * @param ready     whether the player is ready to start
+     * @param bot       whether the seat is played by the computer
+     * @param addBot    whether this free seat offers the host to add a bot; only the first free seat does, since that is
+     *                  the seat the server puts a new bot on
+     * @param removable whether the host may take the bot on this seat away
      */
     public record Row(int seat, boolean occupied, String name, String robotName, boolean host, boolean you,
-                      boolean ready) {
+                      boolean ready, boolean bot, boolean addBot, boolean removable) {
     }
 
     /**
@@ -66,12 +70,17 @@ public final class LobbyView {
      */
     public List<Row> rows() {
         List<Row> rows = new ArrayList<>();
+        boolean offered = false;
         for (int seat = 0; seat < state.maxPlayers(); seat++) {
             PlayerInfo player = playerAt(seat);
             String robot = RobotLook.name(seat);
-            rows.add(player == null
-                ? new Row(seat, false, "", robot, false, false, false)
-                : new Row(seat, true, player.name(), robot, player.host(), seat == mySeat, player.ready()));
+            if (player == null) {
+                rows.add(new Row(seat, false, "", robot, false, false, false, false, iAmHost() && !offered, false));
+                offered = true;
+            } else {
+                rows.add(new Row(seat, true, player.name(), robot, player.host(), seat == mySeat, player.ready(),
+                    player.bot(), false, iAmHost() && player.bot()));
+            }
         }
         return rows;
     }
@@ -124,6 +133,15 @@ public final class LobbyView {
     }
 
     /**
+     * Returns how many seats computer-controlled robots take.
+     *
+     * @return the number of bots
+     */
+    public int botCount() {
+        return (int) state.players().stream().filter(PlayerInfo::bot).count();
+    }
+
+    /**
      * Returns the line that says what happens next, or what is still missing.
      *
      * @return a sentence for the panel next to the board
@@ -133,7 +151,7 @@ public final class LobbyView {
             return "Only the host can start the game. Waiting for the host.";
         }
         if (state.players().size() < state.minPlayers()) {
-            return "At least " + state.minPlayers() + " players are needed to start.";
+            return "At least " + state.minPlayers() + " players are needed to start. Add a bot to play alone.";
         }
         if (!othersAreReady()) {
             return "Waiting for everyone to be ready.";

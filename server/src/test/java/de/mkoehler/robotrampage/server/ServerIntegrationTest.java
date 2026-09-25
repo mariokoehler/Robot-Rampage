@@ -13,6 +13,7 @@ import de.mkoehler.robotrampage.client.replay.TurnReplay;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.NetworkServer;
+import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.HandDealt;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
@@ -215,6 +216,30 @@ class ServerIntegrationTest {
         bo.send(new SetReady(true));
         ann.send(new StartGameRequest());
         assertEquals("loading-dock", BoardLoader.parse(bo.take(GameStarted.class).boardJson()).definition().id());
+    }
+
+    /**
+     * One player alone adds a bot over the network, starts, and plays a turn against it: the bot is seated and ready, locks
+     * its program in at the deal without anybody's help, and the turn resolves as soon as the human has programmed.
+     *
+     * @throws Exception on any failure
+     */
+    @Test
+    void aSoloPlayerPlaysAgainstABotOverRealSockets() throws Exception {
+        TestClient ann = connect("Ann", null);
+        ann.take(HandshakeResponse.class);
+        ann.take(LobbyState.class);
+
+        ann.send(new AddBot());
+        LobbyState withBot = ann.take(LobbyState.class);
+        assertEquals(2, withBot.players().size());
+        assertTrue(withBot.players().get(1).bot() && withBot.players().get(1).ready());
+
+        ann.send(new StartGameRequest());
+        ann.take(GameStarted.class);
+        assertEquals(1, ann.take(PlayerConfirmed.class).robotId(), "the bot locks its program in at once");
+        ann.send(programFrom(ann.take(HandDealt.class)));
+        assertEquals(1, ann.take(TurnResolved.class).turn());
     }
 
     /**

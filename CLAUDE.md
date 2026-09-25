@@ -25,11 +25,11 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 **M0, M1 (rules engine), M2 (board format), M3 (server session + protocol) and M5 (pushers/crushers in play) done, M4
 slices 1-11 (client shell, Startup, Connect, Lobby, static board renderer, programming screen, turn replay, Game Over
 screen, respawn/power-down/eliminated dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture
-atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 440 unit tests in `core`, 4
+atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 456 unit tests in `core`, 4
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 12 integration tests in `server` (real sockets, threads), plus 32 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
+picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 32 in `dev-tools` (board editor). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -365,6 +365,17 @@ overwrite a real one. **Verified:** unit tests, full build, the server jar start
 driver's clicks, and `ServerIntegrationTest.theHostChoosesTheBoardOverRealSockets` (real sockets: host's choice reaches
 everyone, a guest's is refused, the game starts on the chosen board; that test class now serves the real
 `BoardCatalog`); and a real game on `loading-dock`, playtested by the owner (2026-09-23).
+
+**Bots (2026-09-25): first version done** — design.md 2.14. Server-side seats (`SessionPlayer.bot`: always
+"connected" and ready, so nothing that times out or forgets absent humans touches them), `AddBot`/`RemoveBot` from the
+host's lobby, and `bot.BotBrain`, which simulates every distinct program with the real `TurnResolver` on a copy where
+**every other robot's registers are emptied** (fair play; `BotBrainTest.neverLooksAtOtherPrograms` and the
+`ArchitectureTest` rule keeping `bot` away from `session`/`net` guard it). Traps that only show up in play, all covered
+by `GameSessionTest`'s bot tests: every place that clears ready flags must keep bots ready (`selectBoard`,
+`resetToLobby`); the squeeze counts humans only; `hostSeat()` skips bots; once no human is left the session goes back
+to an empty lobby (`forgetBotsIfNoHumanIsLeft`, and `disconnect` in `GAME_OVER`). `ServerIntegrationTest.
+aSoloPlayerPlaysAgainstABotOverRealSockets` is what proves `ServerController` dispatches the new messages. Still open for
+a second slice: difficulty levels, and nothing in `GameScreen` marks a bot yet (only the lobby's "Bot" chip).
 
 **Next: whatever the user picks** — the rest of M6 (board composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
 (2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.

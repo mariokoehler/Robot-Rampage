@@ -28,6 +28,8 @@ import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.ServerLink;
+import de.mkoehler.robotrampage.net.messages.AddBot;
+import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.GameOver;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
@@ -291,7 +293,7 @@ public final class GameScreenDriver {
         List<BoardChoice> boards = List.of(new BoardChoice("proving-grounds", "Proving Grounds", 8),
             new BoardChoice("loading-dock", "Loading Dock", 8), new BoardChoice("tiny", "Tiny", 2));
         List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", false, true, true),
-            new PlayerInfo(2, "Bo", true, true, false));
+            new PlayerInfo(1, "WALL-E", true, true, false, true), new PlayerInfo(2, "Bo", true, true, false));
         LobbyState lobby = new LobbyState(players, "Proving Grounds", 8, 2, 12, 12, 3, 3, 90, "proving-grounds", board,
             boards);
 
@@ -313,6 +315,15 @@ public final class GameScreenDriver {
         click(host, dock[0], dock[1]);
         check(link.sent.size() == 1 && link.sent.get(0) instanceof SelectBoard select
             && select.boardId().equals("loading-dock"), "a click on Loading Dock should send SelectBoard");
+        TextButton addBot = findButton(host.stage.getRoot(), "ADD BOT");
+        check(addBot != null, "the host should be offered a bot on a free seat");
+        click(host, centerOf(addBot)[0], centerOf(addBot)[1]);
+        check(link.sent.size() == 2 && link.sent.get(1) instanceof AddBot, "Add bot should send AddBot");
+        TextButton remove = findButton(host.stage.getRoot(), "REMOVE");
+        check(remove != null, "the host should be able to remove the bot");
+        click(host, centerOf(remove)[0], centerOf(remove)[1]);
+        check(link.sent.size() == 3 && link.sent.get(2) instanceof RemoveBot removed && removed.seat() == 1,
+            "Remove should send RemoveBot for the bot's seat");
 
         ScriptedLink guestLink = new ScriptedLink();
         LobbyScreen guest = new LobbyScreen(game, new ConnectedServer(guestLink,
@@ -322,6 +333,8 @@ public final class GameScreenDriver {
         guest.resize(WIDTH, HEIGHT);
         frame(guest);
         check(findLabel(guest.stage.getRoot(), "Loading Dock") == null, "a guest sees no board picker");
+        check(findButton(guest.stage.getRoot(), "ADD BOT") == null && findButton(guest.stage.getRoot(), "REMOVE") == null,
+            "a guest cannot add or remove bots");
     }
 
     /**

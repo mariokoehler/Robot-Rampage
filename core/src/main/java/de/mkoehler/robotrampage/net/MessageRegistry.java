@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.net;
 import com.esotericsoftware.kryo.Kryo;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.GameOver;
@@ -16,6 +17,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
+import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
@@ -145,5 +147,7 @@ public final class MessageRegistry {
         kryo.register(SetProgrammingSeconds.class);
         kryo.register(BoardChoice.class);
         kryo.register(SelectBoard.class);
+        kryo.register(AddBot.class);
+        kryo.register(RemoveBot.class);
     }
 }

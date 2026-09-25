@@ -1,6 +1,9 @@
 package de.mkoehler.robotrampage.session;
 
 import de.mkoehler.robotrampage.board.BoardLoader;
+import de.mkoehler.robotrampage.bot.BotBrain;
+import de.mkoehler.robotrampage.bot.BotDecision;
+import de.mkoehler.robotrampage.bot.BotNames;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.board.StartSquare;
@@ -119,6 +122,7 @@ public final class GameSession {
     private boolean squeezeActive;
     private long nextTurnAt;
     private int fillCounter;
+    private final Random botRandom;
 
     /**
      * Creates a session in the lobby phase.
@@ -167,6 +171,7 @@ public final class GameSession {
         this.config = config;
         this.programmingMillis = config.programmingMillis();
         this.seed = seed;
+        this.botRandom = new Random(seed ^ 0x5DEECE66DL);
         this.clock = clock;
         this.outbox = outbox;
     }
@@ -300,7 +305,12 @@ public final class GameSession {
         }
         if (phase == Phase.LOBBY) {
             players.remove(seat);
+            forgetBotsIfNoHumanIsLeft();
             broadcastLobby();
+            return;
+        }
+        if (phase == Phase.GAME_OVER && players.values().stream().noneMatch(other -> !other.bot && other.connected)) {
+            resetToLobby();
             return;
         }
         outbox.broadcast(new PlayerConnection(seat, false));
@@ -399,7 +409,66 @@ public final class GameSession {
             return;
         }
         selectedBoard = index;
-        players.values().forEach(player -> player.ready = false);
+        players.values().forEach(player -> player.ready = player.bot);
+        broadcastLobby();
+    }
+
+    /**
+     * Seats a computer-controlled robot on the lowest free seat, on the host's request (design.md 2.14). It gets a name
+     * from {@link BotNames} that nobody at the table uses, and is ready at once. Refused for anybody but the host, outside
+     * the lobby, or when every seat is taken.
+     *
+     * @param seat the requesting player's seat
+     */
+    public void addBot(int seat) {
+        if (!players.containsKey(seat)) {
+            return;
+        }
+        if (phase != Phase.LOBBY) {
+            reject(seat, "Bots can only be added in the lobby.");
+            return;
+        }
+        if (seat != hostSeat()) {
+            reject(seat, "Only the host can add bots.");
+            return;
+        }
+        int free = lowestFreeSeat();
+        if (free < 0) {
+            reject(seat, "Every seat is taken.");
+            return;
+        }
+        Set<String> names = new HashSet<>();
+        players.values().stream().filter(player -> !player.left).forEach(player -> names.add(player.name));
+        players.put(free, new SessionPlayer(free, BotNames.pick(names, botRandom), UUID.randomUUID().toString(),
+            nextJoinOrder++, true));
+        broadcastLobby();
+    }
+
+    /**
+     * Takes a computer-controlled robot off its seat, on the host's request. Refused for anybody but the host, outside the
+     * lobby, or for a seat without a bot, so no human can ever be removed this way.
+     *
+     * @param seat    the requesting player's seat
+     * @param botSeat the seat of the bot to remove
+     */
+    public void removeBot(int seat, int botSeat) {
+        if (!players.containsKey(seat)) {
+            return;
+        }
+        if (phase != Phase.LOBBY) {
+            reject(seat, "Bots can only be removed in the lobby.");
+            return;
+        }
+        if (seat != hostSeat()) {
+            reject(seat, "Only the host can remove bots.");
+            return;
+        }
+        SessionPlayer bot = players.get(botSeat);
+        if (bot == null || !bot.bot) {
+            reject(seat, "There is no bot on seat " + (botSeat + 1) + ".");
+            return;
+        }
+        players.remove(botSeat);
         broadcastLobby();
     }
 
@@ -664,11 +733,36 @@ public final class GameSession {
             }
         }
         for (SessionPlayer player : players.values()) {
-            if (player.awaiting && !player.connected) {
+            if (player.awaiting && player.bot) {
+                playBot(player);
+            } else if (player.awaiting && !player.connected) {
                 fillRandomly(player);
             }
         }
         afterConfirmation();
+    }
+
+    /**
+     * Lets the computer program a bot's robot for this turn (design.md 2.14): it picks its re-entry facing if it may, then
+     * locks its program in at once. Should the brain ever fail, the bot's cards are filled in at random instead, so a bot
+     * can never hold up a turn or stop the server.
+     *
+     * @param player the bot, which owes a program
+     */
+    private void playBot(SessionPlayer player) {
+        Robot robot = state.robot(player.seat);
+        try {
+            BotDecision decision = BotBrain.decide(state, player.seat, player.hand,
+                respawnedThisTurn.contains(player.seat), botRandom);
+            Programming.submit(state, player.seat, player.hand, decision.program(), decision.powerDown());
+            if (decision.facing() != null) {
+                robot.setFacing(decision.facing());
+                outbox.broadcast(new RespawnFacingChosen(robot.id(), decision.facing()));
+            }
+            confirm(player);
+        } catch (RuntimeException e) {
+            fillRandomly(player);
+        }
     }
 
     /**
@@ -702,7 +796,9 @@ public final class GameSession {
         int pending = 0;
         for (SessionPlayer player : players.values()) {
             if (player.awaiting) {
-                awaited++;
+                if (!player.bot) {
+                    awaited++;
+                }
                 if (!player.confirmed) {
                     pending++;
                 }
@@ -812,8 +908,9 @@ public final class GameSession {
      */
     private void resetToLobby() {
         players.values().removeIf(player -> !player.connected || player.left);
+        forgetBotsIfNoHumanIsLeft();
         for (SessionPlayer player : players.values()) {
-            player.ready = false;
+            player.ready = player.bot;
             player.awaiting = false;
             player.confirmed = false;
             player.hand = List.of();
@@ -852,7 +949,9 @@ public final class GameSession {
         Forfeit.forfeit(state, player.seat, log);
         GameOutcome.endIfOneRobotIsLeft(state, log);
         outbox.broadcast(new PlayerLeft(player.seat, log.entries()));
-        if (state.isOver()) {
+        if (players.values().stream().allMatch(other -> other.bot || other.left)) {
+            resetToLobby();
+        } else if (state.isOver()) {
             if (phase != Phase.GAME_OVER) {
                 finishGame();
             }
@@ -944,7 +1043,8 @@ public final class GameSession {
         int host = hostSeat();
         List<PlayerInfo> infos = new ArrayList<>();
         for (SessionPlayer player : players.values()) {
-            infos.add(new PlayerInfo(player.seat, player.name, player.ready, player.connected, player.seat == host));
+            infos.add(new PlayerInfo(player.seat, player.name, player.ready, player.connected, player.seat == host,
+                player.bot));
         }
         return infos;
     }
@@ -981,8 +1081,18 @@ public final class GameSession {
      * @return the host's seat, or -1 if nobody is seated
      */
     private int hostSeat() {
-        return players.values().stream().filter(player -> !player.left)
+        return players.values().stream().filter(player -> !player.left && !player.bot)
             .min((a, b) -> Integer.compare(a.joinOrder, b.joinOrder)).map(player -> player.seat).orElse(-1);
+    }
+
+    /**
+     * Takes every bot off the table once no human is seated any more, so bots never sit alone in a lobby nobody can start
+     * or play on in a game nobody watches.
+     */
+    private void forgetBotsIfNoHumanIsLeft() {
+        if (players.values().stream().allMatch(player -> player.bot)) {
+            players.clear();
+        }
     }
 
     /**
