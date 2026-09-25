@@ -1003,7 +1003,16 @@ Sentient Sketchbook and the Evolutionary Dungeon Designer:
     corners. All ranges and weights are *(unconfirmed)* first guesses.
   - **Measured** (20 bot games each, 2026-09-25), three boards generated from an empty canvas: finished 20/20 in 11.2,
     12.7 and 7.9 turns, 11.5, 17.1 and 6.4 robots lost per game — the same range as proving-grounds (7.4 turns, 8 lost)
-    and loading-dock (9.9, 16). Bot playouts are not part of the search: the metrics panel plays the result anyway.
+    and loading-dock (9.9, 16). **But wins by seat were 1|0|2|0|2|3|6|6, 2|1|1|6|3|2|1|4 and 5|3|0|1|5|2|1|3**: on the
+    first board seats 7 and 8 took 12 of 20 wins despite a walking spread of only 3, so walking distance alone does not
+    keep a board fair — the case for scoring finalists by bot playouts (wins by seat) in step 3. Bot playouts are not
+    part of the search yet: the metrics panel plays the result anyway.
+  - **The hand-made boards, rated:** both pass every hard rule. Proving-grounds scores −12 (mostly its 7-step spread);
+    loading-dock −94, because its deliberate short belts feeding pits count as validator warnings (4) and belt stubs (8
+    squares) — so the belt rules punish a style the owner's own board uses, and may be too strict *(to be decided)*.
+  - **Known quirks, left for the owner to judge:** a laser may fire along the row right in front of the start squares
+    (only the start square and the square ahead are checked for walls, pits and the edge, not laser lines); lasers and
+    pushers may be mounted on belt squares; two lasers may run in parallel; a flag may lie in a laser's line.
 - **Rejected:** wave function collapse as the main generator (only local consistency, needs example boards we do not
   have, no notion of reachable flags or fairness); answer set programming (needs an external solver, and "fun" does not
   reduce to constraints); on-the-fly generation in the lobby (no human check).
