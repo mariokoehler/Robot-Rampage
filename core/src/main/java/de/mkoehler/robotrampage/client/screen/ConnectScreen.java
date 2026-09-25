@@ -18,6 +18,7 @@ import de.mkoehler.robotrampage.client.connect.ConnectionAttempt;
 import de.mkoehler.robotrampage.client.connect.DisplayNames;
 import de.mkoehler.robotrampage.client.connect.ServerAddress;
 import de.mkoehler.robotrampage.client.ui.ModalDialog;
+import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.AppVersion;
 import de.mkoehler.robotrampage.net.NetworkClient;
@@ -45,6 +46,7 @@ public final class ConnectScreen extends StageScreen {
     private final TextField nameField;
     private final Label addressHint;
     private final Label nameHint;
+    private final PillToggle newSession;
     private ConnectionAttempt attempt;
     private ConnectFlow.Phase reported = ConnectFlow.Phase.IDLE;
     private ModalDialog dialog;
@@ -69,6 +71,7 @@ public final class ConnectScreen extends StageScreen {
         super(game);
         addressField = ui.textField(game.settings().serverAddress(), 255);
         nameField = ui.textField(game.settings().displayName(), NetworkConstants.MAX_DISPLAY_NAME_LENGTH);
+        newSession = ui.toggle();
         addressHint = ui.label(ADDRESS_HINT, Theme.TextStyle.CAPTION, Theme.INK_MUTED);
         nameHint = ui.label(NAME_HINT, Theme.TextStyle.CAPTION, Theme.INK_MUTED);
         watchForEditing(addressField, this::clearAddressError);
@@ -137,10 +140,24 @@ public final class ConnectScreen extends StageScreen {
         panel.add(ui.label("Server", Theme.TextStyle.SUBTITLE, Theme.INK)).left().row();
         panel.add(fieldGroup("Server address", addressField, addressHint)).growX().padTop(28f).row();
         panel.add(fieldGroup("Display name", nameField, nameHint)).growX().padTop(28f).row();
+        panel.add(newSessionRow()).left().padTop(28f).row();
         panel.add(buttons).growX().padTop(28f).row();
         panel.add(ui.label("Client v" + AppVersion.getVersion(), Theme.TextStyle.CAPTION, Theme.INK_MUTED)).left()
             .padTop(28f);
         return panel;
+    }
+
+    /**
+     * Builds the "New session" switch with its caption, off unless the player turns it on.
+     *
+     * @return the row
+     */
+    private Table newSessionRow() {
+        Table row = new Table();
+        row.left();
+        row.add(newSession).size(52f, 28f);
+        row.add(ui.label("New session", Theme.TextStyle.LABEL, Theme.INK)).padLeft(12f);
+        return row;
     }
 
     /**
@@ -248,13 +265,14 @@ public final class ConnectScreen extends StageScreen {
      * names a seat on this server, the join becomes a reconnect (covering a client that was closed or crashed, not just
      * a dropped connection, which {@link de.mkoehler.robotrampage.client.connect.Reconnector} already covers while the
      * app keeps running). A token the server does not recognise is always harmless to send — the session falls back to
-     * an ordinary join by name.
+     * an ordinary join by name. With "New session" switched on the stored token is not sent at all, as if there
+     * were none.
      *
      * @param address the server
      * @param name    the display name, already checked
      */
     private void join(ServerAddress address, String name) {
-        String token = game.settings().sessionToken();
+        String token = newSession.isChecked() ? null : game.settings().sessionToken();
         attempt = new ConnectionAttempt(new NetworkClient(), address, name, token == null || token.isBlank() ? null : token,
             AppVersion.getVersion());
         reported = ConnectFlow.Phase.IDLE;

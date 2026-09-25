@@ -152,7 +152,8 @@ refused a nameless new join mid-game with "A game is already in progress." **Fix
 session token too** (`ClientSettings.sessionToken`, `withSessionToken`), saved in `LobbyScreen`'s constructor — every
 path that reaches the lobby (first join, a successful `Reconnector`, or the game handing the connection back) passes
 through it — and presented again by `ConnectScreen.join` on every future connect attempt, whether or not it turns out to
-be a reconnect. **This reverses the earlier "keep the token in memory only" call** for the *manual* reconnect path (the
+be a reconnect — unless the Connect screen's "New session" toggle (off by default, never saved; 2026-09-25) is on, which
+sends `null` instead; `GameScreenDriver.driveConnectNewSession` checks the toggle, not the join itself. **This reverses the earlier "keep the token in memory only" call** for the *manual* reconnect path (the
 automatic `Reconnector` above still only ever needs the in-memory one): it is safe to persist and always resend, because
 an unrecognised token (wrong server, expired grace, server process restarted) makes `GameSession.join` simply fall
 through to an ordinary join by name — never a wrong-seat bug, at worst a normal refusal. *Reviewed, not changed:* on a

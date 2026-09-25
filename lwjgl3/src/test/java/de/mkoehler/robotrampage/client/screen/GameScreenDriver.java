@@ -133,6 +133,7 @@ public final class GameScreenDriver {
                 driveEliminated(this);
                 driveStayPoweredDown(this);
                 driveReconnect(this);
+                driveConnectNewSession(this, folder);
                 driveLobbyBoardChoice(this, folder);
                 driveBoardKeyTooltip(this, folder);
                 System.out.println("GameScreenDriver: all checks passed");
@@ -515,6 +516,28 @@ public final class GameScreenDriver {
         check(leave != null, "the dialog should have a Leave game button");
         click(screen, centerOf(leave)[0], centerOf(leave)[1]);
         check(game.getScreen() instanceof ConnectScreen, "Leave game should give up the attempt and go to the connect screen");
+    }
+
+    /**
+     * Checks the Connect screen's "New session" switch: off when the screen opens, on after a click.
+     *
+     * @param game   the game
+     * @param folder where to save the screen's PNG, or {@code null} to skip it
+     */
+    private static void driveConnectNewSession(RobotRampageGame game, File folder) {
+        ConnectScreen screen = new ConnectScreen(game);
+        game.setScreen(screen);
+        screen.resize(WIDTH, HEIGHT);
+        frame(screen);
+        PillToggle toggle = (PillToggle) findActor(screen.stage.getRoot(), PillToggle.class);
+        check(toggle != null, "the connect screen should have a New session switch");
+        check(!toggle.isChecked(), "New session should be off by default");
+        check(findLabel(screen.stage.getRoot(), "NEW SESSION") != null, "the switch should be captioned New session");
+        click(screen, centerOf(toggle)[0], centerOf(toggle)[1]);
+        check(toggle.isChecked(), "a click should switch New session on");
+        if (folder != null) {
+            snapshot(screen, folder, "connect-new-session.png");
+        }
     }
 
     /**

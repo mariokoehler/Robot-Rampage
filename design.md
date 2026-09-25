@@ -1350,7 +1350,9 @@ hands straight on to a new `GameScreen` — no separate reconnect-specific trans
 
 **The session token is also persisted client-side** (`ClientSettings.sessionToken`, saved in `LobbyScreen`'s
 constructor — every path to the lobby passes through it — and presented again by `ConnectScreen` on every future
-connect). This covers a gap `Reconnector` alone cannot: it only exists in memory inside a live `GameScreen`, so a
+connect — unless the player switches on the Connect screen's **"New session"** toggle (added 2026-09-25, off by
+default, not saved), which sends no token at all, exactly as if none were stored; a successful join then saves the new
+session's token as usual). This covers a gap `Reconnector` alone cannot: it only exists in memory inside a live `GameScreen`, so a
 client that was closed or crashed and relaunched had no token to present and could only send a nameless new join,
 which a running game correctly refuses ("A game is already in progress") — found by the user in-game, 2026-09-22, and
 the reason the design changed from an earlier in-memory-only decision. Persisting it and always resending it is safe
