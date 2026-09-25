@@ -918,7 +918,9 @@ packaged, and players never see it. Run it with `start_board_editor.cmd` or
   is one undo step (Ctrl+Z, Ctrl+Y or Ctrl+Shift+Z; Ctrl+S saves; R/Shift+R turns the chosen
   direction). Dragging a belt lays it along the drag (each belt points at the next square, so
   corners come out right). Edge tools act on the side of the square nearest the pointer and keep
-  that side for the whole drag, so a wall can be dragged along a row. **A laser or pusher is
+  that side for the whole drag, so a wall can be dragged along a row. **The Floor tool is the eraser:** it clears
+  everything on a square (belt, feature, flag, start square, lasers and pushers mounted on its sides) except plain
+  walls, which belong to an edge shared with the neighbour and are removed with the Wall tool. **A laser or pusher is
   mounted on the side of the square it was clicked in** and fires or pushes away from it, so the
   two sides of one edge are different mounts. Flags and start squares are picked up and dragged
   to move them, keeping their number; clicking a start square turns it clockwise.

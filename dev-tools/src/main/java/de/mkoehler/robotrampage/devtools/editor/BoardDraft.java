@@ -256,7 +256,10 @@ public final class BoardDraft {
     }
 
     /**
-     * Turns a square back into plain floor: removes its belt and feature. Walls, flags and start squares stay.
+     * Turns a square back into plain floor: removes its belt, feature, flag and start square, and the lasers and pushers
+     * mounted on its sides. Plain walls stay, since an edge belongs to the neighbouring square as much as to this one; the
+     * wall tool removes them. A removed flag or start square moves the later ones up one number, as removing it with its
+     * own tool does.
      *
      * @param position the square
      * @return {@code true} if the square changed
@@ -264,6 +267,11 @@ public final class BoardDraft {
     public boolean clearSquare(Position position) {
         boolean changed = belts.remove(position) != null | features.remove(position) != null;
         crusherRegisters.remove(position);
+        changed |= removeFlag(position);
+        changed |= removeStart(position);
+        for (Direction side : Direction.values()) {
+            changed |= removeMount(position, side);
+        }
         return changed;
     }
 

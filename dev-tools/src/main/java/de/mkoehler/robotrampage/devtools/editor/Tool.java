@@ -8,7 +8,7 @@ package de.mkoehler.robotrampage.devtools.editor;
  */
 public enum Tool {
 
-    /** Turns squares back into plain floor. */
+    /** Turns squares back into plain floor: clears belts, features, flags, start squares and mounts, not walls. */
     ERASE("Floor", false),
     /** Paints pits. */
     PIT("Pit", false),

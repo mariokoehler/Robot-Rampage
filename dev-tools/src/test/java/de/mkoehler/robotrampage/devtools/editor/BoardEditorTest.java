@@ -5,6 +5,7 @@ import de.mkoehler.robotrampage.board.Board;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.board.SquareFeature;
+import de.mkoehler.robotrampage.board.StartSquare;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -35,6 +36,37 @@ class BoardEditorTest {
     private void click(int x, int y, Direction side, boolean remove) {
         editor.press(new Position(x, y), side, remove);
         editor.release();
+    }
+
+    /**
+     * The floor tool clears everything on a square: belt, feature, flag, start square and the lasers and pushers mounted
+     * on its sides; later flags and seats move up one number. A plain wall on its edge stays, and so does everything on the
+     * neighbouring squares.
+     */
+    @Test
+    void theFloorToolClearsEverythingOnASquareButItsWalls() {
+        BoardDraft draft = editor.draft();
+        Position square = new Position(4, 4);
+        draft.paintBelt(square, Direction.EAST, false);
+        draft.addFlag(square);
+        draft.addFlag(new Position(8, 8));
+        draft.addStart(square, Direction.NORTH);
+        draft.addStart(new Position(1, 0), Direction.NORTH);
+        draft.mountPusher(square, Direction.WEST, Set.of(1, 3, 5));
+        draft.mountLaser(square, Direction.NORTH, 2);
+        draft.addWall(square, Direction.SOUTH);
+        draft.mountPusher(new Position(5, 4), Direction.WEST, Set.of(2));
+
+        editor.setTool(Tool.ERASE);
+        click(4, 4, Direction.NORTH, false);
+
+        assertTrue(draft.toBoard().beltAt(square).isEmpty());
+        assertEquals(List.of(new Position(8, 8)), draft.flags(), "flag 2 becomes flag 1");
+        assertEquals(List.of(new Position(1, 0)), draft.starts().stream().map(StartSquare::position).toList());
+        assertFalse(draft.hasMount(square, Direction.WEST));
+        assertFalse(draft.hasMount(square, Direction.NORTH));
+        assertTrue(draft.hasWall(square, Direction.SOUTH), "a plain wall is left to the wall tool");
+        assertTrue(draft.hasMount(new Position(5, 4), Direction.WEST), "the neighbour's pusher on the shared edge stays");
     }
 
     @Test

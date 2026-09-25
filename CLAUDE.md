@@ -29,7 +29,7 @@ atlas, the "ghost path" preview) done — nothing left "still to come" on M4's o
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 40 in `dev-tools` (board editor and its metrics). A whole turn can be resolved headlessly:
+picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 41 in `dev-tools` (board editor and its metrics). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
