@@ -29,7 +29,7 @@ atlas, the "ghost path" preview) done — nothing left "still to come" on M4's o
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 48 in `dev-tools` (board editor, metrics, generator). A whole turn can be resolved headlessly:
+picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 52 in `dev-tools` (board editor, metrics, generator, suggestions). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -388,8 +388,12 @@ button (design.md 3.14). Judge generator changes by **looking at the boards**, n
 `editor-generated-1..3.png` (from an empty canvas, seeds 1–3, with 20 bot games in the panel) and
 `editor-generated-from-proving-grounds.png` (the real button path, also checking one-step undo and that a hand edit
 during a run drops the result). The first scoring version reached its maximum on every board and stopped refining — a
-flat "inside the range = 0" score needs a tie-breaker (`Rating.TYPICAL`). Next per 3.14: MAP-Elites (axes: hazard
-share, route length, moving share — confirmed by the owner).
+flat "inside the range = 0" score needs a tie-breaker (`Rating.TYPICAL`).
+**Suggest (step 3): done** — `Suggestions` (MAP-Elites on six islands) + `SuggestionsDialog`. **A single MAP-Elites
+archive gave six near-identical boards in six different cells** (one lineage takes over every cell; seeding with scrambled
+copies did not fix it) — only separate islands did. Distinct cells do not mean distinct-looking boards: check the
+`editor-suggestions-empty.png` picture after any change here. `EditorSnapshot` also writes `editor-suggestions.png`
+(waits for all bot games, picks one, checks one-step undo) and `editor-suggestions-two.png` (fewer than six).
 
 **Next: whatever the user picks** — the rest of M6 (board composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
 (2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.

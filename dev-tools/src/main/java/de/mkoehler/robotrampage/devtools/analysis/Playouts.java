@@ -18,6 +18,7 @@ import de.mkoehler.robotrampage.rules.TurnResolver;
 import de.mkoehler.robotrampage.rules.TurnResult;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
@@ -48,9 +49,11 @@ public final class Playouts {
      * @param flags      the flags touched in all games, added up
      * @param deaths     the robots destroyed in all games, by cause
      * @param winsBySeat how many games each seat won, by seat
+     * @param flagsBySeat how many flags each seat had touched when its games ended, added up, by seat: a denser measure of
+     *                    how well a seat does than wins, since every seat counts in every game
      */
     public record Report(int games, int finished, int turns, int flags, Map<DestructionCause, Integer> deaths,
-                         int[] winsBySeat) {
+                         int[] winsBySeat, int[] flagsBySeat) {
 
         /**
          * Returns the average length of a finished game.
@@ -68,6 +71,21 @@ public final class Playouts {
          */
         public double deathsPerGame() {
             return games == 0 ? 0 : deaths.values().stream().mapToInt(Integer::intValue).sum() / (double) games;
+        }
+
+        /**
+         * Returns how far apart the seats are in flags touched per game: the best seat's average minus the worst's. The
+         * smaller, the fairer the board.
+         *
+         * @return the gap in flags per game, 0 before any game
+         */
+        public double flagGap() {
+            if (games == 0 || flagsBySeat.length == 0) {
+                return 0;
+            }
+            int most = Arrays.stream(flagsBySeat).max().orElse(0);
+            int least = Arrays.stream(flagsBySeat).min().orElse(0);
+            return (most - least) / (double) games;
         }
     }
 
@@ -93,6 +111,7 @@ public final class Playouts {
         int flags = 0;
         Map<DestructionCause, Integer> deaths = new EnumMap<>(DestructionCause.class);
         int[] wins = new int[seats];
+        int[] flagsBySeat = new int[seats];
         for (int game = 0; game < games; game++) {
             GameState state = newGame(board, seed + game);
             Random random = new Random(seed * 31 + game);
@@ -112,7 +131,11 @@ public final class Playouts {
                 }
             }
             flags += state.robots().stream().mapToInt(Robot::flagsTouched).sum();
-            progress.accept(new Report(game + 1, finished, turns, flags, Map.copyOf(deaths), wins.clone()));
+            for (Robot robot : state.robots()) {
+                flagsBySeat[robot.id()] += robot.flagsTouched();
+            }
+            progress.accept(new Report(game + 1, finished, turns, flags, Map.copyOf(deaths), wins.clone(),
+                flagsBySeat.clone()));
         }
     }
 

@@ -16,9 +16,11 @@ import de.mkoehler.robotrampage.board.BoardDefinition;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.devtools.generate.BoardGenerator;
+import de.mkoehler.robotrampage.devtools.generate.Suggestions;
 import de.mkoehler.robotrampage.client.ui.Theme;
 
 import java.io.File;
+import java.util.List;
 
 /**
  * A development tool, not a test: opens the board editor on a hidden window and writes PNGs of it, to look at its layout
@@ -88,6 +90,7 @@ public final class EditorSnapshot {
                 fresh.dispose();
 
                 driveGenerateButton(new File(folder, "editor-generated-from-proving-grounds.png"));
+                driveSuggestButton(folder);
 
                 for (long seed = 1; seed <= 3; seed++) {
                     BoardEditorApp generated = new BoardEditorApp(null);
@@ -136,6 +139,72 @@ public final class EditorSnapshot {
             throw new IllegalStateException("A generated board overwrote a hand edit made while it was generated");
         }
         app.dispose();
+    }
+
+    /**
+     * Clicks Suggest on the first board the way the button does: waits for the suggestions and all their bot games,
+     * pictures the dialog, picks the second suggestion and checks that it is on the canvas and that one undo brings the
+     * first board back. Then pictures the dialog with only two suggestions, to check the layout copes with fewer, and
+     * the suggestions an empty canvas gets.
+     *
+     * @param folder where to write {@code editor-suggestions.png}, {@code editor-suggestions-two.png} and
+     *               {@code editor-suggestions-empty.png} (suggestions from an empty canvas)
+     * @throws IllegalStateException if no dialog opens, the bots do not finish, or the pick or its undo go wrong
+     */
+    private static void driveSuggestButton(File folder) {
+        BoardEditorApp app = new BoardEditorApp("proving-grounds");
+        app.create();
+        BoardDefinition original = app.editor().draft().toDefinition();
+        app.suggest();
+        waitForGenerator(app);
+        SuggestionsDialog dialog = app.suggestionsDialog();
+        if (dialog == null || dialog.suggestions().size() < 2) {
+            throw new IllegalStateException("Suggest did not open a dialog with at least two suggestions");
+        }
+        long deadline = System.currentTimeMillis() + 180_000;
+        while (!dialog.allPlayed()) {
+            if (System.currentTimeMillis() > deadline) {
+                throw new IllegalStateException("The suggestions' bot games did not finish within three minutes");
+            }
+            dialog.update();
+            sleep(200);
+        }
+        dialog.update();
+        write(app, new File(folder, "editor-suggestions.png"));
+        List<Suggestions.Suggestion> found = dialog.suggestions();
+        app.pickSuggestion(found.get(1));
+        if (!app.editor().draft().toDefinition().equals(found.get(1).draft().toDefinition())
+            || app.suggestionsDialog() != null) {
+            throw new IllegalStateException("Picking a suggestion did not put it on the canvas and close the dialog");
+        }
+        app.editor().undo();
+        if (!app.editor().draft().toDefinition().equals(original)) {
+            throw new IllegalStateException("One undo did not bring the board from before the pick back");
+        }
+        app.showSuggestions(found.subList(0, 2));
+        write(app, new File(folder, "editor-suggestions-two.png"));
+        app.closeSuggestions();
+        app.dispose();
+
+        BoardEditorApp empty = new BoardEditorApp(null);
+        empty.create();
+        empty.showSuggestions(Suggestions.suggest(empty.editor().draft(), 2L, 6, () -> false));
+        write(empty, new File(folder, "editor-suggestions-empty.png"));
+        empty.closeSuggestions();
+        empty.dispose();
+    }
+
+    /**
+     * Sleeps, giving background threads time.
+     *
+     * @param millis how long
+     */
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**

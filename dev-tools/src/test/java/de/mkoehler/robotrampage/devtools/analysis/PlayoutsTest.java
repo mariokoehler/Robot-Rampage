@@ -39,6 +39,8 @@ class PlayoutsTest {
         assertEquals(last.turns(), second.get(1).turns());
         assertEquals(last.deaths(), second.get(1).deaths());
         assertTrue(Arrays.equals(last.winsBySeat(), second.get(1).winsBySeat()));
+        assertEquals(last.flags(), Arrays.stream(last.flagsBySeat()).sum(), "flags by seat add up to all flags");
+        assertTrue(last.flagGap() >= 0);
     }
 
     /**

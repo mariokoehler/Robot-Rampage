@@ -71,6 +71,29 @@ public record Rating(int violations, double score) {
      * @return the rating
      */
     public static Rating of(BoardDraft draft) {
+        return of(draft, true);
+    }
+
+    /**
+     * Rates a draft for the suggestion grid (design.md 3.14): the same rules, but nothing pulls the board towards the
+     * middle of the ranges or holds its route to a length, since how deadly, how long and how moving a board is are the
+     * very axes the grid spreads suggestions along.
+     *
+     * @param draft the draft
+     * @return the rating
+     */
+    public static Rating forSuggestions(BoardDraft draft) {
+        return of(draft, false);
+    }
+
+    /**
+     * Rates a draft.
+     *
+     * @param draft   the draft
+     * @param typical whether to pull the board towards the middle of the ranges and hold its route to a length
+     * @return the rating
+     */
+    private static Rating of(BoardDraft draft, boolean typical) {
         Board board = draft.toBoard();
         ValidationResult validation = BoardValidator.validate(board);
         BoardMetrics metrics = BoardMetrics.of(board);
@@ -90,14 +113,14 @@ public record Rating(int violations, double score) {
         score -= outside(metrics.laserSquares(), 12, 28);
         int walls = board.walls().values().stream().mapToInt(Set::size).sum();
         score -= 2 * outside(walls, 10, 24);
-        score -= TYPICAL * (offMiddle(metrics.pits(), 4, 8) + offMiddle(metrics.belts(), 18, 32)
+        score -= (typical ? TYPICAL : 0) * (offMiddle(metrics.pits(), 4, 8) + offMiddle(metrics.belts(), 18, 32)
             + offMiddle(metrics.laserSquares(), 12, 28) + offMiddle(walls, 10, 24));
         score -= 6 * beltStubs(board);
         score -= 10 * headOnBelts(board);
         score -= 20 * mountsOnPits(board);
         score -= 15 * validation.warnings().size();
         score -= 15 * Math.max(0, metrics.firstFlagSpread() - MetricsText.UNFAIR_SPREAD);
-        score -= 3 * outside(metrics.flagRoute(), 20, 30);
+        score -= typical ? 3 * outside(metrics.flagRoute(), 20, 30) : 0;
         int nearest = metrics.seats().stream().mapToInt(BoardMetrics.SeatRoute::toFirstFlag).min().orElse(0);
         score -= 3 * outside(nearest, 5, 10);
         List<Position> flags = board.flags();

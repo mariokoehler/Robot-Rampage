@@ -45,7 +45,7 @@ class MetricsTextTest {
     @Test
     void botResultsAreAveragedAndFlagged() {
         Playouts.Report report = new Playouts.Report(10, 4, 100, 30, Map.of(DestructionCause.PIT, 20),
-            new int[] {3, 1, 0});
+            new int[] {3, 1, 0}, new int[] {12, 9, 6});
 
         List<MetricsText.Line> lines = MetricsText.playouts(report, 20);
 

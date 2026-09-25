@@ -976,7 +976,8 @@ Sentient Sketchbook and the Evolutionary Dungeon Designer:
 - **Two populations (FI2Pop):** boards that break a hard rule (unreachable flag, a start square that dies at once) evolve
   towards validity, valid ones towards quality.
 - **Rating:** the instant metrics for every candidate; bot playouts only for the finalists (a game costs ~1 s).
-- **Steps:** (1) the metrics panel — done; (2) "Generate" — done, below; (3) MAP-Elites: a grid of distinct good boards along axes such as hazard share,
+- **Steps:** (1) the metrics panel — done; (2) "Generate" — done, below; (3) "Suggest" — done, below; originally
+  planned as MAP-Elites: a grid of distinct good boards along axes such as hazard share,
   route length and moving share, shown as thumbnails to pick from.
 - **Generate (step 2, done 2026-09-25).** The editor's **Generate** button runs `devtools.generate.BoardGenerator` on
   its own daemon thread from a copy of the canvas, with a random seed (shown in the status line): 4000 boards rated, two
@@ -1013,6 +1014,27 @@ Sentient Sketchbook and the Evolutionary Dungeon Designer:
   - **Known quirks, left for the owner to judge:** a laser may fire along the row right in front of the start squares
     (only the start square and the square ahead are checked for walls, pits and the edge, not laser lines); lasers and
     pushers may be mounted on belt squares; two lasers may run in parallel; a flag may lie in a laser's line.
+- **Suggest (step 3, done 2026-09-25).** The editor's **Suggest** button shows up to six different boards to pick
+  from (`devtools.generate.Suggestions`, `SuggestionsDialog`). **Grid:** every valid board lands in one of 3 × 3 × 3
+  cells — hazard share (calm below 17%, deadly from 22%), average whole route (short below 31 steps, long from 36) and
+  moving share (little below 17%, lots from 21%) *(bin edges unconfirmed, set inside what the element ranges allow)*;
+  each cell keeps its best board (MAP-Elites). Inside the grid the score drops the pull towards the middle of the ranges
+  and the flag-to-flag range (`Rating.forSuggestions`), since those are what the axes measure; everything else stays.
+  **Islands:** one search on one grid let a single strong family of boards spread into every cell, so all six
+  suggestions shared a skeleton (seen in the first pictures; seeding one search with a dozen scrambled copies did not
+  help). So each suggestion comes from its own island — its own search of 2000 boards from its own copy of the canvas,
+  scrambled with 20 random changes (the first island keeps the canvas as it is, so one suggestion stays close to it;
+  on an empty canvas each island also places its own flags). Picking: the best board of all first, then again and again
+  the island whose board lies farthest in the grid from those already picked; a board scoring more than 15 below the
+  best is never shown, so fewer than six can come back. About 3 seconds in all, deterministic from the seed.
+  **Dialog:** each suggestion is drawn small (22 px squares) with its cell in words ("Deadly, short route, lots of
+  movement"), its three numbers, and a bot line: while the dialog is open, bots play 8 games on each board in turn on a
+  background thread and report how far apart the seats end up in **flags touched per game** — a denser fairness measure
+  than wins, since every seat counts in every game (`Playouts.Report.flagsBySeat`, `flagGap`); once all boards are
+  played, the most even one is marked green. The thumbnails are not reordered and are not ranked by fairness. Clicking
+  one puts it on the canvas as one undo step (`applyGenerated`); closing the dialog or picking stops the games. Same
+  "the board changed meanwhile" rule as Generate. **From a finished board the suggestions are variations of it**
+  (Proving Grounds' central loop survives in all of them); an empty canvas gives unrelated boards.
 - **Rejected:** wave function collapse as the main generator (only local consistency, needs example boards we do not
   have, no notion of reachable flags or fairness); answer set programming (needs an external solver, and "fun" does not
   reduce to constraints); on-the-fly generation in the lobby (no human check).

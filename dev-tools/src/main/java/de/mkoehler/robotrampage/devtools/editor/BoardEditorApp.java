@@ -27,6 +27,7 @@ import de.mkoehler.robotrampage.client.ui.ModalDialog;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
 import de.mkoehler.robotrampage.devtools.generate.BoardGenerator;
+import de.mkoehler.robotrampage.devtools.generate.Suggestions;
 
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
@@ -36,6 +37,7 @@ import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 
 /**
  * The board editor window (design.md 3.13): a tool palette on the left, the board in the middle, the board's name and
@@ -53,6 +55,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
     private static final float TILE = 72f;
     private static final float SIDE_WIDTH = 440f;
     private static final float CHECKS_HEIGHT = 80f;
+    private static final int SUGGESTIONS = 6;
     private static final float CHECKS_HEIGHT_INVALID = 420f;
     private static final float FIELD_HEIGHT = 48f;
     private static final float PILL_HEIGHT = 40f;
@@ -101,6 +104,8 @@ public final class BoardEditorApp extends ApplicationAdapter {
     private final AtomicReference<Object> generated = new AtomicReference<>();
     private final Random seeds = new Random();
     private TextButton generateButton;
+    private TextButton suggestButton;
+    private SuggestionsDialog suggestionsDialog;
     private boolean generating;
     private int generationRevision;
     private long generationSeed;
@@ -191,6 +196,9 @@ public final class BoardEditorApp extends ApplicationAdapter {
         }
         metrics.update(Gdx.graphics.getDeltaTime());
         takeGeneratedBoard();
+        if (suggestionsDialog != null) {
+            suggestionsDialog.update();
+        }
         Gdx.gl.glClearColor(Theme.SURFACE.r, Theme.SURFACE.g, Theme.SURFACE.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         stage.act(Gdx.graphics.getDeltaTime());
@@ -213,6 +221,9 @@ public final class BoardEditorApp extends ApplicationAdapter {
      */
     @Override
     public void dispose() {
+        if (suggestionsDialog != null) {
+            suggestionsDialog.dispose();
+        }
         generatorWorker.shutdownNow();
         metrics.dispose();
         stage.dispose();
@@ -278,19 +289,40 @@ public final class BoardEditorApp extends ApplicationAdapter {
      * copied here, on the render thread; the result is taken in by {@link #takeGeneratedBoard()}.
      */
     void generate() {
+        startGenerator("Generating a board…", (canvas, seed) -> BoardGenerator.generate(canvas, seed, () -> false));
+    }
+
+    /**
+     * Starts searching for several different boards from the one on the canvas (design.md 3.14); the result opens the
+     * suggestions dialog.
+     */
+    void suggest() {
+        startGenerator("Looking for suggestions…",
+            (canvas, seed) -> Suggestions.suggest(canvas, seed, SUGGESTIONS, () -> false));
+    }
+
+    /**
+     * Runs a generator on its own thread from a copy of the canvas made here, on the render thread. The result is taken
+     * in by {@link #takeGeneratedBoard()}.
+     *
+     * @param message   what the status line says meanwhile
+     * @param generator the generator, given the canvas copy and the seed
+     */
+    private void startGenerator(String message, BiFunction<BoardDraft, Long, Object> generator) {
         if (generating || dialogOpen) {
             return;
         }
         generating = true;
         generateButton.setDisabled(true);
-        ui.setText(status, Theme.TextStyle.BODY, "Generating a board…");
+        suggestButton.setDisabled(true);
+        ui.setText(status, Theme.TextStyle.BODY, message);
         generationRevision = editor.revision();
         generationSeed = seeds.nextInt(1_000_000);
         BoardDraft canvas = editor.draft().copy();
         long seed = generationSeed;
         generatorWorker.submit(() -> {
             try {
-                generated.set(BoardGenerator.generate(canvas, seed, () -> false));
+                generated.set(generator.apply(canvas, seed));
             } catch (RuntimeException e) {
                 generated.set(e);
             }
@@ -308,16 +340,66 @@ public final class BoardEditorApp extends ApplicationAdapter {
         }
         generating = false;
         generateButton.setDisabled(false);
+        suggestButton.setDisabled(false);
         if (result instanceof RuntimeException failure) {
             notice = "Generating failed: " + failure;
         } else if (editor.revision() != generationRevision) {
             notice = "The board changed while generating, so the result was dropped";
-        } else {
-            editor.applyGenerated(((BoardGenerator.Candidate) result).draft());
+        } else if (result instanceof BoardGenerator.Candidate candidate) {
+            editor.applyGenerated(candidate.draft());
             notice = "Generated from seed " + generationSeed + ", Ctrl+Z undoes it";
+        } else if (result instanceof List<?> found && found.isEmpty()) {
+            notice = "No valid board was found, try again";
+        } else if (result instanceof List<?> found) {
+            showSuggestions(found.stream().map(Suggestions.Suggestion.class::cast).toList());
+            notice = "Suggestions from seed " + generationSeed;
         }
         noticeRevision = editor.revision();
         refresh();
+    }
+
+    /**
+     * Opens the suggestions dialog.
+     *
+     * @param found the suggestions, at least one
+     */
+    void showSuggestions(List<Suggestions.Suggestion> found) {
+        suggestionsDialog = new SuggestionsDialog(ui, found, this::pickSuggestion, this::closeSuggestions);
+        openDialog(suggestionsDialog.dialog());
+    }
+
+    /**
+     * Puts a suggestion on the canvas as one undo step and closes the dialog.
+     *
+     * @param suggestion the picked suggestion
+     */
+    void pickSuggestion(Suggestions.Suggestion suggestion) {
+        closeSuggestions();
+        editor.applyGenerated(suggestion.draft());
+        notice = suggestion.cell().words() + ", Ctrl+Z undoes it";
+        noticeRevision = editor.revision();
+        refresh();
+    }
+
+    /**
+     * Closes the suggestions dialog and stops its bot games.
+     */
+    void closeSuggestions() {
+        if (suggestionsDialog == null) {
+            return;
+        }
+        suggestionsDialog.dispose();
+        closeDialog(suggestionsDialog.dialog());
+        suggestionsDialog = null;
+    }
+
+    /**
+     * Returns the open suggestions dialog, for tools that pick from it.
+     *
+     * @return the dialog, or {@code null} if none is open
+     */
+    SuggestionsDialog suggestionsDialog() {
+        return suggestionsDialog;
     }
 
     /**
@@ -363,6 +445,9 @@ public final class BoardEditorApp extends ApplicationAdapter {
         generateButton = ui.button("Generate", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
         onClick(generateButton, this::generate);
         top.add(generateButton).size(200f, 52f).padLeft(Theme.SPACE_4);
+        suggestButton = ui.button("Suggest", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        onClick(suggestButton, this::suggest);
+        top.add(suggestButton).size(180f, 52f).padLeft(Theme.SPACE_4);
         TextButton newButton = ui.button("New", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
         TextButton openButton = ui.button("Open", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
         saveButton = ui.button("Save", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
