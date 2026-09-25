@@ -27,7 +27,8 @@ import java.util.function.Consumer;
  * The dialog of the editor's Suggest button (design.md 3.14): up to six suggested boards side by side, each drawn small
  * with what makes it different in words and numbers. Clicking a board picks it. While the dialog is open, bots play a few
  * games on each board in turn on a background thread and each caption fills in how evenly the seats did — flags touched
- * per seat, a denser measure than wins — and once every board has been played, the most even one is marked. Closing the
+ * per seat, a denser measure than wins — and once every board has been played, the most even one is marked, but only
+ * if it leads the runner-up by {@link #CLEAR_LEAD} (less is within what eight games vary by). Closing the
  * dialog or picking a board stops the games.
  *
  * @author Mario Koehler
@@ -40,11 +41,17 @@ final class SuggestionsDialog {
     private static final float COLUMN = BoardDraft.SIZE * TILE;
     private static final int COLUMNS = 3;
     private static final long SEED = 1L;
+    /**
+     * How much more even, in flags per game, a board must be than the runner-up to be marked as the most even. Eight games
+     * of the same board vary by up to about half a flag between seeds, so a smaller lead is noise.
+     */
+    static final double CLEAR_LEAD = 0.3;
 
     private final UiKit ui;
     private final List<Suggestions.Suggestion> suggestions;
     private final ModalDialog dialog;
     private final List<Label> botLines = new ArrayList<>();
+    private final List<BoardActor> thumbnails = new ArrayList<>();
     private final AtomicReferenceArray<Playouts.Report> reports;
     private final Playouts.Report[] shown;
     private final AtomicBoolean stopped = new AtomicBoolean();
@@ -103,6 +110,15 @@ final class SuggestionsDialog {
     }
 
     /**
+     * Returns the drawn boards, in the order of the suggestions, for tools that click them.
+     *
+     * @return the thumbnails
+     */
+    List<BoardActor> thumbnails() {
+        return thumbnails;
+    }
+
+    /**
      * Returns the suggestions shown, in order.
      *
      * @return the suggestions
@@ -131,6 +147,15 @@ final class SuggestionsDialog {
                 if (shown[index].flagGap() < shown[fairest].flagGap()) {
                     fairest = index;
                 }
+            }
+            double runnerUp = Double.MAX_VALUE;
+            for (int index = 0; index < shown.length; index++) {
+                if (index != fairest) {
+                    runnerUp = Math.min(runnerUp, shown[index].flagGap());
+                }
+            }
+            if (runnerUp - shown[fairest].flagGap() < CLEAR_LEAD) {
+                return;
             }
             Label line = botLines.get(fairest);
             ui.setText(line, Theme.TextStyle.CAPTION, botText(shown[fairest]) + " — the most even");
@@ -179,6 +204,7 @@ final class SuggestionsDialog {
                 onPick.accept(suggestion);
             }
         });
+        thumbnails.add(board);
         column.add(board).size(COLUMN).row();
         column.add(wrapped(ui.label(suggestion.cell().words(), Theme.TextStyle.LABEL, Theme.INK))).width(COLUMN).left()
             .padTop(Theme.SPACE_2).row();

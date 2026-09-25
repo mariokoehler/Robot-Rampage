@@ -1026,12 +1026,17 @@ Sentient Sketchbook and the Evolutionary Dungeon Designer:
   scrambled with 20 random changes (the first island keeps the canvas as it is, so one suggestion stays close to it;
   on an empty canvas each island also places its own flags). Picking: the best board of all first, then again and again
   the island whose board lies farthest in the grid from those already picked; a board scoring more than 15 below the
-  best is never shown, so fewer than six can come back. About 3 seconds in all, deterministic from the seed.
+  best is never shown, so fewer than six can come back (five, in one of the first pictures). 12 000 boards rated, about
+  3 seconds on the development machine, deterministic from the seed.
   **Dialog:** each suggestion is drawn small (22 px squares) with its cell in words ("Deadly, short route, lots of
   movement"), its three numbers, and a bot line: while the dialog is open, bots play 8 games on each board in turn on a
   background thread and report how far apart the seats end up in **flags touched per game** — a denser fairness measure
   than wins, since every seat counts in every game (`Playouts.Report.flagsBySeat`, `flagGap`); once all boards are
-  played, the most even one is marked green. The thumbnails are not reordered and are not ranked by fairness. Clicking
+  played, the most even one is marked green — **but only if it leads the runner-up by at least 0.3 flags per game**:
+  calibrated on the two hand-made boards, 8 games give a gap of 1.0–1.5 on proving-grounds (known to favour the near
+  seats) and 0.63–0.75 on loading-dock (known to be even) under three seeds each, so the number separates a clearly
+  unfair board from a fair one, but the same board varies by up to 0.5 between seeds, and a smaller lead is noise. The
+  thumbnails are not reordered and are not ranked by fairness. Clicking
   one puts it on the canvas as one undo step (`applyGenerated`); closing the dialog or picking stops the games. Same
   "the board changed meanwhile" rule as Generate. **From a finished board the suggestions are variations of it**
   (Proving Grounds' central loop survives in all of them); an empty canvas gives unrelated boards.

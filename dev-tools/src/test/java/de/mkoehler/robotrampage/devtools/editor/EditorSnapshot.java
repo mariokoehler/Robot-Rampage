@@ -15,9 +15,10 @@ import com.badlogic.gdx.utils.ScreenUtils;
 import de.mkoehler.robotrampage.board.BoardDefinition;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.client.render.BoardActor;
+import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.devtools.generate.BoardGenerator;
 import de.mkoehler.robotrampage.devtools.generate.Suggestions;
-import de.mkoehler.robotrampage.client.ui.Theme;
 
 import java.io.File;
 import java.util.List;
@@ -143,7 +144,7 @@ public final class EditorSnapshot {
 
     /**
      * Clicks Suggest on the first board the way the button does: waits for the suggestions and all their bot games,
-     * pictures the dialog, picks the second suggestion and checks that it is on the canvas and that one undo brings the
+     * pictures the dialog, clicks the second suggestion's board with real pointer events and checks that it is on the canvas and that one undo brings the
      * first board back. Then pictures the dialog with only two suggestions, to check the layout copes with fewer, and
      * the suggestions an empty canvas gets.
      *
@@ -172,7 +173,17 @@ public final class EditorSnapshot {
         dialog.update();
         write(app, new File(folder, "editor-suggestions.png"));
         List<Suggestions.Suggestion> found = dialog.suggestions();
-        app.pickSuggestion(found.get(1));
+        Stage stage = app.stage();
+        stage.getViewport().update(Theme.VIEW_WIDTH, Theme.VIEW_HEIGHT, true);
+        stage.act(0f);
+        stage.draw();
+        BoardActor thumbnail = dialog.thumbnails().get(1);
+        Vector2 centre = thumbnail.localToStageCoordinates(
+            new Vector2(thumbnail.getWidth() / 2, thumbnail.getHeight() / 2));
+        int screenX = Math.round(centre.x);
+        int screenY = Theme.VIEW_HEIGHT - Math.round(centre.y);
+        stage.touchDown(screenX, screenY, 0, Input.Buttons.LEFT);
+        stage.touchUp(screenX, screenY, 0, Input.Buttons.LEFT);
         if (!app.editor().draft().toDefinition().equals(found.get(1).draft().toDefinition())
             || app.suggestionsDialog() != null) {
             throw new IllegalStateException("Picking a suggestion did not put it on the canvas and close the dialog");

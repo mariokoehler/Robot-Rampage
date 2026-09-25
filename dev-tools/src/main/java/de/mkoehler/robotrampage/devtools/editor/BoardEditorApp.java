@@ -441,7 +441,8 @@ public final class BoardEditorApp extends ApplicationAdapter {
         Table top = new Table();
         top.add(ui.label("Board editor", Theme.TextStyle.HEADING, Theme.INK)).left().padRight(Theme.SPACE_6);
         status = ui.label("", Theme.TextStyle.BODY, Theme.INK_MUTED);
-        top.add(status).left().expandX();
+        status.setEllipsis(true);
+        top.add(status).left().expandX().fillX().minWidth(0f);
         generateButton = ui.button("Generate", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
         onClick(generateButton, this::generate);
         top.add(generateButton).size(200f, 52f).padLeft(Theme.SPACE_4);

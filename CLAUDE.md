@@ -393,7 +393,7 @@ flat "inside the range = 0" score needs a tie-breaker (`Rating.TYPICAL`).
 archive gave six near-identical boards in six different cells** (one lineage takes over every cell; seeding with scrambled
 copies did not fix it) — only separate islands did. Distinct cells do not mean distinct-looking boards: check the
 `editor-suggestions-empty.png` picture after any change here. `EditorSnapshot` also writes `editor-suggestions.png`
-(waits for all bot games, picks one, checks one-step undo) and `editor-suggestions-two.png` (fewer than six).
+(waits for all bot games, clicks a thumbnail with real pointer events, checks one-step undo) and `editor-suggestions-two.png` (fewer than six).
 
 **Next: whatever the user picks** — the rest of M6 (board composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
 (2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.
