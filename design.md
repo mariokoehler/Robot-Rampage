@@ -951,7 +951,7 @@ packaged, and players never see it. Run it with `start_board_editor.cmd` or
 - **Metrics (added 2026-09-25, step 1 of board generation, 3.14).** Below the checks, the editor rates every valid board.
   *At once, on every change* (`devtools.analysis.BoardMetrics`): the walking distance from each seat to flag 1 (around
   walls and pits, `board.WalkingDistances`, the same measure the bots use), the spread between the nearest and the
-  farthest seat (flagged above 6 steps *(unconfirmed)*), flag to flag, the whole route; hazards (pits, crushers, lasers
+  farthest seat (flagged above 4 steps, owner's threshold), flag to flag, the whole route; hazards (pits, crushers, lasers
   and how many squares their beams cover) and moving parts (belts, gears, pushers), each also as a share of the board. An
   unreachable flag is flagged in red. *In the background* (`devtools.analysis.Playouts`): once the board has stayed
   unchanged for a second, bots (2.14) play 20 games with a robot on every start square, seed 1 so a board always gives

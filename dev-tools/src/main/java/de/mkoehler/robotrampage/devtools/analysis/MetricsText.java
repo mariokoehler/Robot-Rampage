@@ -18,7 +18,7 @@ import java.util.StringJoiner;
 public final class MetricsText {
 
     /** A first-flag spread above this many steps is flagged as unfair between seats. */
-    static final int UNFAIR_SPREAD = 6;
+    static final int UNFAIR_SPREAD = 4;
 
     /**
      * How a line should look.
@@ -61,7 +61,7 @@ public final class MetricsText {
             lines.add(new Line("A flag cannot be walked to from some seat or from the flag before it.", Tone.BAD));
         }
         if (!metrics.seats().isEmpty()) {
-            StringJoiner walks = new StringJoiner(" · ");
+            StringJoiner walks = new StringJoiner("|");
             BoardMetrics.SeatRoute nearest = metrics.seats().get(0);
             BoardMetrics.SeatRoute farthest = nearest;
             for (BoardMetrics.SeatRoute seat : metrics.seats()) {
@@ -118,10 +118,10 @@ public final class MetricsText {
         }
         lines.add(new Line(String.format(Locale.ROOT, "Robots destroyed per game: %.1f", report.deathsPerGame())
             + (causes.length() > 0 ? " (" + causes + ")" : ""), Tone.NORMAL));
-        StringJoiner wins = new StringJoiner(" · ");
+        StringJoiner wins = new StringJoiner("|");
         int best = 0;
         for (int seat = 0; seat < report.winsBySeat().length; seat++) {
-            wins.add((seat + 1) + ": " + report.winsBySeat()[seat]);
+            wins.add(String.valueOf(report.winsBySeat()[seat]));
             best = Math.max(best, report.winsBySeat()[seat]);
         }
         boolean lopsided = report.finished() >= 5 && best * 2 > report.finished();
