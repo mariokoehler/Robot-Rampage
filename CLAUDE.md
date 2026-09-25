@@ -25,7 +25,7 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 **M0, M1 (rules engine), M2 (board format), M3 (server session + protocol) and M5 (pushers/crushers in play) done, M4
 slices 1-11 (client shell, Startup, Connect, Lobby, static board renderer, programming screen, turn replay, Game Over
 screen, respawn/power-down/eliminated dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture
-atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 425 unit tests in `core`, 4
+atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 438 unit tests in `core`, 4
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
@@ -642,8 +642,13 @@ misbehaves in a way this file doesn't already explain.
   conversion, libGDX's LWJGL3 backend decodes them natively and needs no extra native dependency beyond the
   already-present `gdx-platform` natives (checked against StarWars: it has no separate audio native artifact either).
   `client.audio.AudioKit` (own package, owned by `RobotRampageGame` like `UiKit`, loaded/disposed the same way) loads
-  every clip eagerly as a `Sound` — there are only a dozen, an `AssetManager` would be overkill. See design.md 4.7 for
-  what plays where.
+  every clip eagerly as a `Sound` — there are only about thirty, an `AssetManager` would be overkill. See design.md 4.4
+  for what plays where. **Replay sounds** (board elements, driving, pushes, flags) are chosen by the libGDX-free
+  `client.audio.ReplaySounds` — test them with real `TurnResolver` turns (`ReplaySoundsTest`), never hand-built event
+  lists: the engine logs a push *before* the pusher's step, and a hand-built list encodes the order you expected, which
+  is exactly how `TurnReplay` filed pushes into the previous robot's beat unnoticed until the push sound needed them.
+  Replay sounds play at 1× only; the default speed is 1× for that reason, but the owner's own saved settings may still
+  say 2× (existing files keep their value). `welcome_jingle_longer.mp3` in `assets-raw/sfx` is deliberately unused.
 
 ## Conventions / preferences
 

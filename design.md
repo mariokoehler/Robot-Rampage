@@ -936,7 +936,7 @@ be checked without playing. `lwjgl3/src/test/resources/renderer-probe.json` is a
 **Implemented (M4 slice 5): the replay.** `client.replay.TurnReplay` (libGDX-free) turns the events of a resolved turn into
 **beats** and plays them at a speed of 1×, 2× or 4×. It starts from the robots' state before the turn and applies the events
 beat by beat, so it ends exactly where the server ended (a test compares it with the rules engine over many random turns).
-Beats: the reveal of a register; one beat per robot's card, with the pushes it causes; one beat each for express belts, all
+Beats: the reveal of a register; one beat per robot's card, with the pushes it causes (the engine logs a push *before* the pusher's own step, so pushes wait for the next card move rather than joining the previous robot's beat — fixed 2026-09-25, found wiring up the push sound); one beat each for express belts, all
 belts, pushers, gears, crushers, checkpoints and clean-up (everything in them happens at once); one beat for a whole laser
 volley that hits at least one robot — **a volley that hits nobody produces no beat at all** (added 2026-09-25, playtest
 request): the lasers still fire on the server every register regardless (2.4 item 7), but with nobody standing in the line
@@ -1167,8 +1167,8 @@ if a music bed is ever wanted.
 | `PLACE_CARD` | A card from the hand is placed into a register (`GameScreen.place`). |
 | `RETURN_CARD` | A card is taken back out of a register (`GameScreen.takeBack`). |
 | `PROGRAM_LOCKED_IN` | The program is confirmed and sent (`GameScreen.confirm`). |
-| `ROBOT_DIES` | A replayed beat contains a `GameEvent.RobotDestroyed`, whether or not that also eliminates the robot — once per beat, not once per event (`GameScreen.playBeatSounds`, called from the same beat-transition check `refreshResolution` already uses). |
-| `LASER` | A replayed beat is a laser volley — which, since the skip-if-no-hit change just above, only ever exists when somebody was actually hit (`GameScreen.playBeatSounds`, checking `beat.phase() == SubPhase.LASERS`). |
+| `ROBOT_DIES` | A replayed beat contains a `GameEvent.RobotDestroyed` of **any** robot, whether or not that also eliminates it — once per beat, not once per event. Replay sound, see below. |
+| `LASER` | A replayed beat is a laser volley, whoever it hits — a volley only gets a beat when somebody was actually hit (4.3). Replay sound, see below. |
 | `PROBLEM_OR_ERROR` | `StageScreen.toast(...)` (every use today is a `RequestRejected` reason, in both `GameScreen` and `LobbyScreen`), and the four `Theme.DANGER`-striped dialogs on the Connect screen: can't-reach, version-mismatch, couldn't-join, disconnected. Deliberately *not* played for the eliminated-player dialog, which already gets `ROBOT_DIES`, or for anything else that isn't a real problem. |
 | `WARNING_30` / `WARNING_10` | Looped while the programming timer counts down: `WARNING_30` from 30 seconds, swapped for `WARNING_10` at 10, stopped at 0 — never both at once. Driven by `GameModel.timerCountingDown()` (true while the timer is actually decreasing: programming/submitted/sitting-out, not paused), `secondsLeft()` and `programmingSeconds()` (the turn's total, added 2026-09-23), read every frame in `GameScreen.render` next to the existing `timeLabel`/`timeBar` update, and stopped explicitly in `GameScreen.dispose()` — the only place that starts the loop is also the only place still ticking it, so it must also be the one that stops it. **Each band only starts if the turn's total is longer than that band's own threshold** (`AudioKit.updateCountdownWarning`): a 30-second turn (2.13's host-settable minimum) never starts the 30 s warning on its own first frame and runs it for the whole turn, since there was no "still plenty of time" phase before it to warn *away from*. |
 | `PLAYER_JOINS_LOBBY` / `PLAYER_LEFT_LOBBY` | A seat appears or disappears between one `LobbyState` and the next this player's own `LobbyScreen` receives (`LobbyScreen.playRosterChangeSounds`, diffing seat sets — there is no dedicated join/leave message for the lobby phase, unlike mid-game). Silent for the very first `LobbyState` a screen ever sees (nothing to diff against) and for this player's own join. |
@@ -1176,7 +1176,28 @@ if a music bed is ever wanted.
 | `BUTTON_CLICK` | The default for every `TextButton` `UiKit.button(...)` makes, added inside the one factory method every button in the client goes through (confirmed by grepping for `new TextButton` — there is exactly one call site, in `UiKit` itself). Suppressed for a disabled button (a second, independently-added `ClickListener` still receives the touch even though the button's own internal one no-ops — `Button.setDisabled` never touches `Touchable`) and for the handful of buttons whose own action already plays a more specific clip: Confirm Program (`PROGRAM_LOCKED_IN`), the power-down dialog's confirm button (`POWER_DOWN_NEXT_TURN`), and Connect (`CONNECTING`, only on a successful attempt, but silence on a validation failure was already the pre-existing behaviour). Those three use the new `UiKit.button(text, kind, style, silent)` overload. Also played for the Lobby's "I'm ready" `PillToggle` (`UiKit.toggle()`, its own `ClickListener` — a `PillToggle` is not a `TextButton` so it does not go through the factory above, and it has no disabled state to guard against). |
 | `GAME_WON` | The Game Over screen appears (`GameScreen.showGameOver`) — once, regardless of whether this player won or lost. |
 | `WELCOME_JINGLE` | Once per actual app launch, in `RobotRampageGame.create()` right after the Startup screen is shown — deliberately *not* in `StartupScreen`'s constructor, which re-runs every time the player clicks "Back" from the Connect screen and would replay it on every return. |
-| `BEEP_1`–`BEEP_4` | Loaded, not wired to anything yet — generic "whimsy" beeps the owner hadn't decided a use for at drop-in time. |
+| `BEEP_1`–`BEEP_4` | **Any** robot touches a flag: one of the four, picked at random each time. Replay sound. |
+| `ROBOT_DRIVES_FORWARD` / `ROBOT_DRIVES_BACKWARDS` | My robot moves with a Move 1-3 / Back Up card — once per card, not per square. Replay sound. |
+| `ROBOT_TURNS` | My robot plays Rotate Left, Rotate Right or U-Turn. Replay sound. |
+| `ROBOT_HITS_A_WALL` | My move card is **cut short** (Move 3 stops after one or two squares, and my robot is not lost on the way) — played together with the drive sound. A card blocked from its very first square logs no event at all, so there is no beat to hang the sound on; that case stays silent (owner decision, 2026-09-25: no engine/protocol change for it). |
+| `ROBOT_PUSHES_ANOTHER_ROBOT` | My robot's card pushes another robot, **or another robot's card pushes mine**. |
+| `CONVEYOR_BELT_MOVES` / `ROBOT_IS_TURNED_BY_GEAR` / `ROBOT_IS_PUSHED_BY_PUSHER` | A belt carries / a gear turns / a pusher shoves my robot. Replay sounds. |
+| `ROBOT_IS_CRUSHED_BY_CRUSHER` / `ROBOT_DROPS_INTO_PIT` | My robot is destroyed by a crusher / a pit — **on top of** `ROBOT_DIES`, not instead of it. Leaving the board over an edge has no sound of its own (only `ROBOT_DIES`). |
+| `ROBOT_IS_REPAIRED_ON_HEALTH_TILE` | My robot is repaired on a repair site in the clean-up — not the full repair of powering down (a `RobotPoweredDown` of my robot in the same beat suppresses it). |
+
+**Replay sounds (2026-09-25).** Every sound of the turn replay is chosen by `client.audio.ReplaySounds.forBeat` (libGDX-free,
+`ReplaySoundsTest` plays real `TurnResolver` turns) and played by `GameScreen.playBeatSounds` when a beat starts. Rules:
+- **Only at 1× playback** (the speed in effect when the beat starts, i.e. `GameScreen`'s own per-turn `speed`, not the saved
+  setting): clips are not time-stretched, so at 2×/4× they would pile up. This includes `LASER` and `ROBOT_DIES`. 1× is
+  therefore the default playback speed now (`ClientSettings.defaults()`); an existing settings file keeps whatever it saved.
+- **Heard from this player's robot** ("what is my robot doing / what is happening to it"): other robots drive, turn, ride
+  belts and gears silently, unless their action hits my robot (a push). Exceptions heard for everyone: `LASER`,
+  `ROBOT_DIES`, the flag beeps.
+- Each clip at most once per beat; several different clips of one beat play at once.
+- **No sync with the animation** (owner decision, to try it out first): a clip starts with its beat and simply plays out
+  (all are under 1 s); if the beat is shorter, the next beat's clips overlap it. Beat lengths at 1×: 4.3.
+- Not replayed when the replay reaches its end or is skipped to it (`!replay.isDone()`), which used to repeat the last beat's
+  clips.
 
 **Volume:** one global slider in the Settings dialog (4.6) — no separate music bed exists, so there is no
 music/effects split. `AudioKit.setVolume` scales every `play`/`loop` call and live-updates whatever countdown loop is
@@ -1239,7 +1260,7 @@ disconnecting, which isn't a "fill" at all. Still to be added with the lobby and
   events it has replayed. **Done** (`GameModel` remembers the last flag of every robot and the turn it was eliminated in).
 
 **Client-only features the mockups imply:** local settings saved as JSON (volume, fullscreen, vsync, window
-size, playback speed, show my program on the board), and the last server address, name and
+size, playback speed — default 1×, the only speed the replay's sounds play at (4.4) — show my program on the board), and the last server address, name and
 session token for rejoining "from this computer".
 
 **Settings dialog (implemented, 2026-09-23), two deliberate deviations from the mockup (owner's request):** one global

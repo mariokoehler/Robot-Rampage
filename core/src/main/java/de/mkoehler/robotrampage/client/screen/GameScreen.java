@@ -18,6 +18,7 @@ import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.client.RobotRampageGame;
 import de.mkoehler.robotrampage.client.audio.AudioKit;
+import de.mkoehler.robotrampage.client.audio.ReplaySounds;
 import de.mkoehler.robotrampage.client.board.BoardKey;
 import de.mkoehler.robotrampage.client.board.BoardGeometry;
 import de.mkoehler.robotrampage.client.board.RobotPose;
@@ -50,7 +51,6 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
 import de.mkoehler.robotrampage.rules.Card;
-import de.mkoehler.robotrampage.rules.GameEvent;
 import de.mkoehler.robotrampage.rules.Robot;
 import de.mkoehler.robotrampage.rules.SubPhase;
 import de.mkoehler.robotrampage.rules.RobotStatus;
@@ -58,6 +58,7 @@ import de.mkoehler.robotrampage.rules.RobotStatus;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Random;
 
 /**
  * The screen of a running game: the players, the board, this player's robot, and below them the five registers and the hand
@@ -123,6 +124,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     private boolean replayCompleted;
     private boolean paused;
     private float speed = game.settings().resolutionSpeed();
+    private final Random soundRandom = new Random();
     private int shownBeat = -1;
     private boolean shownDone;
     private final List<Object> returnToLobby = new ArrayList<>();
@@ -1215,7 +1217,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
             boolean newBeat = shownBeat != replay.beatIndex();
             shownBeat = replay.beatIndex();
             shownDone = replay.isDone();
-            if (newBeat) {
+            if (newBeat && !replay.isDone() && speed == 1f) {
                 playBeatSounds(replay.currentBeat());
             }
             refreshResolution();
@@ -1223,8 +1225,8 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
     }
 
     /**
-     * Plays the sound effect for whatever a newly shown beat of the replay did, once per beat regardless of how many
-     * matching events it holds.
+     * Plays the sound effects of a newly shown beat of the replay (chosen by {@link ReplaySounds}). Only called at 1x
+     * playback: the clips are not stretched or squeezed, so at a faster speed they would pile up over the beats.
      *
      * @param beat the beat that just started showing, or {@code null} for a turn without events
      */
@@ -1232,14 +1234,10 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         if (beat == null) {
             return;
         }
-        if (beat.phase() == SubPhase.LASERS) {
-            game.audio().play(AudioKit.Clip.LASER);
-        }
-        for (GameEvent event : beat.events()) {
-            if (event instanceof GameEvent.RobotDestroyed) {
-                game.audio().play(AudioKit.Clip.ROBOT_DIES);
-                return;
-            }
+        Card myCard = replay.plays().stream().filter(play -> play.robotId() == model.mySeat()).map(TurnReplay.Play::card)
+            .findFirst().orElse(null);
+        for (AudioKit.Clip clip : ReplaySounds.forBeat(beat, model.mySeat(), myCard, soundRandom)) {
+            game.audio().play(clip);
         }
     }
 

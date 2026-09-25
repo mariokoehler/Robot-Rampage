@@ -459,7 +459,9 @@ public final class TurnReplay {
     }
 
     /**
-     * Makes one beat for every card played in the robot-movement step, with the pushes it causes.
+     * Makes one beat for every card played in the robot-movement step, with the pushes it causes. The engine logs a push
+     * (and the pushed robot being lost) <em>before</em> the pushing robot's own step, so such events wait and join the next
+     * card move; only the acting robot's own destruction, logged right after its step, stays with the action it ends.
      *
      * @param register the register
      * @param step     the events of the step
@@ -468,6 +470,7 @@ public final class TurnReplay {
     private void movement(int register, List<GameEvent> step, Map<Integer, Card> revealed) {
         List<List<GameEvent>> actions = new ArrayList<>();
         List<GameEvent> current = null;
+        List<GameEvent> pending = new ArrayList<>();
         int currentRobot = GameEvent.NO_ROBOT;
         for (GameEvent event : step) {
             int cardRobot = cardRobot(event);
@@ -477,27 +480,35 @@ public final class TurnReplay {
                     actions.add(current);
                     currentRobot = cardRobot;
                 }
+                current.addAll(pending);
+                pending.clear();
+                current.add(event);
+            } else if (current != null && event instanceof GameEvent.RobotDestroyed destroyed
+                && destroyed.robotId() == currentRobot) {
+                current.add(event);
             } else {
-                if (current == null) {
-                    current = new ArrayList<>();
-                    actions.add(current);
-                    currentRobot = GameEvent.NO_ROBOT;
-                }
+                pending.add(event);
             }
-            current.add(event);
+        }
+        if (!pending.isEmpty()) {
+            if (current == null) {
+                current = new ArrayList<>();
+                actions.add(current);
+            }
+            current.addAll(pending);
         }
         for (List<GameEvent> action : actions) {
             List<Line> lines = new ArrayList<>();
             int pushes = 0;
+            int actor = action.stream().mapToInt(TurnReplay::cardRobot).filter(robot -> robot != GameEvent.NO_ROBOT)
+                .findFirst().orElse(GameEvent.NO_ROBOT);
+            if (actor != GameEvent.NO_ROBOT) {
+                Card card = revealed.get(actor);
+                lines.add(new Line(LineKind.CARD, name(actor) + " plays " + (card == null ? "a card"
+                    : CardLook.name(card.type())), card == null ? "" : "Priority " + card.priority()));
+            }
             for (GameEvent event : action) {
-                int robot = cardRobot(event);
-                if (robot != GameEvent.NO_ROBOT) {
-                    if (lines.isEmpty()) {
-                        Card card = revealed.get(robot);
-                        lines.add(new Line(LineKind.CARD, name(robot) + " plays " + (card == null ? "a card"
-                            : CardLook.name(card.type())), card == null ? "" : "Priority " + card.priority()));
-                    }
-                } else if (event instanceof GameEvent.RobotMoved moved && moved.cause() == MoveCause.PUSHED) {
+                if (event instanceof GameEvent.RobotMoved moved && moved.cause() == MoveCause.PUSHED) {
                     pushes++;
                     lines.add(new Line(LineKind.PUSH, name(moved.robotId()) + " is pushed", "By another robot"));
                 } else if (event instanceof GameEvent.RobotDestroyed destroyed) {

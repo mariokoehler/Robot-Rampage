@@ -28,6 +28,8 @@ import de.mkoehler.robotrampage.rules.RotationCause;
 import de.mkoehler.robotrampage.rules.SubPhase;
 import de.mkoehler.robotrampage.rules.TurnResolver;
 import de.mkoehler.robotrampage.rules.TurnResult;
+import de.mkoehler.robotrampage.testsupport.AsciiBoard;
+import de.mkoehler.robotrampage.testsupport.Programs;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -108,6 +110,28 @@ class TurnReplayTest {
         assertEquals(List.of(new Line(LineKind.CARD, "Sophie plays Move 3", "Priority 830"),
             new Line(LineKind.PUSH, "Mario is pushed", "By another robot")), beats.get(1).lines());
         assertEquals("Mario plays Rotate Right", beats.get(2).lines().get(0).title());
+    }
+
+    /**
+     * The engine logs a push before the pushing robot's own step; the push still belongs to the pusher's moment, not to
+     * the moment of the robot that acted before it.
+     */
+    @Test
+    void aPushJoinsThePushersMomentEvenWhenAnotherRobotActedFirst() {
+        GameState state = AsciiBoard.state(". . . .\n. . . .", ". . . .\n1 2 . 0");
+        state.robot(1).setFacing(Direction.EAST);
+        Programs.program(state, 0, 900, CardType.MOVE_1);
+        Programs.program(state, 1, 100, CardType.MOVE_1);
+        List<RobotState> before = new ArrayList<>();
+        state.robots().forEach(robot -> before.add(RobotState.of(robot)));
+
+        TurnReplay replay = new TurnReplay(before, TurnResolver.resolve(state).events(), TurnReplayTest::name);
+        List<Beat> moves = replay.beats().stream().filter(beat -> beat.phase() == SubPhase.ROBOT_MOVEMENT).toList();
+
+        assertEquals(2, moves.size(), "one moment per card");
+        assertEquals(1, moves.get(0).events().size(), "Sophie's move carries only her own step");
+        assertEquals(List.of(new Line(LineKind.CARD, "Mario plays Move 1", "Priority 100"),
+            new Line(LineKind.PUSH, "Kenji is pushed", "By another robot")), moves.get(1).lines());
     }
 
     /**

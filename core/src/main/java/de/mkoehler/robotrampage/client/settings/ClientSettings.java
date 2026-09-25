@@ -42,8 +42,8 @@ public record ClientSettings(String serverAddress, String displayName, String se
     /**
      * The settings of a first run: the owner's own dedicated server (design.md 3.12) rather than a local dev
      * server, the name of the person logged in to this computer, no session token yet, and the Settings dialog's
-     * own defaults (mockup 4.6): 80% volume, windowed at 1920x1080, vsync on, 2x resolution playback, the ghost
-     * path shown.
+     * own defaults (mockup 4.6): 80% volume, windowed at 1920x1080, vsync on, 1x resolution playback (the only speed
+     * the replay's sound effects play at), the ghost path shown.
      *
      * @return the default settings
      */
@@ -53,7 +53,7 @@ public record ClientSettings(String serverAddress, String displayName, String se
             user = user.substring(0, NetworkConstants.MAX_DISPLAY_NAME_LENGTH);
         }
         return new ClientSettings("NAS5714.myqnapcloud.com:" + NetworkConstants.TCP_PORT, user, null, 0.8f, false,
-            true, 1920, 1080, 2f, true);
+            true, 1920, 1080, 1f, true);
     }
 
     /**

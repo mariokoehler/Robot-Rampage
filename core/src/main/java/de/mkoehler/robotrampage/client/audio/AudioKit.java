@@ -51,14 +51,36 @@ public final class AudioKit implements Disposable {
         GAME_WON("game_won.mp3"),
         /** The application finishes loading and the Startup screen appears. */
         WELCOME_JINGLE("welcome_jingle.mp3"),
-        /** Not wired to anything yet; kept loaded and ready for whatever earns it. */
+        /** A robot touches a flag; one of the four beeps, picked at random each time. */
         BEEP_1("beep_1.mp3"),
-        /** Not wired to anything yet; kept loaded and ready for whatever earns it. */
+        /** A robot touches a flag; one of the four beeps, picked at random each time. */
         BEEP_2("beep_2.mp3"),
-        /** Not wired to anything yet; kept loaded and ready for whatever earns it. */
+        /** A robot touches a flag; one of the four beeps, picked at random each time. */
         BEEP_3("beep_3.mp3"),
-        /** Not wired to anything yet; kept loaded and ready for whatever earns it. */
-        BEEP_4("beep_4.mp3");
+        /** A robot touches a flag; one of the four beeps, picked at random each time. */
+        BEEP_4("beep_4.mp3"),
+        /** This player's robot drives forward with a move card. */
+        ROBOT_DRIVES_FORWARD("robot_drives_forward.mp3"),
+        /** This player's robot backs up with a Back Up card. */
+        ROBOT_DRIVES_BACKWARDS("robot_drives_backwards.mp3"),
+        /** This player's robot turns with a Rotate Left, Rotate Right or U-Turn card. */
+        ROBOT_TURNS("robot_turns_left_right_or_u_turn.mp3"),
+        /** This player's move card is cut short by a wall. */
+        ROBOT_HITS_A_WALL("robot_hits_a_wall.mp3"),
+        /** This player's robot pushes another robot, or is pushed by one. */
+        ROBOT_PUSHES_ANOTHER_ROBOT("robot_pushes_another_robot.mp3"),
+        /** This player's robot is carried by a conveyor belt. */
+        CONVEYOR_BELT_MOVES("conveyor_belt_moves.mp3"),
+        /** This player's robot is turned by a gear. */
+        ROBOT_IS_TURNED_BY_GEAR("robot_is_turned_by_gear.mp3"),
+        /** This player's robot is shoved by a wall-mounted pusher. */
+        ROBOT_IS_PUSHED_BY_PUSHER("robot_is_pushed_by_pusher.mp3"),
+        /** This player's robot is destroyed by a crusher. */
+        ROBOT_IS_CRUSHED_BY_CRUSHER("robot_is_crushed_by_crusher.mp3"),
+        /** This player's robot falls into a pit. */
+        ROBOT_DROPS_INTO_PIT("robot_drops_into_pit.mp3"),
+        /** This player's robot is repaired on a repair site at the end of the turn. */
+        ROBOT_IS_REPAIRED_ON_HEALTH_TILE("robot_is_repaired_on_health_tile.mp3");
 
         private final String file;
 
