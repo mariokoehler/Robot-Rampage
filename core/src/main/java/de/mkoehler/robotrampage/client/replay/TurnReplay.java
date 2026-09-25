@@ -461,7 +461,8 @@ public final class TurnReplay {
     /**
      * Makes one beat for every card played in the robot-movement step, with the pushes it causes. The engine logs a push
      * (and the pushed robot being lost) <em>before</em> the pushing robot's own step, so such events wait and join the next
-     * card move; only the acting robot's own destruction, logged right after its step, stays with the action it ends.
+     * card move; only the acting robot's own destruction, logged right after its step (nothing waiting), stays with the
+     * action it ends — the same robot lost later to someone else's push waits like the push does.
      *
      * @param register the register
      * @param step     the events of the step
@@ -483,7 +484,7 @@ public final class TurnReplay {
                 current.addAll(pending);
                 pending.clear();
                 current.add(event);
-            } else if (current != null && event instanceof GameEvent.RobotDestroyed destroyed
+            } else if (current != null && pending.isEmpty() && event instanceof GameEvent.RobotDestroyed destroyed
                 && destroyed.robotId() == currentRobot) {
                 current.add(event);
             } else {

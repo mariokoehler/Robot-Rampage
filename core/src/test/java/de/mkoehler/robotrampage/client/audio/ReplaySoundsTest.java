@@ -158,6 +158,23 @@ class ReplaySoundsTest {
     }
 
     /**
+     * Being pushed into a pit after this player's robot has already acted in the register is still heard in the pusher's
+     * beat; this player's own beat only has its own card.
+     */
+    @Test
+    void beingPushedIntoAPitAfterActingFirst() {
+        GameState state = east(AsciiBoard.state(". . o", "1 0 ."), 1);
+        Programs.program(state, ME, 900, CardType.ROTATE_RIGHT);
+        Programs.program(state, 1, 100, CardType.MOVE_1);
+
+        List<List<Clip>> sounds = sounds(state);
+
+        assertEquals(List.of(Clip.ROBOT_TURNS), beatWith(sounds, Clip.ROBOT_TURNS));
+        assertEquals(Set.of(Clip.ROBOT_PUSHES_ANOTHER_ROBOT, Clip.ROBOT_DROPS_INTO_PIT, Clip.ROBOT_DIES),
+            Set.copyOf(beatWith(sounds, Clip.ROBOT_PUSHES_ANOTHER_ROBOT)));
+    }
+
+    /**
      * This player's robot pushing another is heard with its own drive.
      */
     @Test

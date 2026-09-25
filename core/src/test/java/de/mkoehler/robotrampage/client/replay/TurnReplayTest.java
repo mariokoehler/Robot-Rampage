@@ -135,6 +135,26 @@ class TurnReplayTest {
     }
 
     /**
+     * A robot that already acted and is then pushed into a pit is lost in the pusher's moment, not in its own earlier one.
+     */
+    @Test
+    void aRobotPushedIntoAPitAfterActingIsLostInThePushersMoment() {
+        GameState state = AsciiBoard.state(". . o", "1 0 .");
+        state.robot(1).setFacing(Direction.EAST);
+        Programs.program(state, 0, 900, CardType.ROTATE_RIGHT);
+        Programs.program(state, 1, 100, CardType.MOVE_1);
+        List<RobotState> before = new ArrayList<>();
+        state.robots().forEach(robot -> before.add(RobotState.of(robot)));
+
+        TurnReplay replay = new TurnReplay(before, TurnResolver.resolve(state).events(), TurnReplayTest::name);
+        List<Beat> moves = replay.beats().stream().filter(beat -> beat.phase() == SubPhase.ROBOT_MOVEMENT).toList();
+
+        assertEquals(List.of(new Line(LineKind.CARD, "Sophie plays Rotate Right", "Priority 900")), moves.get(0).lines());
+        assertTrue(moves.get(1).lines().contains(new Line(LineKind.DESTROYED, "Sophie is destroyed", "Fell into a pit")),
+            moves.get(1).lines().toString());
+    }
+
+    /**
      * A laser volley is a single moment: damage of one robot from several lasers is merged and says where it came from, only
      * the beams that actually hit somebody are shown (a third laser in this volley misses and is dropped), and the damage
      * tags are those of the volley.
