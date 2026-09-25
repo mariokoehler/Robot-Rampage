@@ -9,6 +9,7 @@ import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.scenes.scene2d.Touchable;
+import com.badlogic.gdx.scenes.scene2d.ui.Cell;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
@@ -47,6 +48,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
     private static final float TILE = 72f;
     private static final float SIDE_WIDTH = 440f;
     private static final float CHECKS_HEIGHT = 80f;
+    private static final float CHECKS_HEIGHT_INVALID = 420f;
     private static final float FIELD_HEIGHT = 48f;
     private static final float PILL_HEIGHT = 40f;
     private static final String NEW_ID = "new-board";
@@ -86,6 +88,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
     private Label status;
     private BoardArea boardArea;
     private MetricsPanel metrics;
+    private Cell<ScrollPane> checksCell;
     private BoardDefinition measuredLayout;
 
     /**
@@ -235,6 +238,8 @@ public final class BoardEditorApp extends ApplicationAdapter {
         } else if (result.isValid() && idValid) {
             addCheck("No errors. The board can be saved; the warnings are legal but worth a look.", Theme.SUCCESS);
         }
+        checksCell.height(result.isValid() && idValid ? CHECKS_HEIGHT : CHECKS_HEIGHT_INVALID);
+        checksCell.getTable().invalidateHierarchy();
         BoardDefinition layout = result.isValid() ? layoutOf(editor.draft().toDefinition()) : null;
         if (layout == null || !layout.equals(measuredLayout)) {
             measuredLayout = layout;
@@ -379,7 +384,8 @@ public final class BoardEditorApp extends ApplicationAdapter {
         ScrollPane scroll = new ScrollPane(checks);
         scroll.setFadeScrollBars(false);
         scroll.setScrollingDisabled(true, false);
-        panel.add(scroll).growX().height(CHECKS_HEIGHT).left().top().row();
+        checksCell = panel.add(scroll).growX().height(CHECKS_HEIGHT).left().top();
+        checksCell.row();
         panel.add(ui.label("Metrics", Theme.TextStyle.HEADING, Theme.INK)).left().padTop(Theme.SPACE_4)
             .padBottom(Theme.SPACE_3).row();
         ScrollPane metricsScroll = new ScrollPane(metrics.table());

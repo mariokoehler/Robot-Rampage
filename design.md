@@ -956,7 +956,7 @@ packaged, and players never see it. Run it with `start_board_editor.cmd` or
   the same numbers, and the panel fills in game by game: games finished within 60 turns and how long they took, flags
   touched, robots destroyed per game by cause, and wins by seat. It flags boards whose games mostly run past 60 turns,
   and one seat winning most games. About 1.3 s per game on proving-grounds, on one daemon worker thread; any edit
-  cancels the run and starts over, while typing the id, name or author does not. Wording and flags are in the
+  cancels the run and starts over, while typing the id, name or author does not. No games are played while a flag is unreachable (they could never end), and a run that throws says so in red rather than waiting forever. The checks list takes most of the column while the board is invalid (the metrics are one line then) and shrinks once it is valid. **Measured, 20 games each (2026-09-25):** proving-grounds finishes every game in 7.4 turns on average, 8 robots lost per game (mostly off the edge), and wins by seat 0·0·3·3·3·2·1·8, so its 7-step spread to flag 1 really does favour the near seats; loading-dock (spread 4) finishes in 9.9 turns, twice as deadly (16 per game, mostly pits), wins spread 1·3·3·1·3·4·2·3. Twenty games over eight seats is indicative, not proof. Wording and flags are in the
   libGDX-free `MetricsText`; `MetricsPanel` is the widget.
 
 ### 3.14 Board generation (planned)

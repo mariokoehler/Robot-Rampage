@@ -41,7 +41,7 @@ final class MetricsPanel {
      * @param run    the run's number
      * @param report the report
      */
-    private record Tagged(int run, Playouts.Report report) {
+    private record Tagged(int run, Playouts.Report report, String failure) {
     }
 
     private final UiKit ui;
@@ -92,9 +92,16 @@ final class MetricsPanel {
         shown = null;
         pending = board;
         quiet = 0f;
-        instantLines = board == null
+        BoardMetrics measured = board == null ? null : BoardMetrics.of(board);
+        instantLines = measured == null
             ? List.of(new MetricsText.Line("Fix the checks above to see the metrics.", MetricsText.Tone.NORMAL))
-            : MetricsText.instant(BoardMetrics.of(board));
+            : MetricsText.instant(measured);
+        if (measured != null && !measured.allReachable()) {
+            pending = null;
+            rebuild(List.of(new MetricsText.Line("No bot games while a flag cannot be reached.",
+                MetricsText.Tone.NORMAL)));
+            return;
+        }
         rebuild(List.of());
     }
 
@@ -114,7 +121,9 @@ final class MetricsPanel {
         Tagged report = latest.get();
         if (running && report != shown && report != null && report.run() == run.get()) {
             shown = report;
-            rebuild(MetricsText.playouts(report.report(), GAMES));
+            rebuild(report.failure() != null
+                ? List.of(new MetricsText.Line("The bot games failed: " + report.failure(), MetricsText.Tone.BAD))
+                : MetricsText.playouts(report.report(), GAMES));
         }
     }
 
@@ -124,7 +133,7 @@ final class MetricsPanel {
      * @return the games, 0 before the first has finished
      */
     int gamesShown() {
-        return shown == null ? 0 : shown.report().games();
+        return shown == null || shown.report() == null ? 0 : shown.report().games();
     }
 
     /**
@@ -136,7 +145,7 @@ final class MetricsPanel {
     }
 
     /**
-     * Starts a bot run on the worker.
+     * Starts a bot run on the worker. Should the games throw, the panel says so in red instead of waiting forever.
      *
      * @param board the board to play
      */
@@ -144,8 +153,14 @@ final class MetricsPanel {
         int number = run.get();
         running = true;
         rebuild(MetricsText.playouts(null, GAMES));
-        worker.submit(() -> Playouts.run(board, GAMES, SEED, report -> latest.set(new Tagged(number, report)),
-            () -> run.get() != number));
+        worker.submit(() -> {
+            try {
+                Playouts.run(board, GAMES, SEED, report -> latest.set(new Tagged(number, report, null)),
+                    () -> run.get() != number);
+            } catch (RuntimeException e) {
+                latest.set(new Tagged(number, null, e.toString()));
+            }
+        });
     }
 
     /**
