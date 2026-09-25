@@ -21,6 +21,7 @@ import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerConfirmed;
 import de.mkoehler.robotrampage.net.messages.PlayerConnection;
+import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetReady;
@@ -234,6 +235,10 @@ class ServerIntegrationTest {
         LobbyState withBot = ann.take(LobbyState.class);
         assertEquals(2, withBot.players().size());
         assertTrue(withBot.players().get(1).bot() && withBot.players().get(1).ready());
+        ann.send(new AddBot());
+        assertEquals(3, ann.take(LobbyState.class).players().size());
+        ann.send(new RemoveBot(2));
+        assertEquals(2, ann.take(LobbyState.class).players().size(), "RemoveBot takes the second bot away again");
 
         ann.send(new StartGameRequest());
         ann.take(GameStarted.class);

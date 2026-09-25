@@ -441,9 +441,9 @@ friends can fill out the table.
   robots stand still in its imagination, the same limitation as the ghost path, 4.3); since only its own robot acts,
   priorities cannot change the outcome and programs are compared by card types alone. There is one difficulty
   *(unconfirmed; easy/hard would pick among the top few vs. the best)*. Measured: at most ~50 ms per bot per turn on
-  proving-grounds (about four times that for a bot choosing a re-entry facing), on the session's own thread; four bots
-  alone finish their games (`BotBrainTest`). A bot's randomness comes from the game seed, so a bug report's seed
-  reproduces its choices. Should the brain ever throw, the bot's cards are filled in at random instead.
+  proving-grounds (~130 ms for a bot choosing a re-entry facing), on the session's own thread; four bots
+  alone finish their games (`BotBrainTest`). A bot's randomness comes from the game seed and a counter reset at every start (like
+  random fills), so a bug report's seed reproduces its choices whatever happened in the lobby before. Should the brain ever throw, the bot's cards are filled in at random instead.
 - **No humans left:** bots never play or wait on their own. When the last human leaves the lobby, or is removed from a
   running game after the grace period, or disconnects from the results screen, the session returns to an empty lobby
   (bots removed), so the server is free for the next group. Bots stay seated and ready for the next game after
@@ -1346,8 +1346,9 @@ options later belong in a "create game" step, see 7) → `Game` (alternating **P
 **Resolution** views) → `Game Over` (standings) → back to `Lobby`. Details of the
 lobby model are open (7).
 
-**Lobby (implemented).** The screen shows a row for every seat of the board (robot, name, Host/You/Ready chips, or
-"Waiting for a player…"), the facts of the game, the "I am ready" switch and, for the host, "Start game". **The
+**Lobby (implemented).** The screen shows a row for every seat of the board (robot, name, Host/You/Bot/Ready chips, or
+"Waiting for a player…"; the host gets **"Add bot"** on the first free seat — the one the server fills — and **"Remove"**
+on every bot's row, 2.14), the facts of the game, the "I am ready" switch and, for the host, "Start game". **The
 "Programming time" fact is a host-only +/- stepper** (2.13; `LobbyScreen.programmingTimeStepper`, in
 `NetworkConstants.PROGRAMMING_SECONDS_STEP` steps, clamped client-side to `MIN_PROGRAMMING_SECONDS`/
 `MAX_PROGRAMMING_SECONDS` and again authoritatively by `GameSession.setProgrammingSeconds`) — everyone else sees it as

@@ -1386,6 +1386,32 @@ class GameSessionTest {
     }
 
     /**
+     * The same seed replays the same bot choices, however many bots were added and removed in the lobby before the start,
+     * so a bug report's seed is enough to reproduce what a bot did.
+     */
+    @Test
+    void botChoicesAreReproducibleFromTheSeed() {
+        join("Ann");
+        session.addBot(0);
+        session.startGame(0);
+        advance(CAP);
+        List<Object> first = outbox.receivedBy(0, TurnResolved.class).stream().map(m -> (Object) m).toList();
+
+        outbox = new RecordingOutbox();
+        now.set(1_000);
+        session = newSession(42L);
+        join("Ann");
+        session.addBot(0);
+        session.addBot(0);
+        session.removeBot(0, 2);
+        session.startGame(0);
+        advance(CAP);
+
+        assertFalse(first.isEmpty());
+        assertEquals(first, outbox.receivedBy(0, TurnResolved.class).stream().map(m -> (Object) m).toList());
+    }
+
+    /**
      * A bot is never the host: when the last human leaves the lobby, the bots go with them, and the next person to join
      * finds an empty table and hosts it.
      */

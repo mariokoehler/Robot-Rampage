@@ -99,6 +99,7 @@ public final class GameSession {
 
     private static final int MAX_NAME_LENGTH = NetworkConstants.MAX_DISPLAY_NAME_LENGTH;
     private static final long FILL_STRIDE = 0x9E3779B97F4A7C15L;
+    private static final long BOT_STRIDE = 0xC2B2AE3D27D4EB4FL;
 
     private final List<LoadedBoard> boards;
     private final List<String> boardJsons;
@@ -122,7 +123,8 @@ public final class GameSession {
     private boolean squeezeActive;
     private long nextTurnAt;
     private int fillCounter;
-    private final Random botRandom;
+    private int botCounter;
+    private final Random nameRandom;
 
     /**
      * Creates a session in the lobby phase.
@@ -171,7 +173,7 @@ public final class GameSession {
         this.config = config;
         this.programmingMillis = config.programmingMillis();
         this.seed = seed;
-        this.botRandom = new Random(seed ^ 0x5DEECE66DL);
+        this.nameRandom = new Random(seed ^ 0x5DEECE66DL);
         this.clock = clock;
         this.outbox = outbox;
     }
@@ -439,7 +441,7 @@ public final class GameSession {
         }
         Set<String> names = new HashSet<>();
         players.values().stream().filter(player -> !player.left).forEach(player -> names.add(player.name));
-        players.put(free, new SessionPlayer(free, BotNames.pick(names, botRandom), UUID.randomUUID().toString(),
+        players.put(free, new SessionPlayer(free, BotNames.pick(names, nameRandom), UUID.randomUUID().toString(),
             nextJoinOrder++, true));
         broadcastLobby();
     }
@@ -514,6 +516,7 @@ public final class GameSession {
         state = new GameState(board().board(), robots, Deck.standard(seed));
         turn = 0;
         fillCounter = 0;
+        botCounter = 0;
         for (SessionPlayer player : players.values()) {
             outbox.send(player.seat, new GameStarted(boardJsons.get(selectedBoard), playerInfos(), player.seat));
         }
@@ -744,7 +747,8 @@ public final class GameSession {
 
     /**
      * Lets the computer program a bot's robot for this turn (design.md 2.14): it picks its re-entry facing if it may, then
-     * locks its program in at once. Should the brain ever fail, the bot's cards are filled in at random instead, so a bot
+     * locks its program in at once. Its tie-breaks come from a stream derived from the game seed and a counter, like
+     * random fills, so the same seed replays the same bot choices. Should the brain ever fail, the bot's cards are filled in at random instead, so a bot
      * can never hold up a turn or stop the server.
      *
      * @param player the bot, which owes a program
@@ -753,7 +757,7 @@ public final class GameSession {
         Robot robot = state.robot(player.seat);
         try {
             BotDecision decision = BotBrain.decide(state, player.seat, player.hand,
-                respawnedThisTurn.contains(player.seat), botRandom);
+                respawnedThisTurn.contains(player.seat), new Random(seed + BOT_STRIDE * ++botCounter));
             Programming.submit(state, player.seat, player.hand, decision.program(), decision.powerDown());
             if (decision.facing() != null) {
                 robot.setFacing(decision.facing());

@@ -8,6 +8,7 @@ import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
 import de.mkoehler.robotrampage.rules.Deck;
 import de.mkoehler.robotrampage.rules.EventLog;
+import de.mkoehler.robotrampage.rules.GameEvent;
 import de.mkoehler.robotrampage.rules.GameState;
 import de.mkoehler.robotrampage.rules.Programming;
 import de.mkoehler.robotrampage.rules.Respawner;
@@ -17,9 +18,11 @@ import de.mkoehler.robotrampage.testsupport.AsciiBoard;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -93,20 +96,23 @@ class BotBrainTest {
     }
 
     /**
-     * What the other players have programmed makes no difference to the bot's choice: it never looks.
+     * What the other players have programmed makes no difference to the bot's choice: it never looks. The situation is
+     * built so that looking would pay off: the other robot, acting after the bot in register 1, would shove it east into
+     * the pit, and only backing up in register 1 escapes that; a bot that cannot see it prefers heading for the flag.
      */
     @Test
     void neverLooksAtOtherPrograms() {
-        GameState state = AsciiBoard.state(". . . .\n. . . 1\n. . . .", "0 . . .\n. . . .\n. 1 . .");
-        List<Card> hand = hand(CardType.MOVE_1, CardType.MOVE_2, CardType.ROTATE_RIGHT, CardType.MOVE_1, CardType.U_TURN,
-            CardType.ROTATE_LEFT, CardType.BACK_UP, CardType.MOVE_3, CardType.ROTATE_RIGHT);
+        GameState state = AsciiBoard.state(". 1 .\n. . .\n. . .\n. . o\n. . .", ". . .\n. . .\n. . .\n1 0 .\n. . .");
+        state.robot(1).setFacing(Direction.EAST);
+        List<Card> hand = hand(CardType.ROTATE_LEFT, CardType.ROTATE_RIGHT, CardType.U_TURN, CardType.ROTATE_LEFT,
+            CardType.ROTATE_RIGHT, CardType.BACK_UP, CardType.U_TURN, CardType.ROTATE_LEFT, CardType.ROTATE_RIGHT);
         GameState other = state.copy();
-        for (int register = 0; register < Robot.REGISTER_COUNT; register++) {
-            other.robot(1).setRegister(register, new Card(CardType.MOVE_3, 800 + register));
-        }
+        other.robot(1).setRegister(0, new Card(CardType.MOVE_1, 10));
 
-        assertEquals(BotBrain.decide(state, 0, hand, true, new Random(7)),
-            BotBrain.decide(other, 0, hand, true, new Random(7)));
+        BotDecision blind = BotBrain.decide(state, 0, hand, false, new Random(7));
+
+        assertEquals(blind, BotBrain.decide(other, 0, hand, false, new Random(7)));
+        assertTrue(blind.program().get(0).type() != CardType.BACK_UP, "a bot that could see would back away first");
     }
 
     /**
@@ -147,16 +153,31 @@ class BotBrainTest {
         int finished = 0;
         int flags = 0;
         long slowest = 0;
+        long slowestRespawn = 0;
         for (long seed = 1; seed <= 3; seed++) {
             GameState state = newGame(board, seed, 4);
             Random random = new Random(seed);
             for (int turn = 1; turn <= 80 && !state.isOver(); turn++) {
-                Respawner.respawn(state, Map.of(), new EventLog());
+                EventLog respawns = new EventLog();
+                Respawner.respawn(state, Map.of(), respawns);
+                Set<Integer> respawned = new HashSet<>();
+                respawns.entries().forEach(entry -> {
+                    if (entry.event() instanceof GameEvent.RobotRespawned back) {
+                        respawned.add(back.robotId());
+                    }
+                });
                 Map<Integer, List<Card>> hands = Programming.deal(state);
                 for (Map.Entry<Integer, List<Card>> entry : hands.entrySet()) {
+                    boolean facing = respawned.contains(entry.getKey());
                     long start = System.nanoTime();
-                    BotDecision decision = BotBrain.decide(state, entry.getKey(), entry.getValue(), false, random);
-                    slowest = Math.max(slowest, System.nanoTime() - start);
+                    BotDecision decision = BotBrain.decide(state, entry.getKey(), entry.getValue(), facing, random);
+                    long took = System.nanoTime() - start;
+                    if (facing) {
+                        slowestRespawn = Math.max(slowestRespawn, took);
+                        state.robot(entry.getKey()).setFacing(decision.facing());
+                    } else {
+                        slowest = Math.max(slowest, took);
+                    }
                     Programming.submit(state, entry.getKey(), entry.getValue(), decision.program(), decision.powerDown());
                 }
                 state = TurnResolver.resolve(state).state();
@@ -165,7 +186,7 @@ class BotBrainTest {
             flags += state.robots().stream().mapToInt(Robot::flagsTouched).sum();
         }
         System.out.println("BotBrainTest: " + finished + " of 3 games finished, " + flags + " flags, slowest decision "
-            + slowest / 1_000_000 + " ms");
+            + slowest / 1_000_000 + " ms, slowest with a re-entry facing " + slowestRespawn / 1_000_000 + " ms");
         assertTrue(finished >= 2, "bots should finish most games, finished " + finished);
         assertTrue(flags >= 6, "bots should touch flags, touched " + flags);
     }
