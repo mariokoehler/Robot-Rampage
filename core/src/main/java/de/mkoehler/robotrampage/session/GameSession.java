@@ -122,6 +122,7 @@ public final class GameSession {
     private long pausedAt;
     private boolean squeezeActive;
     private long nextTurnAt;
+    private final Set<Integer> replayWatched = new HashSet<>();
     private int fillCounter;
     private int botCounter;
     private final Random nameRandom;
@@ -319,6 +320,8 @@ public final class GameSession {
         if (phase == Phase.PROGRAMMING && player.awaiting && !player.confirmed) {
             fillRandomly(player);
             afterConfirmation();
+        } else if (phase == Phase.RESOLVING) {
+            beginTurnIfEveryoneHasWatched();
         }
     }
 
@@ -698,11 +701,42 @@ public final class GameSession {
     // ------------------------------------------------------------------------------------------------------
 
     /**
+     * Notes that a player's client has finished showing the replay of the turn just resolved, played to the end or skipped
+     * (design.md 2.13). Once every connected human has, the next turn is dealt at once rather than after the rest of the
+     * pause, which remains the limit for anybody who takes longer. Ignored for any other turn, outside the pause after a
+     * turn, and for bots.
+     *
+     * @param seat the reporting player's seat
+     * @param turn the turn whose replay they finished
+     */
+    public void replayFinished(int seat, int turn) {
+        SessionPlayer player = players.get(seat);
+        if (player == null || player.bot || phase != Phase.RESOLVING || turn != this.turn) {
+            return;
+        }
+        replayWatched.add(seat);
+        beginTurnIfEveryoneHasWatched();
+    }
+
+    /**
+     * Deals the next turn if every connected human has finished watching the last one. With nobody connected there is
+     * nobody to wait for, but also nobody to hurry for, so the pause simply runs out.
+     */
+    private void beginTurnIfEveryoneHasWatched() {
+        List<SessionPlayer> watching = players.values().stream()
+            .filter(player -> !player.bot && player.connected && !player.left).toList();
+        if (!watching.isEmpty() && watching.stream().allMatch(player -> replayWatched.contains(player.seat))) {
+            beginTurn();
+        }
+    }
+
+    /**
      * Starts the next turn: destroyed robots re-enter, hands are dealt, everybody is told, and each player who must
      * program gets their cards.
      */
     private void beginTurn() {
         turn++;
+        replayWatched.clear();
         EventLog respawnLog = new EventLog();
         Respawner.respawn(state, Map.of(), respawnLog);
         Set<Integer> respawned = new HashSet<>();

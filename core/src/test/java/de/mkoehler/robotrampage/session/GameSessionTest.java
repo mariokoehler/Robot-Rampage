@@ -1411,6 +1411,72 @@ class GameSessionTest {
         assertEquals(first, outbox.receivedBy(0, TurnResolved.class).stream().map(m -> (Object) m).toList());
     }
 
+    // ---------------------------------------------------------------------------------------------- watching replays
+
+    /**
+     * Once every human has finished watching the turn's replay (or skipped it), the next turn is dealt at once instead of
+     * after the rest of the pause; one player still watching keeps everybody waiting until the pause runs out.
+     */
+    @Test
+    void theNextTurnStartsOnceEveryoneHasWatched() {
+        startWith(2);
+        submitFor(0);
+        submitFor(1);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+
+        session.replayFinished(0, 1);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase(), "one player is still watching");
+
+        session.replayFinished(1, 1);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        assertEquals(2, session.turn());
+    }
+
+    /**
+     * A report for another turn, or one that arrives while players are programming, changes nothing.
+     */
+    @Test
+    void reportsForOtherTurnsAreIgnored() {
+        startWith(2);
+        session.replayFinished(0, 1);
+        session.replayFinished(1, 1);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+        submitFor(0);
+        submitFor(1);
+
+        session.replayFinished(0, 0);
+        session.replayFinished(1, 2);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+        advance(PAUSE);
+        assertEquals(2, session.turn(), "the pause still ends the wait");
+    }
+
+    /**
+     * Only connected humans are waited for: a player who drops while the others have already finished watching lets the
+     * next turn start, and bots never count.
+     */
+    @Test
+    void onlyConnectedHumansAreWaitedFor() {
+        startWith(3);
+        submitFor(0);
+        submitFor(1);
+        submitFor(2);
+        session.replayFinished(0, 1);
+        session.replayFinished(1, 1);
+        assertEquals(GameSession.Phase.RESOLVING, session.phase());
+
+        session.disconnect(2);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase());
+
+        session = newSession(42L);
+        join("Ann");
+        session.addBot(0);
+        session.startGame(0);
+        submitFor(0);
+        session.replayFinished(0, 1);
+        assertEquals(GameSession.Phase.PROGRAMMING, session.phase(), "the bot is not waited for");
+    }
+
     /**
      * A bot is never the host: when the last human leaves the lobby, the bots go with them, and the next person to join
      * finds an empty table and hosts it.

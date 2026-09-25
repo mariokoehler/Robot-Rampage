@@ -47,6 +47,7 @@ import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.GameStarted;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
+import de.mkoehler.robotrampage.net.messages.ReplayFinished;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.TimerUpdate;
@@ -1208,6 +1209,7 @@ public final class GameScreen extends StageScreen implements NetworkClient.Handl
         }
         if (replay.isDone() && !replayCompleted) {
             replayCompleted = true;
+            send(new ReplayFinished(model.lastResolved().turn()));
             model.completeResolution();
         }
         TurnReplay.Frame frame = replay.frame();

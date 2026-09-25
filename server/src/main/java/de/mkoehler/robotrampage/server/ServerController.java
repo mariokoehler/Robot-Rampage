@@ -8,6 +8,7 @@ import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
 import de.mkoehler.robotrampage.net.messages.RemoveBot;
+import de.mkoehler.robotrampage.net.messages.ReplayFinished;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
@@ -116,6 +117,8 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             session.addBot(seat);
         } else if (message instanceof RemoveBot remove) {
             session.removeBot(seat, remove.seat());
+        } else if (message instanceof ReplayFinished finished) {
+            session.replayFinished(seat, finished.turn());
         }
     }
 

@@ -408,6 +408,13 @@ The programming phase must never let one absent or slow player block everyone
   within the grace period resumes control (needs a session token, see 7).
 - **Disconnect during execution** has no gameplay effect: the server resolves the
   turn without any client involvement.
+- **The pause after a turn ends early once everybody has watched it** (added 2026-09-25, owner request: skipping the
+  replay used to leave players waiting out the rest of the pause). Each client sends `ReplayFinished(turn)` when its replay
+  of that turn is over, played to the end or skipped (`GameScreen`, at the same point it completes the resolution); once
+  every *connected human* has reported for the turn just resolved, `GameSession.replayFinished` deals the next turn at
+  once. Bots and disconnected players are not waited for (a disconnect re-checks), reports for any other turn or phase are
+  ignored, and with nobody connected the pause simply runs out. The pause stays the upper limit for anybody still
+  watching or with the replay paused.
 - **Results have no timer of their own** (changed 2026-09-25 from an earlier automatic pause: the owner wanted everybody
   able to look at the results for as long as they liked, not be timed out). Once the game ends the session stays in the
   `GAME_OVER` phase indefinitely; the host explicitly takes everybody back to the lobby with `ReturnToLobby`, refused for
@@ -632,6 +639,7 @@ derived from the game seed and a fill counter — like the deck, never a live
 | S→all | `LobbyState` | Players (seat, name, ready, connected, host, bot), board name, and the facts the lobby shows: seats, minimum players (so the client can tell whether the host may start), board size, flag count, lives, programming seconds; the chosen board's id and JSON (for the lobby's preview) and every board the host can choose (`BoardChoice`: id, name, seats). Sent again to everybody at every change, and once more when a game ends and the session returns to the lobby, so the lobby screen must be buildable from one `LobbyState` alone. |
 | C→S | `SetReady`, `StartGameRequest` | Lobby actions (start: host only). |
 | C→S | `SelectBoard` | The host chooses the board by id (3.6). Refused for anybody else, outside the lobby, for an id the server does not offer, or for a board with fewer start squares than the highest seat taken. A change clears every ready flag. **Security:** the id is only looked up among the boards loaded at startup, never turned into a file or resource path. |
+| C→S | `ReplayFinished` | The client has finished showing a turn's replay, played out or skipped (2.13). Once every connected human has sent it for the turn just resolved, the next turn is dealt at once. Ignored for any other turn or phase. |
 | C→S | `AddBot`, `RemoveBot` | The host seats a bot on the lowest free seat / takes the bot on a seat away (2.14). Refused for anybody else, outside the lobby, on a full table, and `RemoveBot` for a seat without a bot. |
 | S→each | `GameStarted` | Board (as JSON text, 3.6), all players, *your* robot id. The seed is never sent. |
 | S→all | `TurnStarted` | Turn number, the respawn events, who must program, the time limit. |

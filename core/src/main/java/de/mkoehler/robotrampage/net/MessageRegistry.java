@@ -18,6 +18,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.PlayerLeft;
 import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RemoveBot;
+import de.mkoehler.robotrampage.net.messages.ReplayFinished;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
@@ -149,5 +150,6 @@ public final class MessageRegistry {
         kryo.register(SelectBoard.class);
         kryo.register(AddBot.class);
         kryo.register(RemoveBot.class);
+        kryo.register(ReplayFinished.class);
     }
 }

@@ -28,6 +28,7 @@ import de.mkoehler.robotrampage.client.ui.PillToggle;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.net.NetworkClient;
 import de.mkoehler.robotrampage.net.ServerLink;
+import de.mkoehler.robotrampage.net.messages.ReplayFinished;
 import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.BoardChoice;
@@ -347,7 +348,8 @@ public final class GameScreenDriver {
         List<String> names = List.of("Ann", "Bo", "Cy", "Di");
         SampleTurn.Sample sample = SampleTurn.first(7L, names.size(), names);
         List<RobotState> after = sample.after();
-        ConnectedServer connected = new ConnectedServer(new ScriptedLink(), new HandshakeResponse("Welcome", ME, "token", "test", 600),
+        ScriptedLink skipLink = new ScriptedLink();
+        ConnectedServer connected = new ConnectedServer(skipLink, new HandshakeResponse("Welcome", ME, "token", "test", 600),
             List.of(), false);
 
         GameScreen skipping = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
@@ -362,6 +364,8 @@ public final class GameScreenDriver {
         click(skipping, 1718f, 38f);
         check(!model.isResolutionOpen(), "skipping should complete the resolution");
         check(model.robots().equals(after), "skipping should show the state the server reached");
+        check(skipLink.sent.stream().anyMatch(sent -> sent instanceof ReplayFinished finished
+            && finished.turn() == model.lastResolved().turn()), "skipping should tell the server the replay is finished");
 
         GameScreen cut = new GameScreen(game, connected, new ServerAddress("localhost", 45725),
             new GameStarted(sample.boardJson(), sample.players(), ME), sample.messages());

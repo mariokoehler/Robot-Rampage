@@ -25,7 +25,7 @@ ours). Its netcode is *not* a template — ours is TCP-only and turn-based
 **M0, M1 (rules engine), M2 (board format), M3 (server session + protocol) and M5 (pushers/crushers in play) done, M4
 slices 1-11 (client shell, Startup, Connect, Lobby, static board renderer, programming screen, turn replay, Game Over
 screen, respawn/power-down/eliminated dialogs, reconnecting a dropped client, the "Time's up" reveal, the one texture
-atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 457 unit tests in `core`, 4
+atlas, the "ghost path" preview) done — nothing left "still to come" on M4's own roadmap** — 460 unit tests in `core`, 4
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
@@ -83,7 +83,7 @@ each call). **Server-filled programs (timeout, squeeze, reconnect) are shown as 
 `BoardSnapshot`; writes `game-*.png`). Cards/icons PNGs: `tools/design-import/rasterize.js` into `assets/cards`, `assets/icons`.
 **Replay (slice 5):** `client.replay.TurnReplay` (libGDX-free; its main test replays real `TurnResolver` turns and compares with the
 engine) + the resolution layout inside `GameScreen`. `GameModel` HOLDS the post-turn `StateSnapshot`/`GameOver` until
-`completeResolution()`; never apply them earlier. The server's turn pause (`SessionConfig.defaults()`) is the playback budget: **1× is deliberately slow** (`TurnReplay.PACE` = 2, the owner asked for half speed), so the pause is 12 s + 260 ms/event, max 60 s — change `PACE` and the pause together, or the replay gets cut off by the next deal.
+`completeResolution()`; never apply them earlier. The server's turn pause (`SessionConfig.defaults()`) is the playback budget: **1× is deliberately slow** (`TurnReplay.PACE` = 2, the owner asked for half speed), so the pause is 12 s + 260 ms/event, max 60 s — change `PACE` and the pause together, or the replay gets cut off by the next deal. The pause is only an upper limit: once every connected human's client has sent `ReplayFinished` (replay over or skipped), the server deals at once (design.md 2.13).
 **Host pause (design.md 2.13):** `SetTimerPaused` (C→S, host only) / `TimerPaused` (S→all). `GameSession` freezes its clock (`now()`) and shifts the deadline and every `disconnectedAt` on resume; it only works in `PROGRAMMING` and ends by itself when the turn resolves. The host's button is in `GameScreen` next to the time pill; `ScreenSnapshot` writes `game-host*.png`/`game-guest-paused.png` for it.
 Sample real turns for tools with `SampleTurn` (`lwjgl3/src/test`); `ScreenSnapshot` writes `resolution-*.png` incl. a laser volley.
 Belts pick corner/join/T/X pieces from their neighbours (`BoardGeometry.beltPiece`); the design draws them leaving NORTH.

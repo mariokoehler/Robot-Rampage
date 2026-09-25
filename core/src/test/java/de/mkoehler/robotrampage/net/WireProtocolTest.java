@@ -29,6 +29,7 @@ import de.mkoehler.robotrampage.net.messages.ProgramRevealed;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.RemoveBot;
+import de.mkoehler.robotrampage.net.messages.ReplayFinished;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
@@ -161,7 +162,8 @@ class WireProtocolTest {
             new SetProgrammingSeconds(120),
             new SelectBoard("loading-dock"),
             new AddBot(),
-            new RemoveBot(5));
+            new RemoveBot(5),
+            new ReplayFinished(4));
 
         for (Object message : messages) {
             assertEquals(message, roundTrip(message), message.getClass().getSimpleName());
