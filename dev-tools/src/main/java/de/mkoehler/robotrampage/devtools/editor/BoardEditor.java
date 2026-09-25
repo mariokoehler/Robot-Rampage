@@ -277,6 +277,16 @@ public final class BoardEditor {
     }
 
     /**
+     * Replaces the board with a generated one as a single step that undo takes back; the id, name and author stay.
+     *
+     * @param generated the generated board; a copy is taken
+     */
+    public void applyGenerated(BoardDraft generated) {
+        history.record(draft);
+        replaceWith(generated.copy());
+    }
+
+    /**
      * Undoes the last gesture.
      *
      * @return {@code true} if there was one

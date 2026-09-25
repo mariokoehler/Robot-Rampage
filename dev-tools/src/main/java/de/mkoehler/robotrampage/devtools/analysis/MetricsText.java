@@ -18,7 +18,7 @@ import java.util.StringJoiner;
 public final class MetricsText {
 
     /** A first-flag spread above this many steps is flagged as unfair between seats. */
-    static final int UNFAIR_SPREAD = 4;
+    public static final int UNFAIR_SPREAD = 4;
 
     /**
      * How a line should look.

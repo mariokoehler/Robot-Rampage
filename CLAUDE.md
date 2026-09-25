@@ -29,7 +29,7 @@ atlas, the "ghost path" preview) done — nothing left "still to come" on M4's o
 in `lwjgl3` (`Lwjgl3LauncherTest` pure arithmetic, `AtlasCoverageTest` parses `assets/textures/game.atlas` as text —
 everything else in that module's test tree is a
 `main()`-driven dev tool, not
-picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 41 in `dev-tools` (board editor and its metrics). A whole turn can be resolved headlessly:
+picked up by surefire), plus 13 integration tests in `server` (real sockets, threads), plus 48 in `dev-tools` (board editor, metrics, generator). A whole turn can be resolved headlessly:
 `Respawner.respawn` → `Programming.deal` → `Programming.submit` per robot →
 `TurnResolver.resolve` (public API; returns a `TurnResult` of new state + stamped events).
 Each sub-phase has its own package-private resolver (`MovementResolver`, `BeltResolver`,
@@ -383,7 +383,13 @@ plan). `board.WalkingDistances` (core) is now the one walking-distance search, u
 on a daemon worker that any edit cancels (a run number, checked every turn). **dev-tools tests read real boards from
 `../assets/boards`, not from the classpath** — the board files are only on core's test classpath
 (`BoardMetricsTest.provingGrounds()`). `EditorSnapshot` now waits for five bot games and writes `editor-metrics.png`.
-Next per 3.14: "Generate" (plain evolutionary search), then MAP-Elites.
+**Generate (step 2): done** — `devtools.generate` (`Mutations`, `Rating`, `BoardGenerator`), the editor's Generate
+button (design.md 3.14). Judge generator changes by **looking at the boards**, not only by tests: `EditorSnapshot` writes
+`editor-generated-1..3.png` (from an empty canvas, seeds 1–3, with 20 bot games in the panel) and
+`editor-generated-from-proving-grounds.png` (the real button path, also checking one-step undo and that a hand edit
+during a run drops the result). The first scoring version reached its maximum on every board and stopped refining — a
+flat "inside the range = 0" score needs a tie-breaker (`Rating.TYPICAL`). Next per 3.14: MAP-Elites (axes: hazard
+share, route length, moving share — confirmed by the owner).
 
 **Next: whatever the user picks** — the rest of M6 (board composition, a generator), or the next playtest, which is the owner's to run. The design was reviewed by the user
 (2026-09-21): tags removed = confirmed, `DECISION:` notes in design.md 7.

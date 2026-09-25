@@ -759,8 +759,10 @@ The JSON shape (see `assets/boards/proving-grounds.json` for a real file):
   walking over non-pit squares not separated by walls. *Warnings* (legal, suspicious):
   a flag or start square on a belt or crusher, a start square on a flag, a belt that
   runs into a wall, off the board or into a pit.
-- Generated boards carry `generator` (id) and `seed` in their metadata so a board
-  can be reproduced exactly.
+- A board generated in a pipeline of its own may carry `generator` (id) and `seed` in its metadata so it can be
+  reproduced exactly. **Boards made with the editor's Generate button do not** (2026-09-25): the result depends on the
+  canvas it started from as much as on the seed, and is meant to be finished by hand, so it is saved as an ordinary
+  board; the seed is only shown in the editor's status line.
 - Belt curve/merge artwork is derived by the renderer from which neighbours feed a
   square (2.12); no per-tile curve data is stored.
 
@@ -961,7 +963,7 @@ packaged, and players never see it. Run it with `start_board_editor.cmd` or
   cancels the run and starts over, while typing the id, name or author does not. No games are played while a flag is unreachable (they could never end), and a run that throws says so in red rather than waiting forever. The checks list takes most of the column while the board is invalid (the metrics are one line then) and shrinks once it is valid. **Measured, 20 games each (2026-09-25):** proving-grounds finishes every game in 7.4 turns on average, 8 robots lost per game (mostly off the edge), and wins by seat 0·0·3·3·3·2·1·8, so its 7-step spread to flag 1 really does favour the near seats; loading-dock (spread 4) finishes in 9.9 turns, twice as deadly (16 per game, mostly pits), wins spread 1·3·3·1·3·4·2·3. Twenty games over eight seats is indicative, not proof. Wording and flags are in the
   libGDX-free `MetricsText`; `MetricsPanel` is the widget.
 
-### 3.14 Board generation (planned)
+### 3.14 Board generation
 
 Decided 2026-09-25 after web research (owner request: no hand-drawn library of template pieces). Generation lives in
 the **board editor**, not in the lobby: a human looks over every generated board and fixes what needs fixing, helped by
@@ -974,9 +976,34 @@ Sentient Sketchbook and the Evolutionary Dungeon Designer:
 - **Two populations (FI2Pop):** boards that break a hard rule (unreachable flag, a start square that dies at once) evolve
   towards validity, valid ones towards quality.
 - **Rating:** the instant metrics for every candidate; bot playouts only for the finalists (a game costs ~1 s).
-- **Steps:** (1) the metrics panel — done; (2) "Generate": a plain evolutionary search seeded from the board on the
-  canvas, one result, one undo step; (3) MAP-Elites: a grid of distinct good boards along axes such as hazard share,
+- **Steps:** (1) the metrics panel — done; (2) "Generate" — done, below; (3) MAP-Elites: a grid of distinct good boards along axes such as hazard share,
   route length and moving share, shown as thumbnails to pick from.
+- **Generate (step 2, done 2026-09-25).** The editor's **Generate** button runs `devtools.generate.BoardGenerator` on
+  its own daemon thread from a copy of the canvas, with a random seed (shown in the status line): 4000 boards rated, two
+  populations of 30 (FI2Pop), tournament selection, one to three mutations per child — about a second. The result
+  replaces the canvas as **one undo step** (`BoardEditor.applyGenerated`); if the board was changed by hand while the
+  generator ran, the result is dropped and the status line says so. The same canvas and seed always give the same board
+  (the run is counted in boards rated, never in time). **The canvas is a starting point, not a constraint:** start
+  squares are kept exactly and the number of flags too, but everything else may be changed or deleted — Ctrl+Z brings it
+  back. An empty canvas first gets eight start squares along the bottom row facing north and three flags placed at
+  random *(unconfirmed)*.
+  - **Mutations** (`Mutations`): a belt or express belt along a random walk of 3–8 squares; a cluster of 1–4 pits (not
+    next to a start square); a gear; a wall run of 1–3 segments; a laser of 1–2 beams that fires across at least three
+    squares and never along a line with a start square; a pusher with a crusher on the square it pushes onto, active in
+    the same registers (1-3-5 or 2-4); a repair site; moving a flag; clearing a square; removing a wall. Start squares
+    and flags are never covered.
+  - **Hard rules** (`Rating`, the infeasible population): validator errors, an unreachable flag, and an unsafe start
+    square — on a belt, a crusher or in a laser's line, or facing a wall, a pit or the edge right in front of it.
+  - **Score** of a valid board: every element held to the range the two hand-made boards span (pits 4–8, belts 18–32,
+    express 4–16, gears 1–4, pushers 1–4, crushers 1–3, repair sites 1–3, lasers 2–4 covering 12–28 squares, walls 10–24),
+    a gentle pull towards the middle of those ranges, the first-flag spread within the editor's threshold of 4, flag to
+    flag 20–30 steps, flags at least 6 steps apart, few validator warnings, no belt stubs (runs under 3 squares), no belts
+    pointing head-on at each other, no laser or pusher mounted on a pit — and a bonus for the share of hazards and moving
+    parts that lie within two steps of a shortest route (start to flag 1, flag to flag), so they are not parked in empty
+    corners. All ranges and weights are *(unconfirmed)* first guesses.
+  - **Measured** (20 bot games each, 2026-09-25), three boards generated from an empty canvas: finished 20/20 in 11.2,
+    12.7 and 7.9 turns, 11.5, 17.1 and 6.4 robots lost per game — the same range as proving-grounds (7.4 turns, 8 lost)
+    and loading-dock (9.9, 16). Bot playouts are not part of the search: the metrics panel plays the result anyway.
 - **Rejected:** wave function collapse as the main generator (only local consistency, needs example boards we do not
   have, no notion of reachable flags or fairness); answer set programming (needs an external solver, and "fun" does not
   reduce to constraints); on-the-fly generation in the lobby (no human check).

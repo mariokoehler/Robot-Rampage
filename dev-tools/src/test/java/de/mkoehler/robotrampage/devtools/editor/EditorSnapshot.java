@@ -12,8 +12,10 @@ import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Stage;
 import com.badlogic.gdx.utils.ScreenUtils;
+import de.mkoehler.robotrampage.board.BoardDefinition;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.devtools.generate.BoardGenerator;
 import de.mkoehler.robotrampage.client.ui.Theme;
 
 import java.io.File;
@@ -84,9 +86,78 @@ public final class EditorSnapshot {
                 write(fresh, new File(folder, "editor-new.png"));
                 drivePointer(fresh, new File(folder, "editor-hover-wall.png"));
                 fresh.dispose();
+
+                driveGenerateButton(new File(folder, "editor-generated-from-proving-grounds.png"));
+
+                for (long seed = 1; seed <= 3; seed++) {
+                    BoardEditorApp generated = new BoardEditorApp(null);
+                    generated.create();
+                    generated.editor().load(BoardGenerator.generate(generated.editor().draft(), seed, () -> false).draft());
+                    generated.refresh();
+                    waitForBotGames(generated, 20);
+                    write(generated, new File(folder, "editor-generated-" + seed + ".png"));
+                    generated.dispose();
+                }
                 Gdx.app.exit();
             }
         }, configuration);
+    }
+
+    /**
+     * Clicks Generate on the first board the way the button does and checks the result: it replaces the board as one
+     * undo step, and a hand edit made while the generator runs makes the result be dropped instead.
+     *
+     * @param file the file to write the generated board's picture to
+     * @throws IllegalStateException if the board is not replaced, undo does not bring it back, or a late result
+     *                               overwrites a hand edit
+     */
+    private static void driveGenerateButton(File file) {
+        BoardEditorApp app = new BoardEditorApp("proving-grounds");
+        app.create();
+        BoardDefinition original = app.editor().draft().toDefinition();
+        app.generate();
+        waitForGenerator(app);
+        if (app.editor().draft().toDefinition().equals(original)) {
+            throw new IllegalStateException("Generate did not change the board");
+        }
+        write(app, file);
+        app.editor().undo();
+        if (!app.editor().draft().toDefinition().equals(original)) {
+            throw new IllegalStateException("One undo did not bring the board from before Generate back");
+        }
+
+        app.generate();
+        app.editor().setTool(Tool.PIT);
+        app.editor().press(new Position(0, 11), Direction.NORTH, false);
+        app.editor().release();
+        BoardDefinition edited = app.editor().draft().toDefinition();
+        waitForGenerator(app);
+        if (!app.editor().draft().toDefinition().equals(edited)) {
+            throw new IllegalStateException("A generated board overwrote a hand edit made while it was generated");
+        }
+        app.dispose();
+    }
+
+    /**
+     * Waits until the editor has taken in the generator's result, the way frames passing would.
+     *
+     * @param app the editor, generating
+     * @throws IllegalStateException if the generator takes longer than a minute
+     */
+    private static void waitForGenerator(BoardEditorApp app) {
+        long deadline = System.currentTimeMillis() + 60_000;
+        while (app.generating()) {
+            if (System.currentTimeMillis() > deadline) {
+                throw new IllegalStateException("The generator did not finish within a minute");
+            }
+            app.takeGeneratedBoard();
+            try {
+                Thread.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
     }
 
     /**

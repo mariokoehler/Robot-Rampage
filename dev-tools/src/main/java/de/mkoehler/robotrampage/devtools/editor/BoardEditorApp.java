@@ -26,11 +26,16 @@ import de.mkoehler.robotrampage.board.ValidationResult;
 import de.mkoehler.robotrampage.client.ui.ModalDialog;
 import de.mkoehler.robotrampage.client.ui.Theme;
 import de.mkoehler.robotrampage.client.ui.UiKit;
+import de.mkoehler.robotrampage.devtools.generate.BoardGenerator;
 
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The board editor window (design.md 3.13): a tool palette on the left, the board in the middle, the board's name and
@@ -88,6 +93,19 @@ public final class BoardEditorApp extends ApplicationAdapter {
     private Label status;
     private BoardArea boardArea;
     private MetricsPanel metrics;
+    private final ExecutorService generatorWorker = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "board-generator");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final AtomicReference<Object> generated = new AtomicReference<>();
+    private final Random seeds = new Random();
+    private TextButton generateButton;
+    private boolean generating;
+    private int generationRevision;
+    private long generationSeed;
+    private String notice;
+    private int noticeRevision = -1;
     private Cell<ScrollPane> checksCell;
     private BoardDefinition measuredLayout;
 
@@ -172,6 +190,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
             refresh();
         }
         metrics.update(Gdx.graphics.getDeltaTime());
+        takeGeneratedBoard();
         Gdx.gl.glClearColor(Theme.SURFACE.r, Theme.SURFACE.g, Theme.SURFACE.b, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
         stage.act(Gdx.graphics.getDeltaTime());
@@ -194,6 +213,7 @@ public final class BoardEditorApp extends ApplicationAdapter {
      */
     @Override
     public void dispose() {
+        generatorWorker.shutdownNow();
         metrics.dispose();
         stage.dispose();
         ui.dispose();
@@ -248,8 +268,65 @@ public final class BoardEditorApp extends ApplicationAdapter {
         String file = "boards/" + editor.draft().id() + ".json";
         String state = editor.isDirty() ? "Unsaved changes, will save to " : openedId == null ? "Not saved yet, will save to "
             : "Saved as ";
-        ui.setText(status, Theme.TextStyle.BODY, state + file);
+        ui.setText(status, Theme.TextStyle.BODY, state + file
+            + (notice != null && noticeRevision == editor.revision() ? " · " + notice : ""));
         Gdx.graphics.setTitle("Board Editor - " + editor.draft().id() + (editor.isDirty() ? " *" : ""));
+    }
+
+    /**
+     * Starts generating a board from the one on the canvas, on the generator's own thread (design.md 3.14). The canvas is
+     * copied here, on the render thread; the result is taken in by {@link #takeGeneratedBoard()}.
+     */
+    void generate() {
+        if (generating || dialogOpen) {
+            return;
+        }
+        generating = true;
+        generateButton.setDisabled(true);
+        ui.setText(status, Theme.TextStyle.BODY, "Generating a board…");
+        generationRevision = editor.revision();
+        generationSeed = seeds.nextInt(1_000_000);
+        BoardDraft canvas = editor.draft().copy();
+        long seed = generationSeed;
+        generatorWorker.submit(() -> {
+            try {
+                generated.set(BoardGenerator.generate(canvas, seed, () -> false));
+            } catch (RuntimeException e) {
+                generated.set(e);
+            }
+        });
+    }
+
+    /**
+     * Puts a finished generated board on the canvas as one undo step, unless the board was changed by hand while the
+     * generator ran: then the result is dropped rather than overwriting that work. Call once a frame.
+     */
+    void takeGeneratedBoard() {
+        Object result = generated.getAndSet(null);
+        if (result == null) {
+            return;
+        }
+        generating = false;
+        generateButton.setDisabled(false);
+        if (result instanceof RuntimeException failure) {
+            notice = "Generating failed: " + failure;
+        } else if (editor.revision() != generationRevision) {
+            notice = "The board changed while generating, so the result was dropped";
+        } else {
+            editor.applyGenerated(((BoardGenerator.Candidate) result).draft());
+            notice = "Generated from seed " + generationSeed + ", Ctrl+Z undoes it";
+        }
+        noticeRevision = editor.revision();
+        refresh();
+    }
+
+    /**
+     * Returns whether the generator is running, for tools that wait for it.
+     *
+     * @return {@code true} while a board is being generated
+     */
+    boolean generating() {
+        return generating;
     }
 
     /**
@@ -283,6 +360,9 @@ public final class BoardEditorApp extends ApplicationAdapter {
         top.add(ui.label("Board editor", Theme.TextStyle.HEADING, Theme.INK)).left().padRight(Theme.SPACE_6);
         status = ui.label("", Theme.TextStyle.BODY, Theme.INK_MUTED);
         top.add(status).left().expandX();
+        generateButton = ui.button("Generate", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+        onClick(generateButton, this::generate);
+        top.add(generateButton).size(200f, 52f).padLeft(Theme.SPACE_4);
         TextButton newButton = ui.button("New", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
         TextButton openButton = ui.button("Open", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
         saveButton = ui.button("Save", Theme.ButtonKind.PRIMARY, Theme.TextStyle.BUTTON);
