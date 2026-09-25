@@ -63,7 +63,7 @@ public final class EditorSnapshot {
                 opened.create();
                 opened.selectTool(Tool.PUSHER);
                 write(opened, new File(folder, "editor-proving-grounds.png"));
-                waitForBotGames(opened, 5);
+                waitForBotGames(opened, 20);
                 write(opened, new File(folder, "editor-metrics.png"));
                 opened.dispose();
 

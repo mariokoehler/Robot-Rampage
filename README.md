@@ -10,9 +10,9 @@ in order wins. Most turns don't go to plan, and that's the game.
 
 ![The programming screen: players on the left, the board in the middle with a faint "ghost path" of where your cards will take you, your robot's status and the board key on the right, your program and hand below](docs/screenshots/programming.png)
 
-**Status:** playable end to end and playtested. Still pre-1.0: there are only a
-couple of boards, one game per server, and no persistence yet, so restarting the server
-ends the running game.
+**Status:** playable end to end and playtested. Still pre-1.0: there are four
+boards, one game per server, and no persistence yet, so restarting the server ends
+the running game.
 
 ## Features
 
@@ -24,11 +24,17 @@ ends the running game.
   reach other clients.
 - **The host picks the board** in the lobby, with a preview of it, from every
   board the server offers.
+- **Computer opponents.** The host can seat bots in the lobby, to play alone or to
+  fill out the table. They're named after famous robots (C-3PO, WALL-E, Bender,
+  HAL 9000 and friends) and program their robots by trying every program their
+  hand allows through the real rules engine, without ever seeing anyone else's
+  cards.
 - **A ghost path** shows where your cards will take your robot as you place them.
 - **A step-by-step turn replay.** Every register plays through its phases
   (cards, movement, belts, pushers, gears, lasers, crushers, checkpoints) with a
   running "what happened" feed. You can pause it, play it at 1×/2×/4×, or skip
-  to the end of the turn.
+  to the end of the turn. Once everyone has watched or skipped it, the next turn
+  starts right away.
 - **Nobody waits on a slow player.** The programming timer defaults to 90 s; the
   host can set it from 30 to 300 s in the lobby and pause it mid-game. Once
   everyone else has confirmed, the last player gets at most 30 s. When time runs
@@ -36,8 +42,10 @@ ends the running game.
 - **Drop-outs are handled.** A client that loses its connection reconnects
   automatically, and a client that was closed or crashed can rejoin its own
   seat after a restart. Either way there's a 10-minute grace period, and meanwhile the robot keeps playing with random programs.
-- Sound effects, a results screen with standings, and a Settings dialog (volume,
-  window size, replay speed, ghost path on/off).
+- **Sound effects,** including sounds for what happens to your own robot during
+  the replay (driving, turning, belts, pushers, pits, crushers, flags) at 1× speed.
+- A results screen with standings, and a Settings dialog (volume, window size,
+  replay speed, ghost path on/off).
 
 | Turn replay (laser volley) | Game over |
 |---|---|
@@ -157,8 +165,30 @@ It opens and saves 12×12 boards in `assets/boards/`, draws them exactly as the
 game does, and checks them live with the same validator the game uses. Saving
 is only possible once the board has no errors, and a newly saved board is added
 to `assets/boards/boards.txt`, the list of boards a server offers. The host picks
-the board in the lobby. See section 3.13 of [`design.md`](./design.md) for how
-the editor works.
+the board in the lobby.
+
+- **Metrics.** Next to the board, the editor rates it as you draw: how many steps
+  each seat has to walk to the first flag and how unequal that is, the whole
+  route, and how much of the board is hazards or moving parts. In the background,
+  bots play 20 games on it and report how long games take, what destroys robots,
+  and which seats win.
+- **Generate** turns the board on the canvas (or an empty one) into a finished
+  board in about a second. It makes the kind of small changes a designer would
+  (belt runs, pit clusters, lasers across corridors, pushers aimed at crushers)
+  and keeps the result that best matches the hand-made boards, with hazards on
+  the routes robots actually walk. Start squares and the number of flags stay;
+  everything else may change, and Ctrl+Z brings the old board back.
+- **Suggest** shows up to six different boards to pick from, spread out by how
+  deadly they are, how long the route is and how much of the board moves robots.
+  Bots play each one to show how evenly the seats do.
+
+Generated boards are starting points to finish by hand, not a replacement for
+it. See sections 3.13 and 3.14 of [`design.md`](./design.md) for how the editor
+and the generator work.
+
+| The editor with its metrics | Suggestions to pick from |
+|---|---|
+| ![The board editor: tools on the left, the Proving Grounds board in the middle, and on the right the board's checks and metrics, including the results of 20 bot games](docs/screenshots/board-editor.png) | ![The Suggest dialog: six different boards drawn small, each described in words and numbers, with the bots' results for each](docs/screenshots/board-editor-suggestions.png) |
 
 ## How it's built
 
@@ -171,15 +201,15 @@ the editor works.
   state and programs to new state plus a list of events. It doesn't depend on
   libGDX or the network (ArchUnit enforces this). The server runs it, and the
   clients replay its event list as the turn animation.
-- Boards are **JSON data** (`assets/boards/`), validated on load. The format is
-  built to allow more boards and procedurally generated boards later.
+- Boards are **JSON data** (`assets/boards/`), validated on load. They're drawn
+  in the board editor, or generated there and finished by hand.
 
 | Path | Contents |
 |---|---|
 | `core/` | Rules engine, board format, protocol and session logic, client screens |
 | `lwjgl3/` | Desktop client launcher, release packaging, dev tools (in `src/test`) |
 | `server/` | Dedicated headless server and its Dockerfile |
-| `dev-tools/` | Developer tools that are never shipped: the board editor |
+| `dev-tools/` | Developer tools that are never shipped: the board editor, its metrics and board generation |
 | `assets/` | Everything the game loads at runtime (atlas, fonts, boards, sounds) |
 | `assets-raw/` | Source art, never loaded by the game |
 | `tools/` | Asset-import scripts |
