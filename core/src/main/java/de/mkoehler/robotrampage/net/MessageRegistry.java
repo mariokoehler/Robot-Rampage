@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.net;
 import com.esotericsoftware.kryo.Kryo;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
@@ -24,6 +25,7 @@ import de.mkoehler.robotrampage.net.messages.RespawnFacingChosen;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
+import de.mkoehler.robotrampage.net.messages.SetBotDifficulty;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
@@ -122,6 +124,7 @@ public final class MessageRegistry {
         // Session protocol (design.md 3.5). Messages hold their lists as ArrayList, which is registered here.
         kryo.register(ArrayList.class);
         kryo.register(RobotStatus.class);
+        kryo.register(BotDifficulty.class);
         kryo.register(PlayerInfo.class);
         kryo.register(RobotState.class);
         kryo.register(LobbyState.class);
@@ -151,5 +154,6 @@ public final class MessageRegistry {
         kryo.register(AddBot.class);
         kryo.register(RemoveBot.class);
         kryo.register(ReplayFinished.class);
+        kryo.register(SetBotDifficulty.class);
     }
 }

@@ -442,15 +442,30 @@ friends can fill out the table.
   differs in its sequence of card types (a few hundred, usually), plays each through the real `TurnResolver` on a copy of
   the game, and keeps the best end. Score: winning beats everything; each flag touched +1000; losing a life −10000;
   otherwise −20 per step of **walking distance** to the next flag (a breadth-first search around walls and pits, not a
-  straight line) and −8 per damage point; a tiny random amount breaks ties. A robot that re-entered this turn also tries
-  all four facings. It **powers down** when its best program leaves it alive with 6 or more damage *(unconfirmed)*.
+  straight line) and −8 per damage point. A robot that re-entered this turn also tries all four facings.
   **Fair play:** every other robot's registers are emptied in the copy, so the bot never sees a hidden program (other
   robots stand still in its imagination, the same limitation as the ghost path, 4.3); since only its own robot acts,
-  priorities cannot change the outcome and programs are compared by card types alone. There is one difficulty
-  *(unconfirmed; easy/hard would pick among the top few vs. the best)*. Measured: at most ~50 ms per bot per turn on
-  proving-grounds (~130 ms for a bot choosing a re-entry facing), on the session's own thread; four bots
-  alone finish their games (`BotBrainTest`). A bot's randomness comes from the game seed and a counter reset at every start (like
-  random fills), so a bug report's seed reproduces its choices whatever happened in the lobby before. Should the brain ever throw, the bot's cards are filled in at random instead.
+  priorities cannot change the outcome and programs are compared by card types alone.
+- **Difficulty (`bot.BotDifficulty`: Easy/Normal/Hard, added 2026-09-26, owner request):** the search itself never
+  changes — every difficulty still tries every distinct program through the real `TurnResolver`. Two levers vary by
+  difficulty instead of a second search: **score noise**, a random amount added to each program's score before the best
+  is taken (Hard ≈0, today's original tie-break-only amount; Normal 25; Easy 300 — all far below the ±1000/±10000 a
+  flag or a life is worth, so no difficulty ever throws away a reachable flag or drives to its own destruction on
+  purpose, only genuinely close tactical calls like a slightly longer route are affected), and **the power-down
+  threshold** (Hard 4 damage, the most cautious; Normal 6, the original; Easy 8, the most careless, risking destruction
+  before it gets the chance to repair). Chosen over a second, weaker search (fewer candidate programs, a shallow
+  lookahead) for staying cheap and provably fair at every level — the search stays exhaustive, only the pick and the
+  self-preservation judgement get sloppier. All three numbers are *(unconfirmed)* first guesses, the same way the board
+  generator's scoring weights were. **Per bot, host-only, lobby-only:** the host cycles a bot's difficulty
+  (Normal→Hard→Easy→Normal) with a click on its lobby row (`SetBotDifficulty`, mirrors `AddBot`/`RemoveBot`'s
+  refusal rules); a new bot starts at Normal; the difficulty survives a board change and a trip back to the lobby, the
+  same way the bot's readiness does (`SessionPlayer.difficulty`, a mutable field on the persisted player, like
+  `ready`). Measured: at most ~50 ms per bot per turn on proving-grounds (~130 ms for a bot choosing a re-entry
+  facing), on the session's own thread; four bots alone finish their games (`BotBrainTest`). A bot's randomness comes
+  from the game seed and a counter reset at every start (like random fills), so a bug report's seed reproduces its
+  choices whatever happened in the lobby before. Should the brain ever throw, the bot's cards are filled in at random
+  instead. **Board metrics/generation (3.14) always play bots at Hard**, regardless of what a lobby bot is set to, so
+  the generator's calibrated scoring is never affected by the lobby-only difficulty setting.
 - **No humans left:** bots never play or wait on their own. When the last human leaves the lobby, or is removed from a
   running game after the grace period, or disconnects from the results screen, the session returns to an empty lobby
   (bots removed), so the server is free for the next group. Bots stay seated and ready for the next game after

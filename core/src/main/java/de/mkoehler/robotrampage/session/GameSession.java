@@ -478,6 +478,34 @@ public final class GameSession {
     }
 
     /**
+     * Moves a computer-controlled robot's difficulty to the next one in the cycle (Easy to Normal to Hard and back to
+     * Easy), on the host's request. Refused for anybody but the host, outside the lobby, or for a seat without a bot.
+     *
+     * @param seat    the requesting player's seat
+     * @param botSeat the seat of the bot
+     */
+    public void setBotDifficulty(int seat, int botSeat) {
+        if (!players.containsKey(seat)) {
+            return;
+        }
+        if (phase != Phase.LOBBY) {
+            reject(seat, "A bot's difficulty can only be changed in the lobby.");
+            return;
+        }
+        if (seat != hostSeat()) {
+            reject(seat, "Only the host can change a bot's difficulty.");
+            return;
+        }
+        SessionPlayer bot = players.get(botSeat);
+        if (bot == null || !bot.bot) {
+            reject(seat, "There is no bot on seat " + (botSeat + 1) + ".");
+            return;
+        }
+        bot.difficulty = bot.difficulty.next();
+        broadcastLobby();
+    }
+
+    /**
      * Returns the board chosen for the game.
      *
      * @return the board
@@ -791,7 +819,8 @@ public final class GameSession {
         Robot robot = state.robot(player.seat);
         try {
             BotDecision decision = BotBrain.decide(state, player.seat, player.hand,
-                respawnedThisTurn.contains(player.seat), new Random(seed + BOT_STRIDE * ++botCounter));
+                respawnedThisTurn.contains(player.seat), new Random(seed + BOT_STRIDE * ++botCounter),
+                player.difficulty);
             Programming.submit(state, player.seat, player.hand, decision.program(), decision.powerDown());
             if (decision.facing() != null) {
                 robot.setFacing(decision.facing());
@@ -1082,7 +1111,7 @@ public final class GameSession {
         List<PlayerInfo> infos = new ArrayList<>();
         for (SessionPlayer player : players.values()) {
             infos.add(new PlayerInfo(player.seat, player.name, player.ready, player.connected, player.seat == host,
-                player.bot));
+                player.bot, player.difficulty));
         }
         return infos;
     }

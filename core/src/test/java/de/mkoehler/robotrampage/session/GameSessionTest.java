@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.session;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.LoadedBoard;
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.bot.BotNames;
 import de.mkoehler.robotrampage.net.NetworkConstants;
 import de.mkoehler.robotrampage.net.messages.BoardChoice;
@@ -1302,6 +1303,7 @@ class GameSessionTest {
         assertEquals(1, bot.seat());
         assertTrue(bot.bot() && bot.ready() && !bot.host());
         assertTrue(BotNames.POOL.contains(bot.name()), bot.name());
+        assertEquals(BotDifficulty.NORMAL, bot.difficulty(), "a new bot starts at normal difficulty");
 
         session.addBot(0);
         session.addBot(0);
@@ -1311,6 +1313,61 @@ class GameSessionTest {
 
         session.removeBot(0, 2);
         assertEquals(List.of(0, 1, 3), lobbyPlayers(0).stream().map(PlayerInfo::seat).toList());
+    }
+
+    /**
+     * The host cycles a bot's difficulty Normal to Hard to Easy and back to Normal; it survives a board change (which
+     * clears everybody's ready flag, but not this) and a trip back to the lobby after a game.
+     */
+    @Test
+    void theHostCyclesABotsDifficulty() {
+        SessionConfig config = new SessionConfig(CAP, LAST_PLAYER, GRACE, PAUSE, 0, PAUSE, 2);
+        session = new GameSession(List.of(BoardLoader.parse(FLAG_AHEAD_JSON), BoardLoader.parse(BOARD_JSON)), config,
+            42L, now::get, outbox);
+        join("Ann");
+        session.addBot(0);
+        assertEquals(BotDifficulty.NORMAL, lobbyPlayers(0).get(1).difficulty());
+
+        session.setBotDifficulty(0, 1);
+        assertEquals(BotDifficulty.HARD, lobbyPlayers(0).get(1).difficulty());
+        session.setBotDifficulty(0, 1);
+        assertEquals(BotDifficulty.EASY, lobbyPlayers(0).get(1).difficulty());
+        session.setBotDifficulty(0, 1);
+        assertEquals(BotDifficulty.NORMAL, lobbyPlayers(0).get(1).difficulty(), "the cycle wraps back to normal");
+
+        session.setBotDifficulty(0, 1);
+        session.selectBoard(0, "t");
+        session.selectBoard(0, "ahead");
+        assertEquals(BotDifficulty.HARD, lobbyPlayers(0).get(1).difficulty(), "a board change keeps the difficulty");
+
+        session.startGame(0);
+        submitFor(0);
+        assertEquals(GameSession.Phase.GAME_OVER, session.phase());
+        session.returnToLobby(0);
+        assertEquals(BotDifficulty.HARD, lobbyPlayers(0).get(1).difficulty(),
+            "the difficulty survives the trip back to the lobby");
+    }
+
+    /**
+     * Only the host may cycle a bot's difficulty, only in the lobby, and never for a seat that has no bot.
+     */
+    @Test
+    void botDifficultyRequestsThatCannotWorkAreRefused() {
+        join("Ann");
+        join("Bo");
+        session.addBot(0);
+
+        session.setBotDifficulty(1, 2);
+        assertEquals(BotDifficulty.NORMAL, lobbyPlayers(0).get(2).difficulty(), "a guest cannot change it");
+
+        session.setBotDifficulty(0, 0);
+        assertEquals("There is no bot on seat 1.", outbox.lastReceivedBy(0, RequestRejected.class).reason());
+
+        session.setReady(1, true);
+        session.startGame(0);
+        session.setBotDifficulty(0, 2);
+        assertEquals("A bot's difficulty can only be changed in the lobby.",
+            outbox.lastReceivedBy(0, RequestRejected.class).reason());
     }
 
     /**

@@ -33,6 +33,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
+import de.mkoehler.robotrampage.net.messages.SetBotDifficulty;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
@@ -305,7 +306,8 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
     }
 
     /**
-     * Builds the line of a seat with a player or a bot; the host can remove a bot from its line.
+     * Builds the line of a seat with a player or a bot; the host can cycle a bot's difficulty and remove it from its
+     * line.
      *
      * @param row the seat
      * @return the line
@@ -336,6 +338,14 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
         line.add(row.ready() ? ui.chip("Ready", UiKit.ChipKind.SUCCESS) : ui.chip("Not ready", UiKit.ChipKind.OUTLINE))
             .height(UiKit.CHIP_CELL_HEIGHT).padLeft(Theme.SPACE_2);
         if (row.removable()) {
+            TextButton difficulty = ui.button(row.difficulty(), Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
+            difficulty.addListener(new ChangeListener() {
+                @Override
+                public void changed(ChangeEvent event, Actor actor) {
+                    server.link().send(new SetBotDifficulty(row.seat()));
+                }
+            });
+            line.add(difficulty).size(BOT_BUTTON_WIDTH, BOT_BUTTON_HEIGHT + UiKit.SHAPE_RESERVE).padLeft(Theme.SPACE_4);
             TextButton remove = ui.button("Remove", Theme.ButtonKind.GHOST, Theme.TextStyle.BUTTON);
             remove.addListener(new ChangeListener() {
                 @Override
@@ -343,7 +353,7 @@ public final class LobbyScreen extends StageScreen implements NetworkClient.Hand
                     server.link().send(new RemoveBot(row.seat()));
                 }
             });
-            line.add(remove).size(BOT_BUTTON_WIDTH, BOT_BUTTON_HEIGHT + UiKit.SHAPE_RESERVE).padLeft(Theme.SPACE_4);
+            line.add(remove).size(BOT_BUTTON_WIDTH, BOT_BUTTON_HEIGHT + UiKit.SHAPE_RESERVE).padLeft(Theme.SPACE_2);
         }
         return line;
     }

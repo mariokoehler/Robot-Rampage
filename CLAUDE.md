@@ -377,8 +377,38 @@ host's lobby, and `bot.BotBrain`, which simulates every distinct program with th
 by `GameSessionTest`'s bot tests: every place that clears ready flags must keep bots ready (`selectBoard`,
 `resetToLobby`); the squeeze counts humans only; `hostSeat()` skips bots; once no human is left the session goes back
 to an empty lobby (`forgetBotsIfNoHumanIsLeft`, and `disconnect` in `GAME_OVER`). `ServerIntegrationTest.
-aSoloPlayerPlaysAgainstABotOverRealSockets` is what proves `ServerController` dispatches the new messages. Still open for
-a second slice: difficulty levels, and nothing in `GameScreen` marks a bot yet (only the lobby's "Bot" chip).
+aSoloPlayerPlaysAgainstABotOverRealSockets` is what proves `ServerController` dispatches the new messages. Still open:
+nothing in `GameScreen` marks a bot yet (only the lobby's "Bot" chip).
+
+**Bot difficulty levels (2026-09-26): done** — design.md 2.14, the "second slice" above. `bot.BotDifficulty`
+(Easy/Normal/Hard) is a per-bot setting, not a smarter/dumber search: `BotBrain.decide` still tries every distinct
+program through the real `TurnResolver` at every difficulty, and only two things vary — `scoreNoise` (a random amount
+mixed into a program's score before the best is taken: Hard keeps the original tie-break-only ~0, Normal 25, Easy
+300, all far below what a flag or a life is worth, so no difficulty ever picks a suicidal or flag-skipping program,
+only close tactical calls) and `powerDownDamage` (the damage a surviving bot powers down at: Hard 4, Normal 6 — the
+original constant, Easy 8). Both are package-private static methods on `BotBrain` (widened from `private` so
+`BotBrainTest` can assert their ordering directly, `difficultiesAreOrderedFromCautiousToCareless`) rather than living
+on the enum itself, since they're expressed in terms of `BotBrain`'s own score-scale constants. `SessionPlayer` gained
+a mutable `difficulty` field (default `NORMAL`), exactly like `ready` — so it persists across a board change and a
+trip back to the lobby for free, no extra code needed (`GameSessionTest.theHostCyclesABotsDifficulty` proves it).
+**Lobby control:** a new host-only, lobby-only message `SetBotDifficulty(seat)` (mirrors `AddBot`/`RemoveBot`'s
+refusal rules exactly) cycles Normal→Hard→Easy→Normal (`BotDifficulty.next()`); the lobby shows it as a second
+button next to "Remove" on a bot's row, labelled with the current difficulty, clickable only for the host
+(`LobbyView.Row.difficulty`/`removable`, `LobbyScreen.occupiedRow`) — reuses the exact pattern the "Remove" button
+already established, no new widget. `PlayerInfo` gained a `difficulty` field (default `NORMAL` via its existing 5-
+and 6-arg constructors, so every pre-existing call site kept compiling unchanged). **`devtools.analysis.Playouts`
+(board metrics/generation) deliberately always plays bots at `BotDifficulty.HARD`**, whatever a lobby bot is set to
+— that's the exact behaviour the generator's and the metrics panel's scoring were already calibrated against, so
+adding easier lobby difficulties doesn't silently shift what a board is measured or generated against. **Verified in
+this session:** every difficulty-level file that doesn't need libGDX/Kryo (rules, board, bot, session, net.messages,
+client.lobby) was compiled and its full test suite run directly with `javac`/the JUnit console launcher against jars
+fetched straight from Maven Central (`BotBrainTest` 8/8, `GameSessionTest` 58/58, `LobbyViewTest` 11/11, all green) —
+a genuine `mvn` build wasn't possible in that session's container, since KryoNet is JitPack-only and JitPack was
+blocked by the container's egress policy (not retried or routed around, per the container's own proxy rules); the
+`net`/`server`/libGDX-facing edits (`MessageRegistry`, `ServerController`, `LobbyScreen`'s button, `GameScreenDriver`'s
+new click check) follow existing patterns exactly but were only reviewed by eye, not compiled — run `mvn clean
+package` (needs network) before trusting them, and check the lobby row's width with two bot buttons now sitting
+side by side doesn't crowd a long player name, which needs the owner's own in-app look.
 
 **Board metrics in the editor (2026-09-25): done** — step 1 of board generation (design.md 3.13 metrics, 3.14
 plan). `board.WalkingDistances` (core) is now the one walking-distance search, used by `BotBrain` and by
@@ -403,12 +433,10 @@ as-is" (design.md 7 `DECISION:` notes); autosave/persistence/accounts are scratc
 3.10, 3.12 — this isn't a game that needs to survive a server restart); the Settings dialog, Lobby stepper and board
 editor's drag/shortcuts/close-prompt are all confirmed fine from the owner's own in-app checks, closing out the last
 "not verified" notes from M4/M6.
-**Next candidate raised by the owner: bot difficulty levels.** Today, every bot is identical —
-`BotBrain.decide` (`core/.../bot/BotBrain.java`) always simulates every distinct program through the real
-`TurnResolver` and keeps the best-scoring one (flags touched, walking distance to the next flag, survival, low
-damage); there is no randomness in card choice, no limited lookahead, no weaker mode. This was already flagged as
-open in the "Bots" section above ("second slice: difficulty levels") — still nothing implemented. Otherwise: **whatever
-the user picks next** — the rest of M6 (board composition), or the next playtest, which is the owner's to run.
+**Bot difficulty levels are done (2026-09-26, see "Bots" above)** — the candidate raised the same session it was
+proposed. Not yet verified by a real `mvn` build in-container (see above); do that and an in-game look before
+considering it fully closed out. **Next: whatever the user picks** — the rest of M6 (board composition), or the next
+playtest, which is the owner's to run.
 
 ## Decisions already made (with reasons)
 

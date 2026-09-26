@@ -11,6 +11,7 @@ import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.ReplayFinished;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
+import de.mkoehler.robotrampage.net.messages.SetBotDifficulty;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
@@ -117,6 +118,8 @@ public final class ServerController implements NetworkServer.Handler, Outbox {
             session.addBot(seat);
         } else if (message instanceof RemoveBot remove) {
             session.removeBot(seat, remove.seat());
+        } else if (message instanceof SetBotDifficulty setBotDifficulty) {
+            session.setBotDifficulty(seat, setBotDifficulty.seat());
         } else if (message instanceof ReplayFinished finished) {
             session.replayFinished(seat, finished.turn());
         }
