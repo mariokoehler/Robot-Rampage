@@ -830,12 +830,12 @@ StarWars conventions:
   `localhost:45725` now that the server is actually deployed there, 3.12) — only used when no settings file exists yet
   (a fresh install) or it has no `serverAddress` of its own; once a player has typed or connected to any address, that
   value is what's remembered and offered next time, never silently reset to the default.
-- **Server: autosave.** After every completed turn the server writes the full
-  `GameState` (between turns there is no hidden hand data yet — the deck order and
-  RNG state are all that is secret) to a JSON file, so a server restart can resume
-  running games. Also the natural basis for replays.
+- **Server: no autosave, no persistence.** DECISION (owner, 2026-09-26): this is a casual, no-stakes hobby game, not
+  one where a dropped server should resume a running game — scratched from the roadmap, not just deferred. A restarted
+  server always starts a fresh, empty lobby.
 - **Boards:** `assets/boards/*.json`, read by the server (3.6).
-- **Accounts:** not designed (7).
+- **Accounts:** not designed (7). DECISION (owner, 2026-09-26): no persistent accounts, matching the "no autosave"
+  call above — display name + session token (7) remains the whole identity model.
 
 ### 3.11 Client packaging: a self-contained zip via jpackage
 
@@ -884,9 +884,9 @@ with `-pl`/`-am` restricting what actually builds), `eclipse-temurin:25-jre` run
 have passed locally, and `ServerIntegrationTest`'s real-socket tests took 20+ minutes on GitHub's
 runners. The client release (`release-client.yml`, `verify`) still runs the tests.
 
-**No data volume**, unlike StarWars' account-data bind mount: this server has no persistence
-yet (3.10 — autosave is designed but not implemented). Add a bind mount to
-`deploy/docker-compose.yml` once that lands.
+**No data volume**, unlike StarWars' account-data bind mount, and none planned: this server has no persistence by
+design (3.10 — no autosave, owner decision, 2026-09-26 — this isn't the kind of game that needs to survive a server
+restart).
 
 **Port, deliberately different from StarWars':** `45725/tcp` only (this project is TCP-only,
 3.5 — no UDP channel to publish), vs. StarWars' `45625/tcp` + `45626/udp`
@@ -1607,7 +1607,6 @@ Design questions:
 - **Chat.** In-game text chat is nearly free to add over the same TCP channel. DECISION: no chat for v1, but the protocol is designed to support it later.
 - **Art direction** and audio — nothing decided. DECISION: the project owner will provide the necessary assets as they are needed for the next steps.
 - **Game length / pacing.** Classic RoboRally can run long and eliminate players
-  early; the option of a shorter default course or a spectate-and-rejoin mechanic
-  should be evaluated after the first real playtests.
+  early; the option of a shorter default course or a spectate-and-rejoin mechanic. DECISION: current pacing is fine, no shorter course or spectate-and-rejoin mechanic (owner, 2026-09-26).
 - **2016-edition ideas** worth borrowing later (e.g. reboot tokens instead of
-  archive markers) — each is a separate decision.
+  archive markers). DECISION: classic 2005 rules only, no 2016-edition ideas (owner, 2026-09-26).
