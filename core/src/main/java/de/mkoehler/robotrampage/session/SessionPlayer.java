@@ -1,5 +1,6 @@
 package de.mkoehler.robotrampage.session;
 
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.rules.Card;
 
 import java.util.List;
@@ -22,6 +23,12 @@ final class SessionPlayer {
      * connected and always as ready, so nothing that waits for, times out or forgets absent humans ever touches it.
      */
     final boolean bot;
+
+    /**
+     * How carefully a bot plays (design.md 2.14); meaningless for a human. Starts at {@code NORMAL} and is changed by
+     * the host cycling it in the lobby.
+     */
+    BotDifficulty difficulty = BotDifficulty.NORMAL;
 
     /**
      * Whether the player is currently connected.

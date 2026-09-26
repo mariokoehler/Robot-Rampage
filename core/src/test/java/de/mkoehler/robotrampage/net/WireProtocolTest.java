@@ -12,6 +12,7 @@ import de.mkoehler.robotrampage.board.LoadedBoard;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
 import de.mkoehler.robotrampage.board.StartSquare;
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.net.messages.AddBot;
 import de.mkoehler.robotrampage.net.messages.ChooseRespawnFacing;
 import de.mkoehler.robotrampage.net.messages.GameOver;
@@ -33,6 +34,7 @@ import de.mkoehler.robotrampage.net.messages.ReplayFinished;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
+import de.mkoehler.robotrampage.net.messages.SetBotDifficulty;
 import de.mkoehler.robotrampage.net.messages.SetProgrammingSeconds;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.SetTimerPaused;
@@ -128,7 +130,7 @@ class WireProtocolTest {
     @Test
     void everyProtocolMessageSurvivesTheWire() {
         List<PlayerInfo> players = List.of(new PlayerInfo(0, "Ann", true, true, true), new PlayerInfo(3, "Bo", false, false, false),
-            new PlayerInfo(5, "WALL-E", true, true, false, true));
+            new PlayerInfo(5, "WALL-E", true, true, false, true, BotDifficulty.EASY));
         RobotState robot = new RobotState(3, new Position(4, 5), Direction.WEST, 2, 3, 1, new Position(1, 1),
             de.mkoehler.robotrampage.rules.RobotStatus.ACTIVE, false, true);
         RobotState gone = new RobotState(0, null, Direction.NORTH, 9, 0, 0, new Position(0, 0),
@@ -163,6 +165,7 @@ class WireProtocolTest {
             new SelectBoard("loading-dock"),
             new AddBot(),
             new RemoveBot(5),
+            new SetBotDifficulty(5),
             new ReplayFinished(4));
 
         for (Object message : messages) {

@@ -26,6 +26,11 @@ import java.util.Set;
  * simulates on, so the others stand still in its imagination, whatever the server already knows about them. Since only
  * the bot's own robot acts in the simulation, card priorities cannot change the outcome, and programs are told apart by
  * their sequence of card types alone.
+ * <p>
+ * <b>Difficulty ({@link BotDifficulty}):</b> the search itself never changes — every difficulty still tries every
+ * distinct program through the real rules engine. What changes is how much random noise is mixed into a program's score
+ * before the best one is picked ({@link #scoreNoise}), and how cautiously the bot powers down to repair
+ * ({@link #powerDownDamage}).
  *
  * @author Mario Koehler
  */
@@ -36,8 +41,6 @@ public final class BotBrain {
     private static final double PER_FLAG = 1_000;
     private static final double PER_STEP = -20;
     private static final double PER_DAMAGE = -8;
-    /** From how much damage (at the end of the turn) a surviving bot powers down to repair. */
-    static final int POWER_DOWN_DAMAGE = 6;
 
     /**
      * Not instantiated.
@@ -52,11 +55,12 @@ public final class BotBrain {
      * @param robotId         the bot's robot
      * @param hand            the cards dealt to it
      * @param mayChooseFacing whether the robot re-entered this turn and may pick its facing
-     * @param random          breaks ties between equally good programs
+     * @param random          breaks ties between equally good programs, and is the source of {@code difficulty}'s noise
+     * @param difficulty      how carefully the bot plays (design.md 2.14)
      * @return the decision; its program always fits the robot's unlocked registers and hand
      */
     public static BotDecision decide(GameState state, int robotId, List<Card> hand, boolean mayChooseFacing,
-                                     Random random) {
+                                     Random random, BotDifficulty difficulty) {
         GameState base = state.copy();
         for (Robot other : base.robots()) {
             if (other.id() != robotId) {
@@ -84,7 +88,7 @@ public final class BotBrain {
                     me.setRegister(register, program.get(register));
                 }
                 GameState end = TurnResolver.resolve(base).state();
-                double score = score(end, me, robotId, distances) + random.nextDouble();
+                double score = score(end, me, robotId, distances) + random.nextDouble() * scoreNoise(difficulty);
                 if (score > bestScore) {
                     bestScore = score;
                     bestProgram = program;
@@ -93,8 +97,45 @@ public final class BotBrain {
                 }
             }
         }
-        boolean powerDown = bestEnd != null && bestEnd.isActive() && bestEnd.damage() >= POWER_DOWN_DAMAGE;
+        boolean powerDown = bestEnd != null && bestEnd.isActive() && bestEnd.damage() >= powerDownDamage(difficulty);
         return new BotDecision(bestProgram, bestFacing, powerDown);
+    }
+
+    /**
+     * Returns how much random noise blurs the choice between programs, on top of the scores {@link #score} computes.
+     * On {@code HARD} it is small enough to only break exact ties, so the bot always ends up with the objectively best
+     * program (today's original, only behaviour). On {@code NORMAL}/{@code EASY} it grows, so the bot sometimes settles
+     * for a program a little (or a lot) worse than the best one — but always far below {@link #PER_FLAG} or
+     * {@link #LOST}, so a bot at any difficulty never throws away a reachable flag or drives to its own destruction on
+     * purpose; only genuinely close tactical calls (a slightly longer route, a little avoidable damage) are affected.
+     * All three numbers are first guesses to be refined from playtesting, like the board generator's own scoring
+     * weights.
+     *
+     * @param difficulty the bot's difficulty
+     * @return the upper bound of the noise added to a program's score
+     */
+    static double scoreNoise(BotDifficulty difficulty) {
+        return switch (difficulty) {
+            case HARD -> 1;
+            case NORMAL -> 25;
+            case EASY -> 300;
+        };
+    }
+
+    /**
+     * Returns from how much damage (at the end of the turn) a surviving bot powers down to repair. A cautious
+     * {@code HARD} bot powers down earlier than the original 6; a careless {@code EASY} bot waits longer and risks
+     * being destroyed by the next hit before it gets the chance.
+     *
+     * @param difficulty the bot's difficulty
+     * @return the damage threshold, out of the 0–9 a robot can carry
+     */
+    static int powerDownDamage(BotDifficulty difficulty) {
+        return switch (difficulty) {
+            case HARD -> 4;
+            case NORMAL -> 6;
+            case EASY -> 8;
+        };
     }
 
     /**

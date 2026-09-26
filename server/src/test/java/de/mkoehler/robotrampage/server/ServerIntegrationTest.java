@@ -3,6 +3,7 @@ package de.mkoehler.robotrampage.server;
 import de.mkoehler.robotrampage.board.BoardCatalog;
 import de.mkoehler.robotrampage.board.BoardLoader;
 import de.mkoehler.robotrampage.board.LoadedBoard;
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.client.connect.ConnectFlow;
 import de.mkoehler.robotrampage.client.connect.ConnectedServer;
 import de.mkoehler.robotrampage.client.connect.ConnectionAttempt;
@@ -24,6 +25,7 @@ import de.mkoehler.robotrampage.net.messages.PlayerConnection;
 import de.mkoehler.robotrampage.net.messages.RemoveBot;
 import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
+import de.mkoehler.robotrampage.net.messages.SetBotDifficulty;
 import de.mkoehler.robotrampage.net.messages.SetReady;
 import de.mkoehler.robotrampage.net.messages.StartGameRequest;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
@@ -220,8 +222,9 @@ class ServerIntegrationTest {
     }
 
     /**
-     * One player alone adds a bot over the network, starts, and plays a turn against it: the bot is seated and ready, locks
-     * its program in at the deal without anybody's help, and the turn resolves as soon as the human has programmed.
+     * One player alone adds a bot over the network, starts, and plays a turn against it: the bot is seated and ready, its
+     * difficulty can be cycled over the wire, it locks its program in at the deal without anybody's help, and the turn
+     * resolves as soon as the human has programmed.
      *
      * @throws Exception on any failure
      */
@@ -235,6 +238,10 @@ class ServerIntegrationTest {
         LobbyState withBot = ann.take(LobbyState.class);
         assertEquals(2, withBot.players().size());
         assertTrue(withBot.players().get(1).bot() && withBot.players().get(1).ready());
+        assertEquals(BotDifficulty.NORMAL, withBot.players().get(1).difficulty());
+        ann.send(new SetBotDifficulty(1));
+        assertEquals(BotDifficulty.HARD, ann.take(LobbyState.class).players().get(1).difficulty(),
+            "SetBotDifficulty reaches the session and cycles the bot's difficulty");
         ann.send(new AddBot());
         assertEquals(3, ann.take(LobbyState.class).players().size());
         ann.send(new RemoveBot(2));

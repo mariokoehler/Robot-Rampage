@@ -4,6 +4,7 @@ import de.mkoehler.robotrampage.board.Board;
 import de.mkoehler.robotrampage.board.StartSquare;
 import de.mkoehler.robotrampage.bot.BotBrain;
 import de.mkoehler.robotrampage.bot.BotDecision;
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.Deck;
 import de.mkoehler.robotrampage.rules.DestructionCause;
@@ -156,7 +157,10 @@ public final class Playouts {
     }
 
     /**
-     * Plays one turn the way the server does: robots re-enter, every bot programs, the turn is resolved.
+     * Plays one turn the way the server does: robots re-enter, every bot programs, the turn is resolved. Bots play at
+     * {@link BotDifficulty#HARD} (essentially no randomness beyond tie-breaks), the same quality of play the metrics and
+     * the generator's scoring have always been calibrated against, so a lobby bot's easier difficulty levels never
+     * change what a board is measured or generated against.
      *
      * @param state  the state before the turn
      * @param random the bots' tie-breaks
@@ -174,7 +178,8 @@ public final class Playouts {
         }
         for (Map.Entry<Integer, List<Card>> hand : Programming.deal(state).entrySet()) {
             int id = hand.getKey();
-            BotDecision decision = BotBrain.decide(state, id, hand.getValue(), respawned.contains(id), random);
+            BotDecision decision = BotBrain.decide(state, id, hand.getValue(), respawned.contains(id), random,
+                BotDifficulty.HARD);
             if (decision.facing() != null) {
                 state.robot(id).setFacing(decision.facing());
             }

@@ -43,6 +43,7 @@ import de.mkoehler.robotrampage.net.messages.RequestRejected;
 import de.mkoehler.robotrampage.net.messages.ReturnToLobby;
 import de.mkoehler.robotrampage.net.messages.RobotState;
 import de.mkoehler.robotrampage.net.messages.SelectBoard;
+import de.mkoehler.robotrampage.net.messages.SetBotDifficulty;
 import de.mkoehler.robotrampage.net.messages.StateSnapshot;
 import de.mkoehler.robotrampage.net.messages.SubmitProgram;
 import de.mkoehler.robotrampage.net.messages.TurnResolved;
@@ -320,10 +321,15 @@ public final class GameScreenDriver {
         check(addBot != null, "the host should be offered a bot on a free seat");
         click(host, centerOf(addBot)[0], centerOf(addBot)[1]);
         check(link.sent.size() == 2 && link.sent.get(1) instanceof AddBot, "Add bot should send AddBot");
+        TextButton difficulty = findButton(host.stage.getRoot(), "NORMAL");
+        check(difficulty != null, "the host should see the bot's difficulty, starting at Normal");
+        click(host, centerOf(difficulty)[0], centerOf(difficulty)[1]);
+        check(link.sent.size() == 3 && link.sent.get(2) instanceof SetBotDifficulty changed && changed.seat() == 1,
+            "clicking the difficulty button should send SetBotDifficulty for the bot's seat");
         TextButton remove = findButton(host.stage.getRoot(), "REMOVE");
         check(remove != null, "the host should be able to remove the bot");
         click(host, centerOf(remove)[0], centerOf(remove)[1]);
-        check(link.sent.size() == 3 && link.sent.get(2) instanceof RemoveBot removed && removed.seat() == 1,
+        check(link.sent.size() == 4 && link.sent.get(3) instanceof RemoveBot removed && removed.seat() == 1,
             "Remove should send RemoveBot for the bot's seat");
 
         ScriptedLink guestLink = new ScriptedLink();

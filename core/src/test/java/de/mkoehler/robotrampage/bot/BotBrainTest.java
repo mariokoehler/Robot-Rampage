@@ -25,11 +25,13 @@ import java.util.Random;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Verifies {@link BotBrain}: it heads for its flag, stays out of pits, never looks at other programs, always chooses a
- * legal program, and bots alone can play a real board to the end.
+ * Verifies {@link BotBrain}: it heads for its flag, stays out of pits at any difficulty, never looks at other
+ * programs, powers down at a difficulty-dependent threshold, always chooses a legal program, and bots alone can play a
+ * real board to the end.
  *
  * @author Mario Koehler
  */
@@ -59,7 +61,7 @@ class BotBrainTest {
         List<Card> hand = hand(CardType.MOVE_3, CardType.U_TURN, CardType.U_TURN, CardType.U_TURN, CardType.U_TURN,
             CardType.BACK_UP, CardType.ROTATE_LEFT, CardType.ROTATE_RIGHT, CardType.ROTATE_LEFT);
 
-        BotDecision decision = BotBrain.decide(state, 0, hand, false, new Random(1));
+        BotDecision decision = BotBrain.decide(state, 0, hand, false, new Random(1), BotDifficulty.HARD);
 
         assertEquals(5, decision.program().size());
         Programming.submit(state, 0, hand, decision.program(), decision.powerDown());
@@ -76,10 +78,31 @@ class BotBrainTest {
         List<Card> hand = hand(CardType.MOVE_1, CardType.MOVE_2, CardType.MOVE_3, CardType.MOVE_1, CardType.MOVE_2,
             CardType.ROTATE_LEFT, CardType.ROTATE_RIGHT, CardType.U_TURN, CardType.BACK_UP);
 
-        BotDecision decision = BotBrain.decide(state, 0, hand, false, new Random(1));
+        BotDecision decision = BotBrain.decide(state, 0, hand, false, new Random(1), BotDifficulty.HARD);
 
         Programming.submit(state, 0, hand, decision.program(), false);
         assertTrue(TurnResolver.resolve(state).state().robot(0).isActive(), "the bot should not drive into the pit");
+    }
+
+    /**
+     * Even at {@code EASY}, where score noise is large, a pit's penalty so dwarfs the noise that the bot still never
+     * drives into it — difficulty only affects genuinely close tactical calls, never survival.
+     */
+    @Test
+    void staysOutOfAPitEvenAtEasy() {
+        GameState state = AsciiBoard.state(". o . 1\n. . . .", "0 . . .\n. . . .");
+        state.robot(0).setFacing(Direction.EAST);
+        List<Card> hand = hand(CardType.MOVE_1, CardType.MOVE_2, CardType.MOVE_3, CardType.MOVE_1, CardType.MOVE_2,
+            CardType.ROTATE_LEFT, CardType.ROTATE_RIGHT, CardType.U_TURN, CardType.BACK_UP);
+        Random random = new Random(1);
+
+        for (int trial = 0; trial < 20; trial++) {
+            GameState trialState = state.copy();
+            BotDecision decision = BotBrain.decide(trialState, 0, hand, false, random, BotDifficulty.EASY);
+            Programming.submit(trialState, 0, hand, decision.program(), false);
+            assertTrue(TurnResolver.resolve(trialState).state().robot(0).isActive(),
+                "an easy bot should still not drive into the pit");
+        }
     }
 
     /**
@@ -96,20 +119,55 @@ class BotBrainTest {
         GameState other = state.copy();
         other.robot(1).setRegister(0, new Card(CardType.MOVE_1, 10));
 
-        BotDecision blind = BotBrain.decide(state, 0, hand, false, new Random(7));
+        BotDecision blind = BotBrain.decide(state, 0, hand, false, new Random(7), BotDifficulty.HARD);
 
-        assertEquals(blind, BotBrain.decide(other, 0, hand, false, new Random(7)));
+        assertEquals(blind, BotBrain.decide(other, 0, hand, false, new Random(7), BotDifficulty.HARD));
         assertTrue(blind.program().get(0).type() != CardType.BACK_UP, "a bot that could see would back away first");
     }
 
     /**
-     * Whatever the damage and the hand, the program fits the robot's free registers and comes from its hand, so the server
-     * can always submit it.
+     * The three difficulties are ordered: Hard adds the least score noise (today's original tie-break-only amount) and
+     * powers down the earliest (most cautious); Easy adds the most noise and powers down the latest (most careless).
+     */
+    @Test
+    void difficultiesAreOrderedFromCautiousToCareless() {
+        assertEquals(1, BotBrain.scoreNoise(BotDifficulty.HARD), "hard keeps the original tie-break-only noise");
+        assertTrue(BotBrain.scoreNoise(BotDifficulty.HARD) < BotBrain.scoreNoise(BotDifficulty.NORMAL));
+        assertTrue(BotBrain.scoreNoise(BotDifficulty.NORMAL) < BotBrain.scoreNoise(BotDifficulty.EASY));
+
+        assertEquals(6, BotBrain.powerDownDamage(BotDifficulty.NORMAL), "normal keeps the original threshold");
+        assertTrue(BotBrain.powerDownDamage(BotDifficulty.HARD) < BotBrain.powerDownDamage(BotDifficulty.NORMAL));
+        assertTrue(BotBrain.powerDownDamage(BotDifficulty.NORMAL) < BotBrain.powerDownDamage(BotDifficulty.EASY));
+    }
+
+    /**
+     * A surviving bot powers down at a difficulty-dependent damage threshold. The board is damage-neutral (no lasers,
+     * so no program changes the robot's damage), so whichever program is chosen, only the threshold decides.
+     */
+    @Test
+    void powersDownAtADifficultyDependentThreshold() {
+        GameState state = AsciiBoard.state(". . .\n. . .", "0 . .\n. . .");
+        state.robot(0).setDamage(5);
+        List<Card> hand = hand(CardType.ROTATE_LEFT, CardType.ROTATE_RIGHT, CardType.U_TURN, CardType.MOVE_1,
+            CardType.BACK_UP);
+
+        assertTrue(BotBrain.decide(state, 0, hand, false, new Random(1), BotDifficulty.HARD).powerDown(),
+            "hard powers down from 4 damage");
+        assertFalse(BotBrain.decide(state, 0, hand, false, new Random(1), BotDifficulty.NORMAL).powerDown(),
+            "normal only powers down from 6 damage");
+        assertFalse(BotBrain.decide(state, 0, hand, false, new Random(1), BotDifficulty.EASY).powerDown(),
+            "easy only powers down from 8 damage");
+    }
+
+    /**
+     * Whatever the damage, the hand and the difficulty, the program fits the robot's free registers and comes from its
+     * hand, so the server can always submit it.
      */
     @Test
     void alwaysChoosesALegalProgram() {
         Board board = BoardLoader.loadResource("boards/proving-grounds.json").board();
         Random random = new Random(3);
+        BotDifficulty[] difficulties = BotDifficulty.values();
         for (int round = 0; round < 40; round++) {
             GameState state = newGame(board, round, 4);
             Robot robot = state.robot(round % 4);
@@ -124,7 +182,8 @@ class BotBrainTest {
             }
             List<Card> hand = hands.get(robot.id());
 
-            BotDecision decision = BotBrain.decide(state, robot.id(), hand, round % 3 == 0, random);
+            BotDecision decision = BotBrain.decide(state, robot.id(), hand, round % 3 == 0, random,
+                difficulties[round % difficulties.length]);
 
             Programming.submit(state, robot.id(), hand, decision.program(), decision.powerDown());
             assertEquals(Robot.REGISTER_COUNT - robot.lockedRegisterCount(), decision.program().size());
@@ -157,7 +216,8 @@ class BotBrainTest {
                 for (Map.Entry<Integer, List<Card>> entry : hands.entrySet()) {
                     boolean facing = respawned.contains(entry.getKey());
                     long start = System.nanoTime();
-                    BotDecision decision = BotBrain.decide(state, entry.getKey(), entry.getValue(), facing, random);
+                    BotDecision decision = BotBrain.decide(state, entry.getKey(), entry.getValue(), facing, random,
+                        BotDifficulty.HARD);
                     long took = System.nanoTime() - start;
                     if (facing) {
                         slowestRespawn = Math.max(slowestRespawn, took);

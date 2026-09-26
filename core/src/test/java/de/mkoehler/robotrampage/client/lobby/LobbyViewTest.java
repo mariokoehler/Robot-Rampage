@@ -1,5 +1,6 @@
 package de.mkoehler.robotrampage.client.lobby;
 
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.net.messages.BoardChoice;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
@@ -38,9 +39,11 @@ class LobbyViewTest {
         List<LobbyView.Row> rows = view.rows();
 
         assertEquals(8, rows.size());
-        assertEquals(new LobbyView.Row(0, true, "Sophie", "Bolt", true, false, true, false, false, false), rows.get(0));
-        assertEquals(new LobbyView.Row(1, false, "", "Twin", false, false, false, false, false, false), rows.get(1));
-        assertEquals(new LobbyView.Row(2, true, "Kenji", "Cog", false, true, false, false, false, false), rows.get(2));
+        assertEquals(new LobbyView.Row(0, true, "Sophie", "Bolt", true, false, true, false, "Normal", false, false),
+            rows.get(0));
+        assertEquals(new LobbyView.Row(1, false, "", "Twin", false, false, false, false, "", false, false), rows.get(1));
+        assertEquals(new LobbyView.Row(2, true, "Kenji", "Cog", false, true, false, false, "Normal", false, false),
+            rows.get(2));
         assertFalse(rows.get(7).occupied());
         assertEquals("Stack", rows.get(7).robotName());
     }
@@ -162,11 +165,27 @@ class LobbyViewTest {
         List<LobbyView.Row> guest = new LobbyView(state, 3).rows();
 
         assertTrue(host.get(1).bot() && host.get(1).removable());
+        assertEquals("Normal", host.get(1).difficulty(), "a new bot starts at normal difficulty");
         assertFalse(host.get(3).removable(), "a human is never removable");
         assertTrue(host.get(2).addBot());
         assertFalse(host.get(4).addBot(), "only the first free seat offers a bot");
         assertTrue(guest.stream().noneMatch(row -> row.addBot() || row.removable()));
         assertEquals(1, new LobbyView(state, 0).botCount());
         assertTrue(new LobbyView(lobby(player(0, "Sophie", false, true), bot), 0).canStart());
+    }
+
+    /**
+     * The row shows whatever difficulty the server sent for that bot, in words.
+     */
+    @Test
+    void theHostSeesABotsDifficulty() {
+        PlayerInfo easy = new PlayerInfo(1, "WALL-E", true, true, false, true, BotDifficulty.EASY);
+        PlayerInfo hard = new PlayerInfo(2, "HAL 9000", true, true, false, true, BotDifficulty.HARD);
+        LobbyState state = lobby(player(0, "Sophie", false, true), easy, hard);
+
+        List<LobbyView.Row> rows = new LobbyView(state, 0).rows();
+
+        assertEquals("Easy", rows.get(1).difficulty());
+        assertEquals("Hard", rows.get(2).difficulty());
     }
 }

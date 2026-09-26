@@ -5,8 +5,10 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import de.mkoehler.robotrampage.board.Direction;
 import de.mkoehler.robotrampage.board.Position;
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.net.messages.HandshakeRequest;
 import de.mkoehler.robotrampage.net.messages.HandshakeResponse;
+import de.mkoehler.robotrampage.net.messages.SetBotDifficulty;
 import de.mkoehler.robotrampage.rules.Card;
 import de.mkoehler.robotrampage.rules.CardType;
 import de.mkoehler.robotrampage.rules.DestructionCause;
@@ -60,7 +62,7 @@ class MessageRegistryTest {
             LoggedEvent.class, LaserSource.class, GameEvent.LaserFired.class, GameEvent.RobotDamaged.class,
             GameEvent.RegisterRevealed.class, GameEvent.FlagTouched.class, GameEvent.ArchiveMarkerMoved.class,
             GameEvent.RobotRepaired.class, GameEvent.RobotPoweredDown.class, GameEvent.RobotPoweredUp.class,
-            GameEvent.RobotRespawned.class, GameEvent.GameEnded.class};
+            GameEvent.RobotRespawned.class, GameEvent.GameEnded.class, BotDifficulty.class, SetBotDifficulty.class};
         for (Class<?> messageClass : messageClasses) {
             assertEquals(first.getRegistration(messageClass).getId(), second.getRegistration(messageClass).getId(),
                 "id mismatch for " + messageClass.getSimpleName());
@@ -145,6 +147,16 @@ class MessageRegistryTest {
             assertNotNull(kryo.getClassResolver().getRegistration(eventType),
                 eventType.getSimpleName() + " is not registered");
         }
+    }
+
+    /**
+     * A {@link SetBotDifficulty} must keep its seat across the wire.
+     */
+    @Test
+    void setBotDifficultySurvivesRoundTrip() {
+        SetBotDifficulty original = new SetBotDifficulty(3);
+
+        assertEquals(3, roundTrip(original, SetBotDifficulty.class).seat());
     }
 
     /**

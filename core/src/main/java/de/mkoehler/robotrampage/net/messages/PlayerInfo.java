@@ -1,5 +1,7 @@
 package de.mkoehler.robotrampage.net.messages;
 
+import de.mkoehler.robotrampage.bot.BotDifficulty;
+
 /**
  * One player as everybody sees them in the lobby and in the game. The <em>seat</em> is the
  * player's fixed position at the table: it is also the id of their robot, picks their start
@@ -11,9 +13,25 @@ package de.mkoehler.robotrampage.net.messages;
  * @param connected whether the player is currently connected
  * @param host whether this player is the host who starts the game
  * @param bot whether the robot is computer-controlled (design.md 2.14)
+ * @param difficulty how carefully the bot plays; meaningless (always {@code NORMAL}) for a human
  * @author Mario Koehler
  */
-public record PlayerInfo(int seat, String name, boolean ready, boolean connected, boolean host, boolean bot) {
+public record PlayerInfo(int seat, String name, boolean ready, boolean connected, boolean host, boolean bot,
+                         BotDifficulty difficulty) {
+
+    /**
+     * Describes a bot or human player at the default difficulty.
+     *
+     * @param seat      the seat, 0 to 7
+     * @param name      the display name
+     * @param ready     whether the player is ready to start (lobby)
+     * @param connected whether the player is currently connected
+     * @param host      whether this player is the host who starts the game
+     * @param bot       whether the robot is computer-controlled (design.md 2.14)
+     */
+    public PlayerInfo(int seat, String name, boolean ready, boolean connected, boolean host, boolean bot) {
+        this(seat, name, ready, connected, host, bot, BotDifficulty.NORMAL);
+    }
 
     /**
      * Describes a human player.
@@ -25,6 +43,6 @@ public record PlayerInfo(int seat, String name, boolean ready, boolean connected
      * @param host      whether this player is the host who starts the game
      */
     public PlayerInfo(int seat, String name, boolean ready, boolean connected, boolean host) {
-        this(seat, name, ready, connected, host, false);
+        this(seat, name, ready, connected, host, false, BotDifficulty.NORMAL);
     }
 }

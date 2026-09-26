@@ -1,5 +1,6 @@
 package de.mkoehler.robotrampage.client.lobby;
 
+import de.mkoehler.robotrampage.bot.BotDifficulty;
 import de.mkoehler.robotrampage.net.messages.LobbyState;
 import de.mkoehler.robotrampage.net.messages.PlayerInfo;
 
@@ -25,13 +26,15 @@ public final class LobbyView {
      * @param host      whether the player is the host
      * @param you       whether the player is the one looking at the screen
      * @param ready     whether the player is ready to start
-     * @param bot       whether the seat is played by the computer
-     * @param addBot    whether this free seat offers the host to add a bot; only the first free seat does, since that is
-     *                  the seat the server puts a new bot on
-     * @param removable whether the host may take the bot on this seat away
+     * @param bot        whether the seat is played by the computer
+     * @param difficulty the bot's difficulty label ({@code "Easy"}, {@code "Normal"} or {@code "Hard"}), meaningless for
+     *                   a human
+     * @param addBot     whether this free seat offers the host to add a bot; only the first free seat does, since that is
+     *                   the seat the server puts a new bot on
+     * @param removable  whether the host may take the bot on this seat away, or cycle its difficulty
      */
     public record Row(int seat, boolean occupied, String name, String robotName, boolean host, boolean you,
-                      boolean ready, boolean bot, boolean addBot, boolean removable) {
+                      boolean ready, boolean bot, String difficulty, boolean addBot, boolean removable) {
     }
 
     /**
@@ -75,11 +78,11 @@ public final class LobbyView {
             PlayerInfo player = playerAt(seat);
             String robot = RobotLook.name(seat);
             if (player == null) {
-                rows.add(new Row(seat, false, "", robot, false, false, false, false, iAmHost() && !offered, false));
+                rows.add(new Row(seat, false, "", robot, false, false, false, false, "", iAmHost() && !offered, false));
                 offered = true;
             } else {
                 rows.add(new Row(seat, true, player.name(), robot, player.host(), seat == mySeat, player.ready(),
-                    player.bot(), false, iAmHost() && player.bot()));
+                    player.bot(), difficultyLabel(player.difficulty()), false, iAmHost() && player.bot()));
             }
         }
         return rows;
@@ -214,6 +217,20 @@ public final class LobbyView {
      */
     public String programmingTimeText() {
         return state.programmingSeconds() + " seconds";
+    }
+
+    /**
+     * Returns a bot difficulty the way the lobby shows it.
+     *
+     * @param difficulty the difficulty
+     * @return {@code "Easy"}, {@code "Normal"} or {@code "Hard"}
+     */
+    private static String difficultyLabel(BotDifficulty difficulty) {
+        return switch (difficulty) {
+            case EASY -> "Easy";
+            case NORMAL -> "Normal";
+            case HARD -> "Hard";
+        };
     }
 
     /**
